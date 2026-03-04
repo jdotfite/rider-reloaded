@@ -5,6 +5,7 @@ export class Toolbar {
   private toolRail: HTMLElement;
   private fileActions: HTMLElement;
   private transport: HTMLElement;
+  private layerStrip: HTMLElement;
   private lineTypeStrip: HTMLElement;
 
   onToolSelect: ((tool: string) => void) | null = null;
@@ -15,17 +16,25 @@ export class Toolbar {
   onPlay: (() => void) | null = null;
   onPause: (() => void) | null = null;
   onStop: (() => void) | null = null;
+  onLayerPrev: (() => void) | null = null;
+  onLayerNext: (() => void) | null = null;
+  onLayerNew: (() => void) | null = null;
 
   private toolButtons: Map<string, HTMLButtonElement> = new Map();
   private lineTypeButtons: Map<LineType, HTMLButtonElement> = new Map();
   private playBtn!: HTMLButtonElement;
   private pauseBtn!: HTMLButtonElement;
   private stopBtn!: HTMLButtonElement;
+  private layerPrevBtn!: HTMLButtonElement;
+  private layerLabelBtn!: HTMLButtonElement;
+  private layerNextBtn!: HTMLButtonElement;
+  private layerNewBtn!: HTMLButtonElement;
 
   constructor() {
     this.toolRail = this.requireElement('tool-rail');
     this.fileActions = this.requireElement('file-actions');
     this.transport = this.requireElement('transport');
+    this.layerStrip = this.requireElement('layer-strip');
     this.lineTypeStrip = this.requireElement('line-type-strip');
     this.build();
   }
@@ -47,6 +56,15 @@ export class Toolbar {
     this.pauseBtn.classList.add('subtle');
     this.stopBtn = this.addBtn(this.transport, 'Stop', () => this.onStop?.());
     this.stopBtn.classList.add('subtle');
+
+    this.layerPrevBtn = this.addBtn(this.layerStrip, '<', () => this.onLayerPrev?.());
+    this.layerPrevBtn.classList.add('layer-button');
+    this.layerLabelBtn = this.addBtn(this.layerStrip, 'Main', () => {});
+    this.layerLabelBtn.classList.add('subtle', 'layer-label');
+    this.layerLabelBtn.disabled = true;
+    this.layerNextBtn = this.addBtn(this.layerStrip, '>', () => this.onLayerNext?.());
+    this.layerNextBtn.classList.add('layer-button');
+    this.layerNewBtn = this.addBtn(this.layerStrip, '+ Layer', () => this.onLayerNew?.());
 
     this.addLineTypeBtn(LineType.SOLID, 'Solid (Q)');
     this.addLineTypeBtn(LineType.ACC, 'Speed (W)');
@@ -99,5 +117,12 @@ export class Toolbar {
     this.pauseBtn.disabled = state !== GameState.PLAYING;
     this.stopBtn.disabled = state === GameState.EDITING;
     this.pauseBtn.classList.toggle('active', state === GameState.PAUSED);
+  }
+
+  setLayerState(name: string, index: number, count: number) {
+    this.layerLabelBtn.textContent = `${index}/${count} ${name}`;
+    const multipleLayers = count > 1;
+    this.layerPrevBtn.disabled = !multipleLayers;
+    this.layerNextBtn.disabled = !multipleLayers;
   }
 }

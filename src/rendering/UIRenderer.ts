@@ -7,6 +7,9 @@ interface UIState {
   lineCount: number;
   toolName: string;
   lineType: LineType;
+  activeLayerName: string;
+  activeLayerIndex: number;
+  layerCount: number;
   speed: number;
 }
 
@@ -21,13 +24,25 @@ export class UIRenderer {
     this.runSpeed = document.getElementById('run-speed')!;
   }
 
-  update({ frame, state, lineCount, toolName, lineType, speed }: UIState) {
+  update({
+    frame,
+    state,
+    lineCount,
+    toolName,
+    lineType,
+    activeLayerName,
+    activeLayerIndex,
+    layerCount,
+    speed,
+  }: UIState) {
     const stateLabel = this.titleCase(state);
     this.hud.textContent = `${stateLabel} | ${lineCount} ${lineCount === 1 ? 'line' : 'lines'}`;
 
     if (state === GameState.EDITING) {
       this.statusTitle.textContent = 'Editor';
-      this.runSpeed.textContent = `${this.titleCase(toolName)} tool | ${this.getTrackLabel(lineType)} track`;
+      this.runSpeed.textContent =
+        `${this.titleCase(toolName)} tool | ${this.getTrackLabel(lineType)} track | ` +
+        `Layer ${activeLayerIndex}/${layerCount}: ${activeLayerName}`;
       return;
     }
 

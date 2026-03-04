@@ -102,17 +102,23 @@ const toolbar = new Toolbar();
 toolbar.setActiveTool('pencil');
 toolbar.setActiveLineType(LineType.SOLID);
 toolbar.setPlaybackState(GameState.EDITING);
+toolbar.setLayerState(store.getActiveLayer().name, store.getActiveLayerIndex() + 1, store.layers.length);
 
 // Game loop
 const gameLoop = new GameLoop(physics, () => {
   renderer.render();
   toolbar.setPlaybackState(gameLoop.state);
+  const activeLayer = store.getActiveLayer();
+  toolbar.setLayerState(activeLayer.name, store.getActiveLayerIndex() + 1, store.layers.length);
   uiRenderer.update({
     frame: gameLoop.frame,
     state: gameLoop.state,
     lineCount: store.lines.length,
     toolName: currentTool.name,
     lineType: currentLineType,
+    activeLayerName: activeLayer.name,
+    activeLayerIndex: store.getActiveLayerIndex() + 1,
+    layerCount: store.layers.length,
     speed: rider.getCenterSpeed() * (1000 / TIMESTEP),
   });
 });
@@ -128,6 +134,9 @@ toolbar.onLoad = () => openLoadDialog();
 toolbar.onPlay = () => startPlayback();
 toolbar.onPause = () => gameLoop.pause();
 toolbar.onStop = () => stopPlayback();
+toolbar.onLayerPrev = () => cycleLayer(-1);
+toolbar.onLayerNext = () => cycleLayer(1);
+toolbar.onLayerNew = () => addLayer();
 
 loadInput.addEventListener('change', async () => {
   const file = loadInput.files?.[0];
@@ -161,6 +170,7 @@ function switchTool(name: string) {
 function clearTrack() {
   if (gameLoop.state !== GameState.EDITING) return;
   store.clear();
+  rider.setStartPosition(store.startPosition);
 }
 
 function beginQuickErase(worldPos: Vec2) {
@@ -198,6 +208,16 @@ function openLoadDialog() {
   loadInput.click();
 }
 
+function cycleLayer(direction: 1 | -1) {
+  if (gameLoop.state !== GameState.EDITING) return;
+  store.cycleActiveLayer(direction);
+}
+
+function addLayer() {
+  if (gameLoop.state !== GameState.EDITING) return;
+  store.createLayer();
+}
+
 function startPlayback() {
   if (gameLoop.state === GameState.EDITING) {
     // Build grid from current lines
@@ -231,7 +251,7 @@ renderer.addRenderCallback((ctx) => {
   flagRenderer.render(ctx, store.startPosition);
 
   // Draw lines
-  lineRenderer.render(ctx, store.lines, camera);
+  lineRenderer.render(ctx, store.lines, store.layers);
 
   // Draw active tool preview
   if (gameLoop.state === GameState.EDITING && currentTool.render) {

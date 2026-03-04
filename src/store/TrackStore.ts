@@ -28,6 +28,13 @@ export interface SerializedTrackLayer {
   editable: boolean;
 }
 
+export interface TrackLayer {
+  id: number;
+  name: string;
+  visible: boolean;
+  editable: boolean;
+}
+
 export interface SerializedTrack {
   version: string;
   label: string;
@@ -40,6 +47,8 @@ export interface SerializedTrack {
 interface TrackSnapshot {
   lines: Line[];
   startPosition: Vec2;
+  layers: TrackLayer[];
+  activeLayerId: number;
 }
 
 interface NormalizedTrackLine {
@@ -57,12 +66,15 @@ interface NormalizedTrackLine {
 
 interface NormalizedTrack {
   startPosition: Vec2;
+  layers: TrackLayer[];
   lines: NormalizedTrackLine[];
 }
 
 export class TrackStore {
   lines: Line[] = [];
   startPosition: Vec2 = new Vec2(0, 0);
+  layers: TrackLayer[] = [this.createDefaultLayer()];
+  activeLayerId = 0;
 
   private undoStack: TrackSnapshot[] = [];
   private redoStack: TrackSnapshot[] = [];
@@ -70,7 +82,7 @@ export class TrackStore {
   private transactionChanged = false;
 
   addLine(p1: Vec2, p2: Vec2, type: LineType): Line {
-    const line = this.createLine(p1, p2, type);
+    const line = this.createLine(p1, p2, type, { layer: this.activeLayerId });
     this.beginMutation();
     this.lines.push(line);
     return line;
@@ -85,6 +97,7 @@ export class TrackStore {
       const line = this.createLine(seg.p1, seg.p2, type, {
         leftExtended: i > 0,
         rightExtended: i < segments.length - 1,
+        layer: this.activeLayerId,
       });
       this.lines.push(line);
       added.push(line);
@@ -96,7 +109,10 @@ export class TrackStore {
     if (this.lines.length === 0) return 0;
 
     const radiusSq = radius * radius;
-    const nextLines = this.lines.filter(line => line.distanceToPointSq(point) > radiusSq);
+    const nextLines = this.lines.filter(line => {
+      if (line.layer !== this.activeLayerId) return true;
+      return line.distanceToPointSq(point) > radiusSq;
+    });
     const removed = this.lines.length - nextLines.length;
     if (removed === 0) return 0;
 
@@ -106,9 +122,21 @@ export class TrackStore {
   }
 
   clear(): boolean {
-    if (this.lines.length === 0) return false;
+    const mainLayer = this.layers[0];
+    const alreadyDefault =
+      this.lines.length === 0 &&
+      this.layers.length === 1 &&
+      mainLayer.id === 0 &&
+      mainLayer.name === 'Main' &&
+      mainLayer.visible &&
+      mainLayer.editable &&
+      this.activeLayerId === 0;
+    if (alreadyDefault) return false;
+
     this.beginMutation();
     this.lines = [];
+    this.layers = [this.createDefaultLayer()];
+    this.activeLayerId = 0;
     return true;
   }
 
@@ -117,6 +145,45 @@ export class TrackStore {
     this.beginMutation();
     this.startPosition = position.clone();
     return true;
+  }
+
+  getActiveLayer(): TrackLayer {
+    return this.layers.find(layer => layer.id === this.activeLayerId) ?? this.layers[0];
+  }
+
+  getActiveLayerIndex(): number {
+    return Math.max(0, this.layers.findIndex(layer => layer.id === this.activeLayerId));
+  }
+
+  createLayer(): TrackLayer {
+    const nextId = this.layers.reduce((maxId, layer) => Math.max(maxId, layer.id), -1) + 1;
+    const layer: TrackLayer = {
+      id: nextId,
+      name: `Layer ${this.layers.length + 1}`,
+      visible: true,
+      editable: true,
+    };
+
+    this.beginMutation();
+    this.layers = [...this.layers, layer];
+    this.activeLayerId = layer.id;
+    return layer;
+  }
+
+  cycleActiveLayer(direction: 1 | -1): TrackLayer {
+    const selectableLayers = this.layers.filter(layer => layer.visible && layer.editable);
+    const candidates = selectableLayers.length > 0 ? selectableLayers : this.layers;
+    const index = Math.max(0, candidates.findIndex(layer => layer.id === this.activeLayerId));
+    const nextIndex = (index + direction + candidates.length) % candidates.length;
+    const nextLayer = candidates[nextIndex];
+
+    if (nextLayer.id === this.activeLayerId) {
+      return nextLayer;
+    }
+
+    this.beginMutation();
+    this.activeLayerId = nextLayer.id;
+    return nextLayer;
   }
 
   serialize(): SerializedTrack {
@@ -128,14 +195,7 @@ export class TrackStore {
         x: this.startPosition.x,
         y: this.startPosition.y,
       },
-      layers: [
-        {
-          id: 0,
-          name: 'Main',
-          visible: true,
-          editable: true,
-        },
-      ],
+      layers: this.layers.map(layer => ({ ...layer })),
       lines: this.lines.map(line => ({
         id: line.id,
         type: this.encodeLineType(line.type),
@@ -172,6 +232,8 @@ export class TrackStore {
 
     this.beginMutation();
     this.startPosition = normalizedTrack.startPosition;
+    this.layers = normalizedTrack.layers;
+    this.activeLayerId = this.getPreferredActiveLayerId(normalizedTrack.layers);
     this.lines = loadedLines;
     return true;
   }
@@ -232,12 +294,16 @@ export class TrackStore {
     return {
       lines: [...this.lines],
       startPosition: this.startPosition.clone(),
+      layers: this.layers.map(layer => ({ ...layer })),
+      activeLayerId: this.activeLayerId,
     };
   }
 
   private applySnapshot(snapshot: TrackSnapshot) {
     this.lines = [...snapshot.lines];
     this.startPosition = snapshot.startPosition.clone();
+    this.layers = snapshot.layers.map(layer => ({ ...layer }));
+    this.activeLayerId = snapshot.activeLayerId;
   }
 
   private createLine(p1: Vec2, p2: Vec2, type: LineType, options: LineOptions = {}): Line {
@@ -253,6 +319,7 @@ export class TrackStore {
 
     const candidate = track as {
       startPosition?: { x?: unknown; y?: unknown };
+      layers?: Array<Record<string, unknown>>;
       lines?: Array<Record<string, unknown>>;
     };
     if (!candidate.startPosition || !Array.isArray(candidate.lines)) return null;
@@ -260,7 +327,12 @@ export class TrackStore {
     const { x, y } = candidate.startPosition;
     if (typeof x !== 'number' || typeof y !== 'number') return null;
 
+    const layers = this.normalizeLayers(candidate.layers);
+    if (!layers) return null;
+
     const normalizedLines: NormalizedTrackLine[] = [];
+    const validLayerIds = new Set(layers.map(layer => layer.id));
+    const fallbackLayerId = this.getPreferredActiveLayerId(layers);
     for (const line of candidate.lines) {
       if (!line || typeof line !== 'object') return null;
 
@@ -296,15 +368,57 @@ export class TrackStore {
         flipped: this.toBoolean(line.flipped) ?? false,
         leftExtended,
         rightExtended,
-        layer: typeof line.layer === 'number' && Number.isFinite(line.layer) ? line.layer : 0,
+        layer:
+          typeof line.layer === 'number' &&
+          Number.isFinite(line.layer) &&
+          validLayerIds.has(line.layer)
+            ? line.layer
+            : fallbackLayerId,
         multiplier: typeof line.multiplier === 'number' ? line.multiplier : undefined,
       });
     }
 
     return {
       startPosition: new Vec2(x, y),
+      layers,
       lines: normalizedLines,
     };
+  }
+
+  private normalizeLayers(layers: Array<Record<string, unknown>> | undefined): TrackLayer[] | null {
+    if (!layers || layers.length === 0) {
+      return [this.createDefaultLayer()];
+    }
+
+    const normalizedLayers: TrackLayer[] = [];
+    for (const layer of layers) {
+      if (
+        typeof layer.id !== 'number' ||
+        !Number.isFinite(layer.id) ||
+        typeof layer.name !== 'string'
+      ) {
+        return null;
+      }
+
+      normalizedLayers.push({
+        id: layer.id,
+        name: layer.name,
+        visible: this.toBoolean(layer.visible) ?? true,
+        editable: this.toBoolean(layer.editable) ?? true,
+      });
+    }
+
+    if (normalizedLayers.length === 0) {
+      return [this.createDefaultLayer()];
+    }
+
+    const fallbackLayer = normalizedLayers.find(layer => layer.visible && layer.editable)
+      ?? normalizedLayers.find(layer => layer.editable)
+      ?? normalizedLayers[0];
+    fallbackLayer.visible = true;
+    fallbackLayer.editable = true;
+
+    return normalizedLayers;
   }
 
   private toBoolean(value: unknown): boolean | undefined {
@@ -329,5 +443,22 @@ export class TrackStore {
     if (type === LineType.ACC || type === 1) return LineType.ACC;
     if (type === LineType.SCENERY || type === 2) return LineType.SCENERY;
     return null;
+  }
+
+  private createDefaultLayer(): TrackLayer {
+    return {
+      id: 0,
+      name: 'Main',
+      visible: true,
+      editable: true,
+    };
+  }
+
+  private getPreferredActiveLayerId(layers: TrackLayer[]): number {
+    return (
+      layers.find(layer => layer.visible && layer.editable)
+      ?? layers.find(layer => layer.editable)
+      ?? layers[0]
+    ).id;
   }
 }

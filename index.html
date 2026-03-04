@@ -125,7 +125,8 @@
     }
     #tool-rail::before,
     #line-type-strip::before,
-    #file-actions::before {
+    #file-actions::before,
+    #layer-strip::before {
       content: attr(data-label);
       font: 700 11px/1 var(--ui-font);
       letter-spacing: 0.14em;
@@ -170,14 +171,15 @@
     }
     #bottom-dock {
       display: grid;
-      grid-template-columns: minmax(0, 1fr) auto auto;
+      grid-template-columns: minmax(0, 1fr) auto auto auto;
       align-items: center;
       gap: 16px;
       padding: 18px 22px 22px;
       z-index: 10;
     }
     #file-actions,
-    #line-type-strip {
+    #line-type-strip,
+    #layer-strip {
       display: flex;
       align-items: center;
       gap: 10px;
@@ -232,6 +234,10 @@
       border-color: rgba(24, 24, 24, 0.08);
       background: rgba(255, 255, 255, 0.86);
     }
+    button.layer-label:disabled {
+      opacity: 1;
+      box-shadow: 0 10px 18px rgba(20, 20, 20, 0.06);
+    }
     button.active {
       background: linear-gradient(180deg, #1d1d1d 0%, #080808 100%);
       border-color: #080808;
@@ -251,6 +257,13 @@
     }
     button.line-type-button {
       min-width: 112px;
+    }
+    button.layer-button {
+      min-width: 52px;
+    }
+    button.layer-label {
+      min-width: 176px;
+      justify-content: flex-start;
     }
     button[data-color="solid"] {
       box-shadow: inset 0 -3px 0 #2266cc, 0 10px 18px rgba(20, 20, 20, 0.06);
@@ -321,7 +334,8 @@
       }
       #transport,
       #line-type-strip,
-      #file-actions {
+      #file-actions,
+      #layer-strip {
         justify-self: stretch;
         justify-content: center;
         flex-wrap: wrap;
@@ -368,6 +382,7 @@
     <div id="bottom-dock">
       <div id="file-actions" data-label="Project"></div>
       <div id="transport"></div>
+      <div id="layer-strip" data-label="Layers"></div>
       <div id="line-type-strip" data-label="Track"></div>
     </div>
   </div>

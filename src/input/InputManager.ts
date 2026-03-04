@@ -10,7 +10,11 @@ export class InputManager {
   private isPanning = false;
   private quickErasing = false;
   private isSpaceDown = false;
-  private activePointerId: number | null = null;
+  private activeMousePointerId: number | null = null;
+  private touchPointers: Map<number, Vec2> = new Map();
+  private touchDrawingPointerId: number | null = null;
+  private touchGestureCenter: Vec2 | null = null;
+  private touchGestureDistance = 0;
   private lastMouse = new Vec2();
   private mouseDown = false;
 
@@ -55,119 +59,39 @@ export class InputManager {
   }
 
   private onPointerDown = (e: PointerEvent) => {
-    if (this.activePointerId !== null) {
+    if (e.pointerType === 'mouse') {
+      this.onMousePointerDown(e);
       return;
     }
 
-    const sp = this.screenPos(e);
-    this.lastMouse.copyFrom(sp);
-    this.activePointerId = e.pointerId;
-    this.canvas.setPointerCapture(e.pointerId);
-
-    if (e.pointerType !== 'mouse') {
-      e.preventDefault();
-    }
-
-    // Middle mouse or space+left = pan
-    if (e.pointerType === 'mouse' && (e.button === 1 || (e.button === 0 && this.isSpaceDown))) {
-      this.isPanning = true;
-      this.canvas.style.cursor = 'grabbing';
-      return;
-    }
-
-    if (e.pointerType === 'mouse' && e.button === 2 && this.getState() === GameState.EDITING) {
-      this.quickErasing = true;
-      const wp = this.camera.screenToWorld(sp);
-      this.onQuickEraseStart?.(wp);
-      return;
-    }
-
-    if (this.isPrimaryDrawPointer(e) && this.tool && this.getState() === GameState.EDITING) {
-      this.mouseDown = true;
-      const wp = this.camera.screenToWorld(sp);
-      this.tool.onMouseDown(wp, sp, this.getToolButton(e));
-    }
+    this.onTouchPointerDown(e);
   };
 
   private onPointerMove = (e: PointerEvent) => {
-    if (this.activePointerId !== null && e.pointerId !== this.activePointerId) {
+    if (e.pointerType === 'mouse') {
+      this.onMousePointerMove(e);
       return;
     }
 
-    const sp = this.screenPos(e);
-
-    if (e.pointerType !== 'mouse') {
-      e.preventDefault();
-    }
-
-    if (this.isPanning) {
-      const dx = sp.x - this.lastMouse.x;
-      const dy = sp.y - this.lastMouse.y;
-      this.camera.pan(dx, dy);
-      this.lastMouse.copyFrom(sp);
-      return;
-    }
-
-    if (this.quickErasing && this.getState() === GameState.EDITING) {
-      const wp = this.camera.screenToWorld(sp);
-      this.onQuickEraseMove?.(wp);
-      return;
-    }
-
-    if (this.tool && this.getState() === GameState.EDITING) {
-      const wp = this.camera.screenToWorld(sp);
-      this.tool.onMouseMove(wp, sp);
-    }
+    this.onTouchPointerMove(e);
   };
 
   private onPointerUp = (e: PointerEvent) => {
-    if (this.activePointerId !== e.pointerId) {
+    if (e.pointerType === 'mouse') {
+      this.onMousePointerUp(e);
       return;
     }
 
-    const sp = this.screenPos(e);
-
-    if (e.pointerType !== 'mouse') {
-      e.preventDefault();
-    }
-
-    if (this.isPanning && (e.button === 1 || e.button === 0)) {
-      this.isPanning = false;
-      this.canvas.style.cursor = '';
-      this.releasePointer(e.pointerId);
-      return;
-    }
-
-    if (this.quickErasing && e.button === 2) {
-      this.quickErasing = false;
-      this.onQuickEraseEnd?.();
-      this.releasePointer(e.pointerId);
-      return;
-    }
-
-    if (this.mouseDown && this.tool && this.getState() === GameState.EDITING) {
-      this.mouseDown = false;
-      const wp = this.camera.screenToWorld(sp);
-      this.tool.onMouseUp(wp, sp, this.getToolButton(e));
-    }
-
-    this.releasePointer(e.pointerId);
+    this.onTouchPointerUp(e);
   };
 
   private onPointerCancel = (e: PointerEvent) => {
-    if (this.activePointerId !== e.pointerId) {
+    if (e.pointerType === 'mouse') {
+      this.onMousePointerCancel(e);
       return;
     }
 
-    if (this.quickErasing) {
-      this.quickErasing = false;
-      this.onQuickEraseEnd?.();
-    }
-
-    this.isPanning = false;
-    this.mouseDown = false;
-    this.canvas.style.cursor = '';
-    this.releasePointer(e.pointerId);
+    this.onTouchPointerCancel(e);
   };
 
   private onWheel = (e: WheelEvent) => {
@@ -243,22 +167,291 @@ export class InputManager {
     return this.getGameState?.() ?? GameState.EDITING;
   }
 
-  private isPrimaryDrawPointer(e: PointerEvent): boolean {
-    if (e.pointerType === 'mouse') {
-      return e.button === 0;
+  private onMousePointerDown(e: PointerEvent) {
+    if (this.activeMousePointerId !== null || this.touchPointers.size > 0) {
+      return;
     }
 
-    return e.isPrimary;
+    const sp = this.screenPos(e);
+    this.lastMouse.copyFrom(sp);
+    this.activeMousePointerId = e.pointerId;
+    this.canvas.setPointerCapture(e.pointerId);
+
+    if (e.button === 1 || (e.button === 0 && this.isSpaceDown)) {
+      this.isPanning = true;
+      this.canvas.style.cursor = 'grabbing';
+      return;
+    }
+
+    if (e.button === 2 && this.getState() === GameState.EDITING) {
+      this.quickErasing = true;
+      const wp = this.camera.screenToWorld(sp);
+      this.onQuickEraseStart?.(wp);
+      return;
+    }
+
+    if (e.button === 0 && this.tool && this.getState() === GameState.EDITING) {
+      this.mouseDown = true;
+      const wp = this.camera.screenToWorld(sp);
+      this.tool.onMouseDown(wp, sp, 0);
+    }
   }
 
-  private getToolButton(e: PointerEvent): number {
-    return e.pointerType === 'mouse' ? e.button : 0;
+  private onMousePointerMove(e: PointerEvent) {
+    if (this.activeMousePointerId !== null && e.pointerId !== this.activeMousePointerId) {
+      return;
+    }
+
+    const sp = this.screenPos(e);
+
+    if (this.isPanning) {
+      const dx = sp.x - this.lastMouse.x;
+      const dy = sp.y - this.lastMouse.y;
+      this.camera.pan(dx, dy);
+      this.lastMouse.copyFrom(sp);
+      return;
+    }
+
+    if (this.quickErasing && this.getState() === GameState.EDITING) {
+      const wp = this.camera.screenToWorld(sp);
+      this.onQuickEraseMove?.(wp);
+      return;
+    }
+
+    if (this.tool && this.getState() === GameState.EDITING) {
+      const wp = this.camera.screenToWorld(sp);
+      this.tool.onMouseMove(wp, sp);
+    }
   }
 
-  private releasePointer(pointerId: number) {
+  private onMousePointerUp(e: PointerEvent) {
+    if (this.activeMousePointerId !== e.pointerId) {
+      return;
+    }
+
+    const sp = this.screenPos(e);
+
+    if (this.isPanning && (e.button === 1 || e.button === 0)) {
+      this.isPanning = false;
+      this.canvas.style.cursor = '';
+      this.releaseCapturedPointer(e.pointerId);
+      this.activeMousePointerId = null;
+      return;
+    }
+
+    if (this.quickErasing && e.button === 2) {
+      this.quickErasing = false;
+      this.onQuickEraseEnd?.();
+      this.releaseCapturedPointer(e.pointerId);
+      this.activeMousePointerId = null;
+      return;
+    }
+
+    if (this.mouseDown && this.tool && this.getState() === GameState.EDITING) {
+      this.mouseDown = false;
+      const wp = this.camera.screenToWorld(sp);
+      this.tool.onMouseUp(wp, sp, e.button);
+    }
+
+    this.releaseCapturedPointer(e.pointerId);
+    this.activeMousePointerId = null;
+  }
+
+  private onMousePointerCancel(e: PointerEvent) {
+    if (this.activeMousePointerId !== e.pointerId) {
+      return;
+    }
+
+    if (this.quickErasing) {
+      this.quickErasing = false;
+      this.onQuickEraseEnd?.();
+    }
+
+    this.isPanning = false;
+    this.mouseDown = false;
+    this.canvas.style.cursor = '';
+    this.releaseCapturedPointer(e.pointerId);
+    this.activeMousePointerId = null;
+  }
+
+  private onTouchPointerDown(e: PointerEvent) {
+    if (this.activeMousePointerId !== null) {
+      return;
+    }
+
+    e.preventDefault();
+    const sp = this.screenPos(e);
+    this.touchPointers.set(e.pointerId, sp);
+    this.canvas.setPointerCapture(e.pointerId);
+
+    if (this.touchPointers.size === 1) {
+      this.touchDrawingPointerId = e.pointerId;
+      this.resetTouchGesture();
+
+      if (this.tool && this.getState() === GameState.EDITING) {
+        this.mouseDown = true;
+        const wp = this.camera.screenToWorld(sp);
+        this.tool.onMouseDown(wp, sp, 0);
+      }
+      return;
+    }
+
+    this.finishTouchStroke();
+    this.beginTouchGesture();
+  }
+
+  private onTouchPointerMove(e: PointerEvent) {
+    if (!this.touchPointers.has(e.pointerId)) {
+      return;
+    }
+
+    e.preventDefault();
+    const sp = this.screenPos(e);
+    this.touchPointers.set(e.pointerId, sp);
+
+    if (this.touchPointers.size >= 2) {
+      this.updateTouchGesture();
+      return;
+    }
+
+    if (
+      this.touchDrawingPointerId === e.pointerId &&
+      this.mouseDown &&
+      this.tool &&
+      this.getState() === GameState.EDITING
+    ) {
+      const wp = this.camera.screenToWorld(sp);
+      this.tool.onMouseMove(wp, sp);
+    }
+  }
+
+  private onTouchPointerUp(e: PointerEvent) {
+    if (!this.touchPointers.has(e.pointerId)) {
+      return;
+    }
+
+    e.preventDefault();
+    const sp = this.screenPos(e);
+    const wasDrawingPointer = this.touchDrawingPointerId === e.pointerId;
+
+    if (
+      wasDrawingPointer &&
+      this.mouseDown &&
+      this.tool &&
+      this.getState() === GameState.EDITING &&
+      this.touchPointers.size === 1
+    ) {
+      this.mouseDown = false;
+      const wp = this.camera.screenToWorld(sp);
+      this.tool.onMouseUp(wp, sp, 0);
+    }
+
+    this.touchPointers.delete(e.pointerId);
+    this.releaseCapturedPointer(e.pointerId);
+
+    if (this.touchPointers.size < 2) {
+      this.resetTouchGesture();
+    }
+
+    if (this.touchPointers.size === 0) {
+      this.touchDrawingPointerId = null;
+      this.mouseDown = false;
+      return;
+    }
+
+    this.touchDrawingPointerId = null;
+  }
+
+  private onTouchPointerCancel(e: PointerEvent) {
+    if (!this.touchPointers.has(e.pointerId)) {
+      return;
+    }
+
+    this.touchPointers.delete(e.pointerId);
+    this.releaseCapturedPointer(e.pointerId);
+    this.touchDrawingPointerId = null;
+    this.mouseDown = false;
+    this.resetTouchGesture();
+  }
+
+  private beginTouchGesture() {
+    const metrics = this.getTouchGestureMetrics();
+    if (!metrics) return;
+    this.touchGestureCenter = metrics.center;
+    this.touchGestureDistance = metrics.distance;
+  }
+
+  private updateTouchGesture() {
+    const metrics = this.getTouchGestureMetrics();
+    if (!metrics) return;
+
+    if (!this.touchGestureCenter) {
+      this.beginTouchGesture();
+      return;
+    }
+
+    const dx = metrics.center.x - this.touchGestureCenter.x;
+    const dy = metrics.center.y - this.touchGestureCenter.y;
+    if (dx !== 0 || dy !== 0) {
+      this.camera.pan(dx, dy);
+    }
+
+    if (this.touchGestureDistance > 0 && metrics.distance > 0) {
+      this.camera.zoomAt(
+        metrics.center.x,
+        metrics.center.y,
+        metrics.distance / this.touchGestureDistance,
+      );
+    }
+
+    this.touchGestureCenter = metrics.center;
+    this.touchGestureDistance = metrics.distance;
+  }
+
+  private getTouchGestureMetrics(): { center: Vec2; distance: number } | null {
+    const points = [...this.touchPointers.values()];
+    if (points.length < 2) return null;
+
+    const [a, b] = points;
+    return {
+      center: new Vec2((a.x + b.x) / 2, (a.y + b.y) / 2),
+      distance: a.distanceTo(b),
+    };
+  }
+
+  private finishTouchStroke() {
+    if (
+      this.touchDrawingPointerId === null ||
+      !this.mouseDown ||
+      !this.tool ||
+      this.getState() !== GameState.EDITING
+    ) {
+      this.touchDrawingPointerId = null;
+      this.mouseDown = false;
+      return;
+    }
+
+    const screenPos = this.touchPointers.get(this.touchDrawingPointerId);
+    if (!screenPos) {
+      this.touchDrawingPointerId = null;
+      this.mouseDown = false;
+      return;
+    }
+
+    this.mouseDown = false;
+    const worldPos = this.camera.screenToWorld(screenPos);
+    this.tool.onMouseUp(worldPos, screenPos, 0);
+    this.touchDrawingPointerId = null;
+  }
+
+  private resetTouchGesture() {
+    this.touchGestureCenter = null;
+    this.touchGestureDistance = 0;
+  }
+
+  private releaseCapturedPointer(pointerId: number) {
     if (this.canvas.hasPointerCapture(pointerId)) {
       this.canvas.releasePointerCapture(pointerId);
     }
-    this.activePointerId = null;
   }
 }
