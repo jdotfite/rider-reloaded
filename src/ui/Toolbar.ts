@@ -11,6 +11,8 @@ export class Toolbar {
   onToolSelect: ((tool: string) => void) | null = null;
   onLineTypeSelect: ((type: LineType) => void) | null = null;
   onClear: (() => void) | null = null;
+  onUndo: (() => void) | null = null;
+  onRedo: (() => void) | null = null;
   onSave: (() => void) | null = null;
   onLoad: (() => void) | null = null;
   onPlay: (() => void) | null = null;
@@ -46,7 +48,9 @@ export class Toolbar {
     this.addToolBtn('curve', 'Curve (4)');
     this.addToolBtn('flag', 'Flag (5)');
 
-    this.addBtn(this.fileActions, 'New / Clear', () => this.onClear?.());
+    this.addBtn(this.fileActions, 'Clear', () => this.onClear?.());
+    this.addBtn(this.fileActions, 'Undo', () => this.onUndo?.());
+    this.addBtn(this.fileActions, 'Redo', () => this.onRedo?.());
     this.addBtn(this.fileActions, 'Save', () => this.onSave?.());
     this.addBtn(this.fileActions, 'Load', () => this.onLoad?.());
 

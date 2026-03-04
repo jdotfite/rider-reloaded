@@ -129,6 +129,16 @@ toolbar.onLineTypeSelect = (type) => {
   toolbar.setActiveLineType(type);
 };
 toolbar.onClear = () => clearTrack();
+toolbar.onUndo = () => {
+  if (gameLoop.state === GameState.EDITING) {
+    store.undo();
+  }
+};
+toolbar.onRedo = () => {
+  if (gameLoop.state === GameState.EDITING) {
+    store.redo();
+  }
+};
 toolbar.onSave = () => saveTrack();
 toolbar.onLoad = () => openLoadDialog();
 toolbar.onPlay = () => startPlayback();
