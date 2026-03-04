@@ -62,6 +62,9 @@ loadInput.accept = '.track.json,.json,application/json';
 loadInput.style.display = 'none';
 document.body.appendChild(loadInput);
 const mobileMoreToggle = document.getElementById('mobile-more-toggle') as HTMLButtonElement | null;
+const layerRenameInput = document.getElementById('layer-rename-input') as HTMLInputElement | null;
+const layerRenameSave = document.getElementById('layer-rename-save') as HTMLButtonElement | null;
+const layerRenameCancel = document.getElementById('layer-rename-cancel') as HTMLButtonElement | null;
 
 // Input
 const input = new InputManager(canvas, camera);
@@ -185,6 +188,21 @@ if (mobileMoreToggle) {
   syncMobileUiToggle();
 }
 
+if (layerRenameSave && layerRenameCancel && layerRenameInput) {
+  layerRenameSave.addEventListener('click', () => commitLayerRename());
+  layerRenameCancel.addEventListener('click', () => closeLayerRename());
+  layerRenameInput.addEventListener('keydown', (event) => {
+    if (event.key === 'Enter') {
+      event.preventDefault();
+      commitLayerRename();
+    }
+    if (event.key === 'Escape') {
+      event.preventDefault();
+      closeLayerRename();
+    }
+  });
+}
+
 loadInput.addEventListener('change', async () => {
   const file = loadInput.files?.[0];
   if (!file || gameLoop.state !== GameState.EDITING) return;
@@ -281,12 +299,25 @@ function moveLayer(direction: 1 | -1) {
 }
 
 function renameLayer() {
-  if (gameLoop.state !== GameState.EDITING) return;
+  if (gameLoop.state !== GameState.EDITING || !layerRenameInput) return;
 
-  const activeLayer = store.getActiveLayer();
-  const nextName = window.prompt('Rename layer', activeLayer.name);
-  if (nextName == null) return;
-  store.renameActiveLayer(nextName);
+  document.body.classList.add('layer-renaming');
+  layerRenameInput.value = store.getActiveLayer().name;
+  requestAnimationFrame(() => {
+    layerRenameInput.focus();
+    layerRenameInput.select();
+  });
+}
+
+function commitLayerRename() {
+  if (!layerRenameInput) return;
+  store.renameActiveLayer(layerRenameInput.value);
+  closeLayerRename();
+}
+
+function closeLayerRename() {
+  document.body.classList.remove('layer-renaming');
+  layerRenameInput?.blur();
 }
 
 function startPlayback() {
