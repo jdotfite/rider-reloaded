@@ -2,7 +2,7 @@ import { LineType } from '../physics/lines/LineTypes';
 import { GameState } from '../game/GameState';
 
 export class Toolbar {
-  private static readonly COMPACT_BREAKPOINT = 720;
+  private static readonly COMPACT_BREAKPOINT = 1240;
   private static readonly ICON_BREAKPOINT = 560;
 
   private toolRail: HTMLElement;
@@ -83,9 +83,9 @@ export class Toolbar {
     this.layerLabelBtn = this.addBtn(this.layerStrip, 'Main', () => {});
     this.layerLabelBtn.classList.add('subtle', 'layer-label');
     this.layerLabelBtn.disabled = true;
-    this.layerVisibilityBtn = this.addBtn(this.layerStrip, 'Shown', () => this.onLayerToggleVisibility?.(), 'Show', 'V');
+    this.layerVisibilityBtn = this.addBtn(this.layerStrip, 'Shown', () => this.onLayerToggleVisibility?.(), 'Visible', 'V');
     this.layerVisibilityBtn.classList.add('layer-state-button');
-    this.layerEditBtn = this.addBtn(this.layerStrip, 'Edit', () => this.onLayerToggleEditability?.(), 'Edit', 'E');
+    this.layerEditBtn = this.addBtn(this.layerStrip, 'Edit', () => this.onLayerToggleEditability?.(), 'Editable', 'E');
     this.layerEditBtn.classList.add('layer-state-button');
     this.layerNextBtn = this.addBtn(this.layerStrip, '>', () => this.onLayerNext?.());
     this.layerNextBtn.classList.add('layer-button');
@@ -167,14 +167,14 @@ export class Toolbar {
     this.setResponsiveLabel(
       this.layerVisibilityBtn,
       visible ? 'Shown' : 'Hidden',
-      visible ? 'Show' : 'Hide',
+      visible ? 'Visible' : 'Hidden',
       visible ? 'V' : 'H',
     );
     this.layerVisibilityBtn.classList.toggle('active', !visible);
     this.setResponsiveLabel(
       this.layerEditBtn,
       editable ? 'Edit' : 'Locked',
-      editable ? 'Edit' : 'Lock',
+      editable ? 'Editable' : 'Locked',
       editable ? 'E' : 'L',
     );
     this.layerEditBtn.classList.toggle('active', !editable);
@@ -182,6 +182,8 @@ export class Toolbar {
 
   private setResponsiveLabel(button: HTMLButtonElement, wide: string, compact: string, icon: string = compact) {
     this.responsiveButtons.set(button, { wide, compact, icon });
+    button.title = wide;
+    button.setAttribute('aria-label', wide);
     button.textContent =
       this.labelMode === 'icon' ? icon : this.labelMode === 'compact' ? compact : wide;
   }
@@ -196,6 +198,8 @@ export class Toolbar {
     }
 
     for (const [button, labels] of this.responsiveButtons) {
+      button.title = labels.wide;
+      button.setAttribute('aria-label', labels.wide);
       button.textContent =
         this.labelMode === 'icon'
           ? labels.icon

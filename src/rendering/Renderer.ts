@@ -6,6 +6,7 @@ export class Renderer {
   ctx: CanvasRenderingContext2D;
   camera: Camera;
   private renderCallbacks: Array<(ctx: CanvasRenderingContext2D) => void> = [];
+  private resizeObserver: ResizeObserver | null = null;
 
   constructor(canvas: HTMLCanvasElement, camera: Camera) {
     this.canvas = canvas;
@@ -13,12 +14,19 @@ export class Renderer {
     this.camera = camera;
     this.resize();
     window.addEventListener('resize', () => this.resize());
+    if (typeof ResizeObserver !== 'undefined') {
+      const container = this.canvas.parentElement;
+      if (container) {
+        this.resizeObserver = new ResizeObserver(() => this.resize());
+        this.resizeObserver.observe(container);
+      }
+    }
   }
 
   resize() {
-    const container = this.canvas.parentElement!;
-    const w = container.clientWidth;
-    const h = container.clientHeight;
+    const rect = this.canvas.getBoundingClientRect();
+    const w = Math.max(1, Math.round(rect.width));
+    const h = Math.max(1, Math.round(rect.height));
     this.canvas.width = w;
     this.canvas.height = h;
     this.camera.resize(w, h);
