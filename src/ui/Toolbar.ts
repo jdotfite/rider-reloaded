@@ -3,13 +3,14 @@ import { GameState } from '../game/GameState';
 
 export class Toolbar {
   private static readonly COMPACT_BREAKPOINT = 720;
+  private static readonly ICON_BREAKPOINT = 560;
 
   private toolRail: HTMLElement;
   private fileActions: HTMLElement;
   private transport: HTMLElement;
   private layerStrip: HTMLElement;
   private lineTypeStrip: HTMLElement;
-  private compactMode = false;
+  private labelMode: 'wide' | 'compact' | 'icon' = 'wide';
 
   onToolSelect: ((tool: string) => void) | null = null;
   onLineTypeSelect: ((type: LineType) => void) | null = null;
@@ -44,7 +45,7 @@ export class Toolbar {
   private layerMoveNextBtn!: HTMLButtonElement;
   private layerRenameBtn!: HTMLButtonElement;
   private layerNewBtn!: HTMLButtonElement;
-  private responsiveButtons: Map<HTMLButtonElement, { wide: string; compact: string }> = new Map();
+  private responsiveButtons: Map<HTMLButtonElement, { wide: string; compact: string; icon: string }> = new Map();
 
   constructor() {
     this.toolRail = this.requireElement('tool-rail');
@@ -58,23 +59,23 @@ export class Toolbar {
   }
 
   private build() {
-    this.addToolBtn('pencil', 'Pencil (1)', 'Pen');
-    this.addToolBtn('line', 'Line (2)', 'Line');
-    this.addToolBtn('eraser', 'Eraser (3)', 'Erase');
-    this.addToolBtn('curve', 'Curve (4)', 'Curve');
-    this.addToolBtn('flag', 'Flag (5)', 'Flag');
+    this.addToolBtn('pencil', 'Pencil (1)', 'Pen', 'P');
+    this.addToolBtn('line', 'Line (2)', 'Line', 'L');
+    this.addToolBtn('eraser', 'Eraser (3)', 'Erase', 'X');
+    this.addToolBtn('curve', 'Curve (4)', 'Curve', 'C');
+    this.addToolBtn('flag', 'Flag (5)', 'Flag', 'F');
 
-    this.addBtn(this.fileActions, 'Clear', () => this.onClear?.(), 'Clr');
-    this.addBtn(this.fileActions, 'Undo', () => this.onUndo?.(), 'Undo');
-    this.addBtn(this.fileActions, 'Redo', () => this.onRedo?.(), 'Redo');
-    this.addBtn(this.fileActions, 'Save', () => this.onSave?.(), 'Save');
-    this.addBtn(this.fileActions, 'Load', () => this.onLoad?.(), 'Load');
+    this.addBtn(this.fileActions, 'Clear', () => this.onClear?.(), 'Clr', 'C');
+    this.addBtn(this.fileActions, 'Undo', () => this.onUndo?.(), 'Undo', 'U');
+    this.addBtn(this.fileActions, 'Redo', () => this.onRedo?.(), 'Redo', 'R');
+    this.addBtn(this.fileActions, 'Save', () => this.onSave?.(), 'Save', 'S');
+    this.addBtn(this.fileActions, 'Load', () => this.onLoad?.(), 'Load', 'L');
 
-    this.playBtn = this.addBtn(this.transport, 'Play', () => this.onPlay?.(), 'Play');
+    this.playBtn = this.addBtn(this.transport, 'Play', () => this.onPlay?.(), 'Play', '>');
     this.playBtn.classList.add('play-button');
-    this.pauseBtn = this.addBtn(this.transport, 'Pause', () => this.onPause?.(), 'Pause');
+    this.pauseBtn = this.addBtn(this.transport, 'Pause', () => this.onPause?.(), 'Pause', '||');
     this.pauseBtn.classList.add('subtle');
-    this.stopBtn = this.addBtn(this.transport, 'Stop', () => this.onStop?.(), 'Stop');
+    this.stopBtn = this.addBtn(this.transport, 'Stop', () => this.onStop?.(), 'Stop', '[]');
     this.stopBtn.classList.add('subtle');
 
     this.layerPrevBtn = this.addBtn(this.layerStrip, '<', () => this.onLayerPrev?.());
@@ -82,9 +83,9 @@ export class Toolbar {
     this.layerLabelBtn = this.addBtn(this.layerStrip, 'Main', () => {});
     this.layerLabelBtn.classList.add('subtle', 'layer-label');
     this.layerLabelBtn.disabled = true;
-    this.layerVisibilityBtn = this.addBtn(this.layerStrip, 'Shown', () => this.onLayerToggleVisibility?.(), 'Show');
+    this.layerVisibilityBtn = this.addBtn(this.layerStrip, 'Shown', () => this.onLayerToggleVisibility?.(), 'Show', 'V');
     this.layerVisibilityBtn.classList.add('layer-state-button');
-    this.layerEditBtn = this.addBtn(this.layerStrip, 'Edit', () => this.onLayerToggleEditability?.(), 'Edit');
+    this.layerEditBtn = this.addBtn(this.layerStrip, 'Edit', () => this.onLayerToggleEditability?.(), 'Edit', 'E');
     this.layerEditBtn.classList.add('layer-state-button');
     this.layerNextBtn = this.addBtn(this.layerStrip, '>', () => this.onLayerNext?.());
     this.layerNextBtn.classList.add('layer-button');
@@ -92,22 +93,22 @@ export class Toolbar {
     this.layerMovePrevBtn.classList.add('layer-button');
     this.layerMoveNextBtn = this.addBtn(this.layerStrip, '>>', () => this.onLayerMoveNext?.());
     this.layerMoveNextBtn.classList.add('layer-button');
-    this.layerRenameBtn = this.addBtn(this.layerStrip, 'Rename', () => this.onLayerRename?.(), 'Ren');
+    this.layerRenameBtn = this.addBtn(this.layerStrip, 'Rename', () => this.onLayerRename?.(), 'Ren', 'N');
     this.layerRenameBtn.classList.add('layer-state-button');
-    this.layerNewBtn = this.addBtn(this.layerStrip, '+ Layer', () => this.onLayerNew?.(), '+');
+    this.layerNewBtn = this.addBtn(this.layerStrip, '+ Layer', () => this.onLayerNew?.(), '+', '+');
 
-    this.addLineTypeBtn(LineType.SOLID, 'Solid (Q)', 'Solid');
-    this.addLineTypeBtn(LineType.ACC, 'Speed (W)', 'Speed');
-    this.addLineTypeBtn(LineType.SCENERY, 'Scenery (E)', 'Scene');
+    this.addLineTypeBtn(LineType.SOLID, 'Solid (Q)', 'Solid', 'N');
+    this.addLineTypeBtn(LineType.ACC, 'Speed (W)', 'Speed', 'R');
+    this.addLineTypeBtn(LineType.SCENERY, 'Scenery (E)', 'Scene', 'S');
   }
 
-  private addToolBtn(name: string, label: string, compactLabel?: string) {
-    const btn = this.addBtn(this.toolRail, label, () => this.onToolSelect?.(name), compactLabel);
+  private addToolBtn(name: string, label: string, compactLabel?: string, iconLabel?: string) {
+    const btn = this.addBtn(this.toolRail, label, () => this.onToolSelect?.(name), compactLabel, iconLabel);
     this.toolButtons.set(name, btn);
   }
 
-  private addLineTypeBtn(type: LineType, label: string, compactLabel?: string) {
-    const btn = this.addBtn(this.lineTypeStrip, label, () => this.onLineTypeSelect?.(type), compactLabel);
+  private addLineTypeBtn(type: LineType, label: string, compactLabel?: string, iconLabel?: string) {
+    const btn = this.addBtn(this.lineTypeStrip, label, () => this.onLineTypeSelect?.(type), compactLabel, iconLabel);
     btn.classList.add('line-type-button');
     btn.dataset.color = type;
     this.lineTypeButtons.set(type, btn);
@@ -118,9 +119,10 @@ export class Toolbar {
     label: string,
     onClick: () => void,
     compactLabel: string = label,
+    iconLabel: string = compactLabel,
   ): HTMLButtonElement {
     const btn = document.createElement('button');
-    this.setResponsiveLabel(btn, label, compactLabel);
+    this.setResponsiveLabel(btn, label, compactLabel, iconLabel);
     btn.addEventListener('click', onClick);
     container.appendChild(btn);
     return btn;
@@ -147,7 +149,7 @@ export class Toolbar {
   }
 
   setPlaybackState(state: GameState) {
-    this.setResponsiveLabel(this.playBtn, state === GameState.PAUSED ? 'Resume' : 'Play', 'Play');
+    this.setResponsiveLabel(this.playBtn, state === GameState.PAUSED ? 'Resume' : 'Play', 'Play', '>');
     this.playBtn.disabled = state === GameState.PLAYING;
     this.pauseBtn.disabled = state !== GameState.PLAYING;
     this.stopBtn.disabled = state === GameState.EDITING;
@@ -155,27 +157,51 @@ export class Toolbar {
   }
 
   setLayerState(name: string, index: number, count: number, visible: boolean, editable: boolean) {
-    this.layerLabelBtn.textContent = this.compactMode ? `${index}/${count} ${name}` : `${index}/${count} ${name}`;
+    this.layerLabelBtn.textContent = this.labelMode === 'icon' ? `${index}/${count}` : `${index}/${count} ${name}`;
+    this.layerLabelBtn.title = name;
     const multipleLayers = count > 1;
     this.layerPrevBtn.disabled = !multipleLayers;
     this.layerNextBtn.disabled = !multipleLayers;
     this.layerMovePrevBtn.disabled = !multipleLayers || index <= 1;
     this.layerMoveNextBtn.disabled = !multipleLayers || index >= count;
-    this.setResponsiveLabel(this.layerVisibilityBtn, visible ? 'Shown' : 'Hidden', visible ? 'Show' : 'Hide');
+    this.setResponsiveLabel(
+      this.layerVisibilityBtn,
+      visible ? 'Shown' : 'Hidden',
+      visible ? 'Show' : 'Hide',
+      visible ? 'V' : 'H',
+    );
     this.layerVisibilityBtn.classList.toggle('active', !visible);
-    this.setResponsiveLabel(this.layerEditBtn, editable ? 'Edit' : 'Locked', editable ? 'Edit' : 'Lock');
+    this.setResponsiveLabel(
+      this.layerEditBtn,
+      editable ? 'Edit' : 'Locked',
+      editable ? 'Edit' : 'Lock',
+      editable ? 'E' : 'L',
+    );
     this.layerEditBtn.classList.toggle('active', !editable);
   }
 
-  private setResponsiveLabel(button: HTMLButtonElement, wide: string, compact: string) {
-    this.responsiveButtons.set(button, { wide, compact });
-    button.textContent = this.compactMode ? compact : wide;
+  private setResponsiveLabel(button: HTMLButtonElement, wide: string, compact: string, icon: string = compact) {
+    this.responsiveButtons.set(button, { wide, compact, icon });
+    button.textContent =
+      this.labelMode === 'icon' ? icon : this.labelMode === 'compact' ? compact : wide;
   }
 
   private applyResponsiveLabels = () => {
-    this.compactMode = window.innerWidth <= Toolbar.COMPACT_BREAKPOINT;
+    if (window.innerWidth <= Toolbar.ICON_BREAKPOINT) {
+      this.labelMode = 'icon';
+    } else if (window.innerWidth <= Toolbar.COMPACT_BREAKPOINT) {
+      this.labelMode = 'compact';
+    } else {
+      this.labelMode = 'wide';
+    }
+
     for (const [button, labels] of this.responsiveButtons) {
-      button.textContent = this.compactMode ? labels.compact : labels.wide;
+      button.textContent =
+        this.labelMode === 'icon'
+          ? labels.icon
+          : this.labelMode === 'compact'
+            ? labels.compact
+            : labels.wide;
     }
   };
 }
