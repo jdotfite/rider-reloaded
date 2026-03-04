@@ -203,6 +203,35 @@ export class TrackStore {
     return this.getActiveLayer();
   }
 
+  moveActiveLayer(direction: 1 | -1): TrackLayer {
+    const currentIndex = this.getActiveLayerIndex();
+    const targetIndex = currentIndex + direction;
+    if (targetIndex < 0 || targetIndex >= this.layers.length) {
+      return this.getActiveLayer();
+    }
+
+    this.beginMutation();
+    const nextLayers = [...this.layers];
+    const [activeLayer] = nextLayers.splice(currentIndex, 1);
+    nextLayers.splice(targetIndex, 0, activeLayer);
+    this.layers = nextLayers;
+    return this.getActiveLayer();
+  }
+
+  renameActiveLayer(name: string): TrackLayer {
+    const nextName = name.trim();
+    const activeLayer = this.getActiveLayer();
+    if (!nextName || nextName === activeLayer.name) {
+      return activeLayer;
+    }
+
+    this.beginMutation();
+    this.layers = this.layers.map(layer =>
+      layer.id === activeLayer.id ? { ...layer, name: nextName } : layer
+    );
+    return this.getActiveLayer();
+  }
+
   serialize(): SerializedTrack {
     return {
       version: '6.2',

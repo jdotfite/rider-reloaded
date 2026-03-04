@@ -61,6 +61,7 @@ loadInput.type = 'file';
 loadInput.accept = '.track.json,.json,application/json';
 loadInput.style.display = 'none';
 document.body.appendChild(loadInput);
+const mobileMoreToggle = document.getElementById('mobile-more-toggle') as HTMLButtonElement | null;
 
 // Input
 const input = new InputManager(canvas, camera);
@@ -163,6 +164,26 @@ toolbar.onLayerNext = () => cycleLayer(1);
 toolbar.onLayerNew = () => addLayer();
 toolbar.onLayerToggleVisibility = () => toggleLayerVisibility();
 toolbar.onLayerToggleEditability = () => toggleLayerEditability();
+toolbar.onLayerMovePrev = () => moveLayer(-1);
+toolbar.onLayerMoveNext = () => moveLayer(1);
+toolbar.onLayerRename = () => renameLayer();
+
+if (mobileMoreToggle) {
+  const syncMobileUiToggle = () => {
+    if (window.innerWidth > 560) {
+      document.body.classList.remove('mobile-ui-expanded');
+    }
+    mobileMoreToggle.textContent = document.body.classList.contains('mobile-ui-expanded') ? 'Less' : 'More';
+  };
+
+  mobileMoreToggle.addEventListener('click', () => {
+    document.body.classList.toggle('mobile-ui-expanded');
+    syncMobileUiToggle();
+  });
+
+  window.addEventListener('resize', syncMobileUiToggle);
+  syncMobileUiToggle();
+}
 
 loadInput.addEventListener('change', async () => {
   const file = loadInput.files?.[0];
@@ -252,6 +273,20 @@ function toggleLayerVisibility() {
 function toggleLayerEditability() {
   if (gameLoop.state !== GameState.EDITING) return;
   store.toggleActiveLayerEditability();
+}
+
+function moveLayer(direction: 1 | -1) {
+  if (gameLoop.state !== GameState.EDITING) return;
+  store.moveActiveLayer(direction);
+}
+
+function renameLayer() {
+  if (gameLoop.state !== GameState.EDITING) return;
+
+  const activeLayer = store.getActiveLayer();
+  const nextName = window.prompt('Rename layer', activeLayer.name);
+  if (nextName == null) return;
+  store.renameActiveLayer(nextName);
 }
 
 function startPlayback() {

@@ -207,6 +207,11 @@
       flex: 0 1 auto;
       min-width: 0;
     }
+    #mobile-more-toggle {
+      display: none;
+      flex: 1 1 100%;
+      border-radius: 999px;
+    }
     #file-actions {
       flex: 1.1 1 330px;
     }
@@ -451,8 +456,8 @@
         display: none;
       }
       button {
-        min-height: 38px;
-        padding: 9px 11px;
+        min-height: 42px;
+        padding: 10px 12px;
         font-size: 12px;
       }
       button.play-button {
@@ -466,6 +471,50 @@
       }
       button.layer-state-button {
         min-width: 64px;
+      }
+    }
+    @media (max-width: 560px) {
+      #mobile-more-toggle {
+        display: inline-flex;
+      }
+      body:not(.mobile-ui-expanded) #file-actions,
+      body:not(.mobile-ui-expanded) #layer-strip {
+        display: none;
+      }
+      #bottom-dock {
+        gap: 8px;
+      }
+      #transport {
+        order: 1;
+      }
+      #mobile-more-toggle {
+        order: 2;
+      }
+      #line-type-strip {
+        order: 3;
+      }
+      #file-actions {
+        order: 4;
+      }
+      #layer-strip {
+        order: 5;
+      }
+      button {
+        min-height: 46px;
+        padding: 11px 14px;
+        font-size: 13px;
+      }
+      #tool-rail button {
+        min-height: 46px;
+      }
+      button.play-button {
+        min-width: 132px;
+      }
+      button.line-type-button {
+        min-width: 94px;
+      }
+      button.layer-label {
+        min-width: 150px;
       }
     }
     #canvas-container,
@@ -504,6 +553,7 @@
     <div id="bottom-dock">
       <div id="file-actions" data-label="Project"></div>
       <div id="transport"></div>
+      <button id="mobile-more-toggle" type="button">More</button>
       <div id="layer-strip" data-label="Layers"></div>
       <div id="line-type-strip" data-label="Track"></div>
     </div>

@@ -23,6 +23,9 @@ export class Toolbar {
   onLayerNew: (() => void) | null = null;
   onLayerToggleVisibility: (() => void) | null = null;
   onLayerToggleEditability: (() => void) | null = null;
+  onLayerMovePrev: (() => void) | null = null;
+  onLayerMoveNext: (() => void) | null = null;
+  onLayerRename: (() => void) | null = null;
 
   private toolButtons: Map<string, HTMLButtonElement> = new Map();
   private lineTypeButtons: Map<LineType, HTMLButtonElement> = new Map();
@@ -34,6 +37,9 @@ export class Toolbar {
   private layerVisibilityBtn!: HTMLButtonElement;
   private layerEditBtn!: HTMLButtonElement;
   private layerNextBtn!: HTMLButtonElement;
+  private layerMovePrevBtn!: HTMLButtonElement;
+  private layerMoveNextBtn!: HTMLButtonElement;
+  private layerRenameBtn!: HTMLButtonElement;
   private layerNewBtn!: HTMLButtonElement;
 
   constructor() {
@@ -76,6 +82,12 @@ export class Toolbar {
     this.layerEditBtn.classList.add('layer-state-button');
     this.layerNextBtn = this.addBtn(this.layerStrip, '>', () => this.onLayerNext?.());
     this.layerNextBtn.classList.add('layer-button');
+    this.layerMovePrevBtn = this.addBtn(this.layerStrip, '<<', () => this.onLayerMovePrev?.());
+    this.layerMovePrevBtn.classList.add('layer-button');
+    this.layerMoveNextBtn = this.addBtn(this.layerStrip, '>>', () => this.onLayerMoveNext?.());
+    this.layerMoveNextBtn.classList.add('layer-button');
+    this.layerRenameBtn = this.addBtn(this.layerStrip, 'Name', () => this.onLayerRename?.());
+    this.layerRenameBtn.classList.add('layer-state-button');
     this.layerNewBtn = this.addBtn(this.layerStrip, '+ Layer', () => this.onLayerNew?.());
 
     this.addLineTypeBtn(LineType.SOLID, 'Solid (Q)');
@@ -136,6 +148,8 @@ export class Toolbar {
     const multipleLayers = count > 1;
     this.layerPrevBtn.disabled = !multipleLayers;
     this.layerNextBtn.disabled = !multipleLayers;
+    this.layerMovePrevBtn.disabled = !multipleLayers || index <= 1;
+    this.layerMoveNextBtn.disabled = !multipleLayers || index >= count;
     this.layerVisibilityBtn.textContent = visible ? 'Shown' : 'Hidden';
     this.layerVisibilityBtn.classList.toggle('active', !visible);
     this.layerEditBtn.textContent = editable ? 'Edit' : 'Locked';
