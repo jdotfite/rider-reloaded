@@ -7,6 +7,9 @@ export class Renderer {
   camera: Camera;
   private renderCallbacks: Array<(ctx: CanvasRenderingContext2D) => void> = [];
   private resizeObserver: ResizeObserver | null = null;
+  private viewportWidth = 1;
+  private viewportHeight = 1;
+  private pixelRatio = 1;
 
   constructor(canvas: HTMLCanvasElement, camera: Camera) {
     this.canvas = canvas;
@@ -27,8 +30,11 @@ export class Renderer {
     const rect = this.canvas.getBoundingClientRect();
     const w = Math.max(1, Math.round(rect.width));
     const h = Math.max(1, Math.round(rect.height));
-    this.canvas.width = w;
-    this.canvas.height = h;
+    this.viewportWidth = w;
+    this.viewportHeight = h;
+    this.pixelRatio = Math.max(1, Math.min(window.devicePixelRatio || 1, 2));
+    this.canvas.width = Math.round(w * this.pixelRatio);
+    this.canvas.height = Math.round(h * this.pixelRatio);
     this.camera.resize(w, h);
   }
 
@@ -37,15 +43,15 @@ export class Renderer {
   }
 
   render() {
-    const { ctx, canvas, camera } = this;
+    const { ctx, camera } = this;
 
     // Clear
-    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.setTransform(this.pixelRatio, 0, 0, this.pixelRatio, 0, 0);
     ctx.fillStyle = COLOR_BACKGROUND;
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.fillRect(0, 0, this.viewportWidth, this.viewportHeight);
 
     // Apply camera
-    camera.applyTransform(ctx);
+    camera.applyTransform(ctx, this.pixelRatio);
 
     // Draw origin crosshair
     this.drawOriginMarker(ctx);

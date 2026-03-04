@@ -47,12 +47,12 @@ export class Camera {
   }
 
   /** Apply camera transform to canvas context */
-  applyTransform(ctx: CanvasRenderingContext2D) {
+  applyTransform(ctx: CanvasRenderingContext2D, pixelRatio: number = 1) {
     ctx.setTransform(
-      this.zoom, 0,
-      0, this.zoom,
-      this._width / 2 - this.position.x * this.zoom,
-      this._height / 2 - this.position.y * this.zoom
+      this.zoom * pixelRatio, 0,
+      0, this.zoom * pixelRatio,
+      (this._width / 2 - this.position.x * this.zoom) * pixelRatio,
+      (this._height / 2 - this.position.y * this.zoom) * pixelRatio
     );
   }
 }
