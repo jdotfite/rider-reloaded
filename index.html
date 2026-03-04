@@ -6,61 +6,368 @@
   <title>Line Rider</title>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
-    html, body { width: 100%; height: 100%; overflow: hidden; background: #eee; }
+    :root {
+      --paper: #f4f3ef;
+      --panel: rgba(252, 251, 247, 0.88);
+      --panel-strong: rgba(255, 255, 255, 0.96);
+      --line: rgba(24, 24, 24, 0.14);
+      --ink: #141414;
+      --muted: #6f6b64;
+      --accent: #d14a37;
+      --accent-soft: #f1d3cd;
+      --shadow: 0 18px 44px rgba(26, 28, 30, 0.12);
+      --radius-lg: 28px;
+      --radius-md: 18px;
+      --radius-sm: 12px;
+      --ui-font: "Candara", "Segoe UI", sans-serif;
+      --brand-font: "Trebuchet MS", "Segoe UI", sans-serif;
+    }
+    html, body {
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background:
+        radial-gradient(circle at 18% 16%, rgba(255, 240, 213, 0.7), transparent 26%),
+        radial-gradient(circle at 82% 22%, rgba(221, 229, 240, 0.8), transparent 24%),
+        linear-gradient(180deg, #f9f8f4 0%, #ecebe6 100%);
+      color: var(--ink);
+      font-family: var(--ui-font);
+    }
     #app {
-      width: 100%; height: 100%;
-      display: flex; flex-direction: column;
-    }
-    #toolbar {
-      height: 40px;
-      background: #333;
-      display: flex;
-      align-items: center;
-      padding: 0 8px;
-      gap: 6px;
-      flex-shrink: 0;
-      z-index: 10;
-    }
-    #toolbar button {
-      padding: 4px 10px;
-      border: 1px solid #555;
-      background: #444;
-      color: #ddd;
-      cursor: pointer;
-      border-radius: 3px;
-      font-size: 13px;
-      font-family: monospace;
-    }
-    #toolbar button:hover { background: #555; }
-    #toolbar button.active { background: #0074d9; border-color: #0074d9; color: #fff; }
-    #toolbar .separator {
-      width: 1px; height: 24px; background: #555; margin: 0 4px;
-    }
-    #canvas-container {
-      flex: 1;
+      width: 100%;
+      height: 100%;
+      display: grid;
+      grid-template-rows: auto 1fr auto;
       position: relative;
       overflow: hidden;
+    }
+    #topbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 18px 28px 14px;
+      position: relative;
+      z-index: 10;
+    }
+    #brand-lockup {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+    }
+    #brand-mark {
+      font: 700 48px/0.95 var(--brand-font);
+      letter-spacing: -0.04em;
+    }
+    #brand-pill {
+      border-radius: 999px;
+      background: var(--accent);
+      color: #fff7f2;
+      padding: 7px 14px 6px;
+      font: 700 13px/1 var(--ui-font);
+      text-transform: uppercase;
+      letter-spacing: 0.18em;
+      box-shadow: 0 10px 20px rgba(209, 74, 55, 0.18);
+    }
+    #topbar-meta {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      color: var(--muted);
+      font: 700 12px/1 var(--ui-font);
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
+    .meta-chip {
+      padding: 8px 12px;
+      border: 1px solid rgba(20, 20, 20, 0.08);
+      border-radius: 999px;
+      background: rgba(255, 255, 255, 0.55);
+      backdrop-filter: blur(8px);
+    }
+    #canvas-container {
+      position: relative;
+      overflow: hidden;
+      margin: 0 22px;
+      border-radius: 34px;
+      background:
+        radial-gradient(circle at 20% 20%, rgba(255, 255, 255, 0.72), transparent 28%),
+        radial-gradient(circle at 80% 14%, rgba(253, 239, 218, 0.7), transparent 24%),
+        linear-gradient(180deg, #f8f7f3 0%, #f1f0ea 100%);
+      border: 1px solid rgba(28, 28, 28, 0.08);
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.5), var(--shadow);
+    }
+    #canvas-atmosphere {
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+      background:
+        radial-gradient(circle at 14% 18%, rgba(225, 223, 218, 0.55) 0 3%, transparent 3.3%),
+        radial-gradient(circle at 70% 28%, rgba(210, 208, 202, 0.52) 0 1.2%, transparent 1.5%),
+        radial-gradient(circle at 78% 30%, rgba(210, 208, 202, 0.52) 0 0.9%, transparent 1.2%),
+        radial-gradient(circle at 32% 26%, rgba(220, 218, 213, 0.5) 0 2.2%, transparent 2.5%),
+        linear-gradient(180deg, rgba(244, 243, 239, 0.15), rgba(225, 223, 217, 0.08));
+      opacity: 0.7;
+    }
+    #tool-rail {
+      position: absolute;
+      top: 22px;
+      right: 22px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      padding: 12px;
+      border-radius: 24px;
+      background: var(--panel);
+      border: 1px solid rgba(22, 22, 22, 0.08);
+      box-shadow: var(--shadow);
+      backdrop-filter: blur(14px);
+      z-index: 5;
+    }
+    #tool-rail::before,
+    #line-type-strip::before,
+    #file-actions::before {
+      content: attr(data-label);
+      font: 700 11px/1 var(--ui-font);
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      color: var(--muted);
+      margin: 0 6px 4px;
+    }
+    #tool-rail button {
+      min-width: 108px;
+      justify-content: flex-start;
+    }
+    #status-card {
+      position: absolute;
+      left: 22px;
+      top: 22px;
+      padding: 14px 18px;
+      border-radius: 22px;
+      background: rgba(255, 255, 255, 0.78);
+      border: 1px solid rgba(24, 24, 24, 0.08);
+      box-shadow: var(--shadow);
+      backdrop-filter: blur(12px);
+      z-index: 5;
+      min-width: 220px;
+    }
+    #status-title {
+      font: 700 11px/1 var(--ui-font);
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      color: var(--muted);
+      margin-bottom: 10px;
+    }
+    #hud {
+      font: 700 19px/1 var(--ui-font);
+      letter-spacing: -0.02em;
+      margin-bottom: 8px;
+    }
+    #run-speed {
+      font: 700 12px/1.2 var(--ui-font);
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: var(--accent);
+    }
+    #bottom-dock {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto auto;
+      align-items: center;
+      gap: 16px;
+      padding: 18px 22px 22px;
+      z-index: 10;
+    }
+    #file-actions,
+    #line-type-strip {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 12px;
+      border-radius: var(--radius-lg);
+      background: var(--panel);
+      border: 1px solid rgba(22, 22, 22, 0.08);
+      box-shadow: var(--shadow);
+      backdrop-filter: blur(14px);
+    }
+    #transport {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 12px;
+      border-radius: 999px;
+      background: var(--panel-strong);
+      border: 1px solid rgba(22, 22, 22, 0.08);
+      box-shadow: var(--shadow);
+      justify-self: center;
+    }
+    button {
+      border: 1px solid rgba(24, 24, 24, 0.08);
+      background: rgba(255, 255, 255, 0.86);
+      color: var(--ink);
+      cursor: pointer;
+      border-radius: var(--radius-sm);
+      padding: 11px 14px;
+      min-height: 44px;
+      font: 700 14px/1 var(--ui-font);
+      letter-spacing: 0.01em;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      transition: transform 140ms ease, border-color 140ms ease, background 140ms ease, box-shadow 140ms ease;
+      box-shadow: 0 10px 18px rgba(20, 20, 20, 0.06);
+    }
+    button:hover {
+      transform: translateY(-1px);
+      border-color: rgba(20, 20, 20, 0.16);
+      background: rgba(255, 255, 255, 0.96);
+    }
+    button:disabled {
+      opacity: 0.42;
+      cursor: default;
+      transform: none;
+      box-shadow: none;
+    }
+    button:disabled:hover {
+      transform: none;
+      border-color: rgba(24, 24, 24, 0.08);
+      background: rgba(255, 255, 255, 0.86);
+    }
+    button.active {
+      background: linear-gradient(180deg, #1d1d1d 0%, #080808 100%);
+      border-color: #080808;
+      color: #fff;
+      box-shadow: 0 14px 26px rgba(10, 10, 10, 0.18);
+    }
+    button.play-button {
+      min-width: 168px;
+      border-radius: 999px;
+      background: linear-gradient(180deg, #1f1f1f 0%, #0a0a0a 100%);
+      color: #fff;
+      border-color: #090909;
+      box-shadow: 0 16px 30px rgba(10, 10, 10, 0.2);
+    }
+    button.play-button:hover {
+      background: linear-gradient(180deg, #262626 0%, #0f0f0f 100%);
+    }
+    button.line-type-button {
+      min-width: 112px;
+    }
+    button[data-color="solid"] {
+      box-shadow: inset 0 -3px 0 #2266cc, 0 10px 18px rgba(20, 20, 20, 0.06);
+    }
+    button[data-color="acc"] {
+      box-shadow: inset 0 -3px 0 #cc2222, 0 10px 18px rgba(20, 20, 20, 0.06);
+    }
+    button[data-color="scenery"] {
+      box-shadow: inset 0 -3px 0 #00aa00, 0 10px 18px rgba(20, 20, 20, 0.06);
+    }
+    button.subtle {
+      background: rgba(255, 255, 255, 0.6);
+      color: var(--muted);
+    }
+    .toolbar-separator {
+      width: 100%;
+      height: 1px;
+      background: linear-gradient(90deg, transparent, var(--line), transparent);
+      margin: 2px 0;
+    }
+    .inline-separator {
+      width: 1px;
+      align-self: stretch;
+      background: linear-gradient(180deg, transparent, var(--line), transparent);
+      margin: 0 2px;
+    }
+    #canvas-shell {
+      position: absolute;
+      inset: 0;
+      padding: 0;
     }
     canvas {
       display: block;
       width: 100%;
       height: 100%;
     }
-    #hud {
-      position: absolute;
-      top: 4px; right: 8px;
-      color: #666;
-      font: 12px monospace;
-      pointer-events: none;
+    @media (max-width: 980px) {
+      #topbar {
+        padding: 14px 16px 10px;
+      }
+      #brand-mark {
+        font-size: 34px;
+      }
+      #brand-pill {
+        font-size: 10px;
+        letter-spacing: 0.12em;
+      }
+      #topbar-meta {
+        display: none;
+      }
+      #canvas-container {
+        margin: 0 12px;
+      }
+      #tool-rail {
+        top: auto;
+        bottom: 18px;
+        right: 18px;
+        flex-direction: row;
+        flex-wrap: wrap;
+        max-width: calc(100% - 36px);
+      }
+      #tool-rail button {
+        min-width: 92px;
+      }
+      #bottom-dock {
+        grid-template-columns: 1fr;
+      }
+      #transport,
+      #line-type-strip,
+      #file-actions {
+        justify-self: stretch;
+        justify-content: center;
+        flex-wrap: wrap;
+      }
+      #status-card {
+        min-width: 0;
+        right: 18px;
+        left: 18px;
+      }
+    }
+    #canvas-container,
+    #bottom-dock,
+    #topbar {
+      width: auto;
+    }
+    #canvas-container {
+      flex: 1;
     }
   </style>
 </head>
 <body>
   <div id="app">
-    <div id="toolbar"></div>
+    <div id="topbar">
+      <div id="brand-lockup">
+        <div id="brand-mark">Line Rider.</div>
+        <div id="brand-pill">Remastered</div>
+      </div>
+      <div id="topbar-meta">
+        <div class="meta-chip">Draw</div>
+        <div class="meta-chip">Ride</div>
+        <div class="meta-chip">Refine</div>
+      </div>
+    </div>
     <div id="canvas-container">
+      <div id="canvas-atmosphere"></div>
+      <div id="status-card">
+        <div id="status-title">Run Status</div>
+        <div id="hud"></div>
+        <div id="run-speed"></div>
+      </div>
+      <div id="tool-rail" data-label="Tools"></div>
       <canvas id="canvas"></canvas>
-      <div id="hud"></div>
+    </div>
+    <div id="bottom-dock">
+      <div id="file-actions" data-label="Project"></div>
+      <div id="transport"></div>
+      <div id="line-type-strip" data-label="Track"></div>
     </div>
   </div>
   <script type="module" src="/src/main.ts"></script>

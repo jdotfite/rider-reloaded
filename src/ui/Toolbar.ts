@@ -1,7 +1,11 @@
 import { LineType } from '../physics/lines/LineTypes';
+import { GameState } from '../game/GameState';
 
 export class Toolbar {
-  private container: HTMLElement;
+  private toolRail: HTMLElement;
+  private fileActions: HTMLElement;
+  private transport: HTMLElement;
+  private lineTypeStrip: HTMLElement;
 
   onToolSelect: ((tool: string) => void) | null = null;
   onLineTypeSelect: ((type: LineType) => void) | null = null;
@@ -19,58 +23,61 @@ export class Toolbar {
   private stopBtn!: HTMLButtonElement;
 
   constructor() {
-    this.container = document.getElementById('toolbar')!;
+    this.toolRail = this.requireElement('tool-rail');
+    this.fileActions = this.requireElement('file-actions');
+    this.transport = this.requireElement('transport');
+    this.lineTypeStrip = this.requireElement('line-type-strip');
     this.build();
   }
 
   private build() {
-    // Tools
     this.addToolBtn('pencil', 'Pencil (1)');
     this.addToolBtn('line', 'Line (2)');
     this.addToolBtn('eraser', 'Eraser (3)');
-    this.addSeparator();
+    this.addToolBtn('curve', 'Curve (4)');
 
-    // Line types
-    this.addLineTypeBtn(LineType.SOLID, 'Normal (Q)', '#2266cc');
-    this.addLineTypeBtn(LineType.ACC, 'Accel (W)', '#cc2222');
-    this.addLineTypeBtn(LineType.SCENERY, 'Scenery (E)', '#00aa00');
-    this.addSeparator();
+    this.addBtn(this.fileActions, 'New / Clear', () => this.onClear?.());
+    this.addBtn(this.fileActions, 'Save', () => this.onSave?.());
+    this.addBtn(this.fileActions, 'Load', () => this.onLoad?.());
 
-    // Editing actions
-    this.addBtn('Clear (Del)', () => this.onClear?.());
-    this.addBtn('Save (Ctrl+S)', () => this.onSave?.());
-    this.addBtn('Load (Ctrl+O)', () => this.onLoad?.());
-    this.addSeparator();
+    this.playBtn = this.addBtn(this.transport, 'Play', () => this.onPlay?.());
+    this.playBtn.classList.add('play-button');
+    this.pauseBtn = this.addBtn(this.transport, 'Pause', () => this.onPause?.());
+    this.pauseBtn.classList.add('subtle');
+    this.stopBtn = this.addBtn(this.transport, 'Stop', () => this.onStop?.());
+    this.stopBtn.classList.add('subtle');
 
-    // Playback
-    this.playBtn = this.addBtn('Play', () => this.onPlay?.());
-    this.pauseBtn = this.addBtn('Pause', () => this.onPause?.());
-    this.stopBtn = this.addBtn('Stop', () => this.onStop?.());
+    this.addLineTypeBtn(LineType.SOLID, 'Solid (Q)');
+    this.addLineTypeBtn(LineType.ACC, 'Accel (W)');
+    this.addLineTypeBtn(LineType.SCENERY, 'Scenery (E)');
   }
 
   private addToolBtn(name: string, label: string) {
-    const btn = this.addBtn(label, () => this.onToolSelect?.(name));
+    const btn = this.addBtn(this.toolRail, label, () => this.onToolSelect?.(name));
     this.toolButtons.set(name, btn);
   }
 
-  private addLineTypeBtn(type: LineType, label: string, color: string) {
-    const btn = this.addBtn(label, () => this.onLineTypeSelect?.(type));
-    btn.style.borderBottom = `3px solid ${color}`;
+  private addLineTypeBtn(type: LineType, label: string) {
+    const btn = this.addBtn(this.lineTypeStrip, label, () => this.onLineTypeSelect?.(type));
+    btn.classList.add('line-type-button');
+    btn.dataset.color = type;
     this.lineTypeButtons.set(type, btn);
   }
 
-  private addBtn(label: string, onClick: () => void): HTMLButtonElement {
+  private addBtn(container: HTMLElement, label: string, onClick: () => void): HTMLButtonElement {
     const btn = document.createElement('button');
     btn.textContent = label;
     btn.addEventListener('click', onClick);
-    this.container.appendChild(btn);
+    container.appendChild(btn);
     return btn;
   }
 
-  private addSeparator() {
-    const sep = document.createElement('div');
-    sep.className = 'separator';
-    this.container.appendChild(sep);
+  private requireElement(id: string): HTMLElement {
+    const element = document.getElementById(id);
+    if (!element) {
+      throw new Error(`Missing toolbar element: ${id}`);
+    }
+    return element;
   }
 
   setActiveTool(name: string) {
@@ -83,5 +90,13 @@ export class Toolbar {
     for (const [t, btn] of this.lineTypeButtons) {
       btn.classList.toggle('active', t === type);
     }
+  }
+
+  setPlaybackState(state: GameState) {
+    this.playBtn.textContent = state === GameState.PAUSED ? 'Resume' : 'Play';
+    this.playBtn.disabled = state === GameState.PLAYING;
+    this.pauseBtn.disabled = state !== GameState.PLAYING;
+    this.stopBtn.disabled = state === GameState.EDITING;
+    this.pauseBtn.classList.toggle('active', state === GameState.PAUSED);
   }
 }

@@ -130,4 +130,12 @@ export class Rider {
       (buttY + shoulderY) / 2
     );
   }
+
+  getCenterSpeed(): number {
+    const buttVelocity = this.points[BUTT].vel;
+    const shoulderVelocity = this.points[SHOULDER].vel;
+    const averageX = (buttVelocity.x + shoulderVelocity.x) / 2;
+    const averageY = (buttVelocity.y + shoulderVelocity.y) / 2;
+    return Math.sqrt(averageX * averageX + averageY * averageY);
+  }
 }

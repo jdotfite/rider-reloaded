@@ -9,6 +9,7 @@ import { InputManager } from './input/InputManager';
 import { PencilTool } from './input/tools/PencilTool';
 import { LineTool } from './input/tools/LineTool';
 import { EraserTool } from './input/tools/EraserTool';
+import { CurveTool } from './input/tools/CurveTool';
 import { SerializedTrack, TrackStore } from './store/TrackStore';
 import { Rider } from './physics/Rider';
 import { PhysicsEngine } from './physics/PhysicsEngine';
@@ -18,7 +19,7 @@ import { GameState } from './game/GameState';
 import { Toolbar } from './ui/Toolbar';
 import { LineType } from './physics/lines/LineTypes';
 import { Tool } from './input/tools/Tool';
-import { ERASER_RADIUS } from './constants';
+import { ERASER_RADIUS, TIMESTEP } from './constants';
 
 // Core
 const canvas = document.getElementById('canvas') as HTMLCanvasElement;
@@ -40,12 +41,6 @@ const riderRenderer = new RiderRenderer();
 const flagRenderer = new FlagRenderer();
 const uiRenderer = new UIRenderer();
 
-// Game loop
-const gameLoop = new GameLoop(physics, () => {
-  renderer.render();
-  uiRenderer.update(gameLoop.frame, gameLoop.state);
-});
-
 // Current state
 let currentLineType: LineType = LineType.SOLID;
 let currentTool: Tool;
@@ -54,6 +49,7 @@ let currentTool: Tool;
 const pencilTool = new PencilTool(store, () => currentLineType);
 const lineTool = new LineTool(store, () => currentLineType);
 const eraserTool = new EraserTool(store);
+const curveTool = new CurveTool(store, () => currentLineType);
 currentTool = pencilTool;
 const loadInput = document.createElement('input');
 loadInput.type = 'file';
@@ -100,6 +96,21 @@ let savedCameraZoom: number = 1;
 const toolbar = new Toolbar();
 toolbar.setActiveTool('pencil');
 toolbar.setActiveLineType(LineType.SOLID);
+toolbar.setPlaybackState(GameState.EDITING);
+
+// Game loop
+const gameLoop = new GameLoop(physics, () => {
+  renderer.render();
+  toolbar.setPlaybackState(gameLoop.state);
+  uiRenderer.update({
+    frame: gameLoop.frame,
+    state: gameLoop.state,
+    lineCount: store.lines.length,
+    toolName: currentTool.name,
+    lineType: currentLineType,
+    speed: rider.getCenterSpeed() * (1000 / TIMESTEP),
+  });
+});
 
 toolbar.onToolSelect = (name) => switchTool(name);
 toolbar.onLineTypeSelect = (type) => {
@@ -136,6 +147,7 @@ function switchTool(name: string) {
   if (name === 'pencil') currentTool = pencilTool;
   else if (name === 'line') currentTool = lineTool;
   else if (name === 'eraser') currentTool = eraserTool;
+  else if (name === 'curve') currentTool = curveTool;
   input.setTool(currentTool);
   toolbar.setActiveTool(name);
 }
