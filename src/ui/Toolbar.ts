@@ -22,6 +22,7 @@ export class Toolbar {
   onPlay: (() => void) | null = null;
   onPause: (() => void) | null = null;
   onStop: (() => void) | null = null;
+  onFit: (() => void) | null = null;
   onLayerPrev: (() => void) | null = null;
   onLayerNext: (() => void) | null = null;
   onLayerNew: (() => void) | null = null;
@@ -36,6 +37,7 @@ export class Toolbar {
   private playBtn!: HTMLButtonElement;
   private pauseBtn!: HTMLButtonElement;
   private stopBtn!: HTMLButtonElement;
+  private fitBtn!: HTMLButtonElement;
   private layerPrevBtn!: HTMLButtonElement;
   private layerLabelBtn!: HTMLButtonElement;
   private layerVisibilityBtn!: HTMLButtonElement;
@@ -77,6 +79,8 @@ export class Toolbar {
     this.pauseBtn.classList.add('subtle');
     this.stopBtn = this.addBtn(this.transport, 'Stop', () => this.onStop?.(), 'Stop', '[]');
     this.stopBtn.classList.add('subtle');
+    this.fitBtn = this.addBtn(this.transport, 'Fit', () => this.onFit?.(), 'Fit', 'F');
+    this.fitBtn.classList.add('subtle');
 
     this.layerPrevBtn = this.addBtn(this.layerStrip, '<', () => this.onLayerPrev?.());
     this.layerPrevBtn.classList.add('layer-button');

@@ -20,6 +20,7 @@ export class InputManager {
 
   onPlayPauseToggle: (() => void) | null = null;
   onStop: (() => void) | null = null;
+  onFitView: (() => void) | null = null;
   onUndo: (() => void) | null = null;
   onRedo: (() => void) | null = null;
   onClearTrack: (() => void) | null = null;
@@ -142,6 +143,11 @@ export class InputManager {
     if (e.code === 'Delete') {
       e.preventDefault();
       this.onClearTrack?.();
+    }
+
+    if (e.code === 'KeyF') {
+      e.preventDefault();
+      this.onFitView?.();
     }
 
     if (e.code === 'Digit1') this.onToolSwitch?.('pencil');

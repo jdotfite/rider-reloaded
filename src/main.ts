@@ -73,6 +73,7 @@ input.getGameState = () => gameLoop.state;
 
 input.onPlayPauseToggle = () => gameLoop.togglePlayPause();
 input.onStop = () => stopPlayback();
+input.onFitView = () => fitView();
 input.onUndo = () => {
   if (gameLoop.state === GameState.EDITING) {
     store.undo();
@@ -162,6 +163,7 @@ toolbar.onLoad = () => openLoadDialog();
 toolbar.onPlay = () => startPlayback();
 toolbar.onPause = () => gameLoop.pause();
 toolbar.onStop = () => stopPlayback();
+toolbar.onFit = () => fitView();
 toolbar.onLayerPrev = () => cycleLayer(-1);
 toolbar.onLayerNext = () => cycleLayer(1);
 toolbar.onLayerNew = () => addLayer();
@@ -215,6 +217,7 @@ loadInput.addEventListener('change', async () => {
     }
 
     stopPlayback();
+    fitView();
   } catch {
     window.alert('Could not load track JSON.');
   } finally {
@@ -236,6 +239,7 @@ function clearTrack() {
   if (gameLoop.state !== GameState.EDITING) return;
   store.clear();
   rider.setStartPosition(store.startPosition);
+  fitView();
 }
 
 function beginQuickErase(worldPos: Vec2) {
@@ -320,6 +324,33 @@ function closeLayerRename() {
   layerRenameInput?.blur();
 }
 
+function fitView() {
+  if (gameLoop.state === GameState.PLAYING) return;
+
+  const padding = 120;
+  let minX = store.startPosition.x;
+  let maxX = store.startPosition.x;
+  let minY = store.startPosition.y;
+  let maxY = store.startPosition.y;
+
+  for (const line of store.lines) {
+    minX = Math.min(minX, line.p1.x, line.p2.x);
+    maxX = Math.max(maxX, line.p1.x, line.p2.x);
+    minY = Math.min(minY, line.p1.y, line.p2.y);
+    maxY = Math.max(maxY, line.p1.y, line.p2.y);
+  }
+
+  const boundsWidth = Math.max(1, maxX - minX);
+  const boundsHeight = Math.max(1, maxY - minY);
+  const viewWidth = Math.max(1, camera.width - padding * 2);
+  const viewHeight = Math.max(1, camera.height - padding * 2);
+  const zoom = Math.min(viewWidth / boundsWidth, viewHeight / boundsHeight);
+
+  camera.zoom = Math.max(0.1, Math.min(30, zoom));
+  camera.position.x = (minX + maxX) / 2;
+  camera.position.y = (minY + maxY) / 2;
+}
+
 function startPlayback() {
   if (gameLoop.state === GameState.EDITING) {
     // Build grid from current lines
@@ -375,3 +406,4 @@ renderer.addRenderCallback((ctx) => {
 
 // Start
 gameLoop.start();
+fitView();
