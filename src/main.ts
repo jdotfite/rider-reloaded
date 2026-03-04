@@ -102,14 +102,26 @@ const toolbar = new Toolbar();
 toolbar.setActiveTool('pencil');
 toolbar.setActiveLineType(LineType.SOLID);
 toolbar.setPlaybackState(GameState.EDITING);
-toolbar.setLayerState(store.getActiveLayer().name, store.getActiveLayerIndex() + 1, store.layers.length);
+toolbar.setLayerState(
+  store.getActiveLayer().name,
+  store.getActiveLayerIndex() + 1,
+  store.layers.length,
+  store.getActiveLayer().visible,
+  store.getActiveLayer().editable,
+);
 
 // Game loop
 const gameLoop = new GameLoop(physics, () => {
   renderer.render();
   toolbar.setPlaybackState(gameLoop.state);
   const activeLayer = store.getActiveLayer();
-  toolbar.setLayerState(activeLayer.name, store.getActiveLayerIndex() + 1, store.layers.length);
+  toolbar.setLayerState(
+    activeLayer.name,
+    store.getActiveLayerIndex() + 1,
+    store.layers.length,
+    activeLayer.visible,
+    activeLayer.editable,
+  );
   uiRenderer.update({
     frame: gameLoop.frame,
     state: gameLoop.state,
@@ -119,6 +131,8 @@ const gameLoop = new GameLoop(physics, () => {
     activeLayerName: activeLayer.name,
     activeLayerIndex: store.getActiveLayerIndex() + 1,
     layerCount: store.layers.length,
+    activeLayerVisible: activeLayer.visible,
+    activeLayerEditable: activeLayer.editable,
     speed: rider.getCenterSpeed() * (1000 / TIMESTEP),
   });
 });
@@ -147,6 +161,8 @@ toolbar.onStop = () => stopPlayback();
 toolbar.onLayerPrev = () => cycleLayer(-1);
 toolbar.onLayerNext = () => cycleLayer(1);
 toolbar.onLayerNew = () => addLayer();
+toolbar.onLayerToggleVisibility = () => toggleLayerVisibility();
+toolbar.onLayerToggleEditability = () => toggleLayerEditability();
 
 loadInput.addEventListener('change', async () => {
   const file = loadInput.files?.[0];
@@ -226,6 +242,16 @@ function cycleLayer(direction: 1 | -1) {
 function addLayer() {
   if (gameLoop.state !== GameState.EDITING) return;
   store.createLayer();
+}
+
+function toggleLayerVisibility() {
+  if (gameLoop.state !== GameState.EDITING) return;
+  store.toggleActiveLayerVisibility();
+}
+
+function toggleLayerEditability() {
+  if (gameLoop.state !== GameState.EDITING) return;
+  store.toggleActiveLayerEditability();
 }
 
 function startPlayback() {

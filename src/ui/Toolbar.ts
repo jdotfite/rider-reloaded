@@ -21,6 +21,8 @@ export class Toolbar {
   onLayerPrev: (() => void) | null = null;
   onLayerNext: (() => void) | null = null;
   onLayerNew: (() => void) | null = null;
+  onLayerToggleVisibility: (() => void) | null = null;
+  onLayerToggleEditability: (() => void) | null = null;
 
   private toolButtons: Map<string, HTMLButtonElement> = new Map();
   private lineTypeButtons: Map<LineType, HTMLButtonElement> = new Map();
@@ -29,6 +31,8 @@ export class Toolbar {
   private stopBtn!: HTMLButtonElement;
   private layerPrevBtn!: HTMLButtonElement;
   private layerLabelBtn!: HTMLButtonElement;
+  private layerVisibilityBtn!: HTMLButtonElement;
+  private layerEditBtn!: HTMLButtonElement;
   private layerNextBtn!: HTMLButtonElement;
   private layerNewBtn!: HTMLButtonElement;
 
@@ -66,6 +70,10 @@ export class Toolbar {
     this.layerLabelBtn = this.addBtn(this.layerStrip, 'Main', () => {});
     this.layerLabelBtn.classList.add('subtle', 'layer-label');
     this.layerLabelBtn.disabled = true;
+    this.layerVisibilityBtn = this.addBtn(this.layerStrip, 'Shown', () => this.onLayerToggleVisibility?.());
+    this.layerVisibilityBtn.classList.add('layer-state-button');
+    this.layerEditBtn = this.addBtn(this.layerStrip, 'Edit', () => this.onLayerToggleEditability?.());
+    this.layerEditBtn.classList.add('layer-state-button');
     this.layerNextBtn = this.addBtn(this.layerStrip, '>', () => this.onLayerNext?.());
     this.layerNextBtn.classList.add('layer-button');
     this.layerNewBtn = this.addBtn(this.layerStrip, '+ Layer', () => this.onLayerNew?.());
@@ -123,10 +131,14 @@ export class Toolbar {
     this.pauseBtn.classList.toggle('active', state === GameState.PAUSED);
   }
 
-  setLayerState(name: string, index: number, count: number) {
+  setLayerState(name: string, index: number, count: number, visible: boolean, editable: boolean) {
     this.layerLabelBtn.textContent = `${index}/${count} ${name}`;
     const multipleLayers = count > 1;
     this.layerPrevBtn.disabled = !multipleLayers;
     this.layerNextBtn.disabled = !multipleLayers;
+    this.layerVisibilityBtn.textContent = visible ? 'Shown' : 'Hidden';
+    this.layerVisibilityBtn.classList.toggle('active', !visible);
+    this.layerEditBtn.textContent = editable ? 'Edit' : 'Locked';
+    this.layerEditBtn.classList.toggle('active', !editable);
   }
 }

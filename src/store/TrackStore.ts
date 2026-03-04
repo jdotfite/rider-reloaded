@@ -81,7 +81,8 @@ export class TrackStore {
   private transactionSnapshot: TrackSnapshot | null = null;
   private transactionChanged = false;
 
-  addLine(p1: Vec2, p2: Vec2, type: LineType): Line {
+  addLine(p1: Vec2, p2: Vec2, type: LineType): Line | null {
+    if (!this.canEditActiveLayer()) return null;
     const line = this.createLine(p1, p2, type, { layer: this.activeLayerId });
     this.beginMutation();
     this.lines.push(line);
@@ -89,7 +90,7 @@ export class TrackStore {
   }
 
   addLines(segments: Array<{ p1: Vec2; p2: Vec2 }>, type: LineType): Line[] {
-    if (segments.length === 0) return [];
+    if (segments.length === 0 || !this.canEditActiveLayer()) return [];
     this.beginMutation();
     const added: Line[] = [];
     for (let i = 0; i < segments.length; i++) {
@@ -106,7 +107,7 @@ export class TrackStore {
   }
 
   removeLinesNear(point: Vec2, radius: number): number {
-    if (this.lines.length === 0) return 0;
+    if (this.lines.length === 0 || !this.canEditActiveLayer()) return 0;
 
     const radiusSq = radius * radius;
     const nextLines = this.lines.filter(line => {
@@ -171,11 +172,9 @@ export class TrackStore {
   }
 
   cycleActiveLayer(direction: 1 | -1): TrackLayer {
-    const selectableLayers = this.layers.filter(layer => layer.visible && layer.editable);
-    const candidates = selectableLayers.length > 0 ? selectableLayers : this.layers;
-    const index = Math.max(0, candidates.findIndex(layer => layer.id === this.activeLayerId));
-    const nextIndex = (index + direction + candidates.length) % candidates.length;
-    const nextLayer = candidates[nextIndex];
+    const index = Math.max(0, this.layers.findIndex(layer => layer.id === this.activeLayerId));
+    const nextIndex = (index + direction + this.layers.length) % this.layers.length;
+    const nextLayer = this.layers[nextIndex];
 
     if (nextLayer.id === this.activeLayerId) {
       return nextLayer;
@@ -184,6 +183,24 @@ export class TrackStore {
     this.beginMutation();
     this.activeLayerId = nextLayer.id;
     return nextLayer;
+  }
+
+  toggleActiveLayerVisibility(): TrackLayer {
+    const activeLayer = this.getActiveLayer();
+    this.beginMutation();
+    this.layers = this.layers.map(layer =>
+      layer.id === activeLayer.id ? { ...layer, visible: !layer.visible } : layer
+    );
+    return this.getActiveLayer();
+  }
+
+  toggleActiveLayerEditability(): TrackLayer {
+    const activeLayer = this.getActiveLayer();
+    this.beginMutation();
+    this.layers = this.layers.map(layer =>
+      layer.id === activeLayer.id ? { ...layer, editable: !layer.editable } : layer
+    );
+    return this.getActiveLayer();
   }
 
   serialize(): SerializedTrack {
@@ -457,8 +474,14 @@ export class TrackStore {
   private getPreferredActiveLayerId(layers: TrackLayer[]): number {
     return (
       layers.find(layer => layer.visible && layer.editable)
+      ?? layers.find(layer => layer.visible)
       ?? layers.find(layer => layer.editable)
       ?? layers[0]
     ).id;
+  }
+
+  private canEditActiveLayer(): boolean {
+    const activeLayer = this.getActiveLayer();
+    return activeLayer.visible && activeLayer.editable;
   }
 }

@@ -172,7 +172,7 @@
     #bottom-dock {
       display: flex;
       flex-wrap: wrap;
-      align-items: center;
+      align-items: stretch;
       gap: 16px;
       padding: 18px 22px 22px;
       z-index: 10;
@@ -191,6 +191,7 @@
       backdrop-filter: blur(14px);
       flex-wrap: wrap;
       max-width: 100%;
+      min-width: 0;
     }
     #transport {
       display: flex;
@@ -202,12 +203,18 @@
       border: 1px solid rgba(22, 22, 22, 0.08);
       box-shadow: var(--shadow);
       flex-wrap: wrap;
+      justify-content: center;
+      flex: 0 1 auto;
+      min-width: 0;
     }
     #file-actions {
-      margin-right: auto;
+      flex: 1.1 1 330px;
+    }
+    #layer-strip {
+      flex: 1 1 320px;
     }
     #line-type-strip {
-      margin-left: auto;
+      flex: 1 1 320px;
     }
     button {
       border: 1px solid rgba(24, 24, 24, 0.08);
@@ -273,6 +280,9 @@
     button.layer-label {
       min-width: 176px;
       justify-content: flex-start;
+    }
+    button.layer-state-button {
+      min-width: 74px;
     }
     button[data-color="solid"] {
       box-shadow: inset 0 -3px 0 #2266cc, 0 10px 18px rgba(20, 20, 20, 0.06);
@@ -349,11 +359,113 @@
         flex-wrap: wrap;
         margin-left: 0;
         margin-right: 0;
+        flex: 1 1 100%;
       }
       #status-card {
         min-width: 0;
         right: 18px;
         left: 18px;
+      }
+    }
+    @media (max-width: 720px) {
+      #topbar {
+        padding: 10px 12px 8px;
+      }
+      #brand-lockup {
+        gap: 10px;
+      }
+      #brand-mark {
+        font-size: 28px;
+      }
+      #brand-pill {
+        padding: 5px 10px 4px;
+        font-size: 9px;
+        letter-spacing: 0.1em;
+      }
+      #canvas-container {
+        margin: 0 8px;
+        border-radius: 22px;
+      }
+      #status-card {
+        top: 12px;
+        left: 12px;
+        right: 12px;
+        padding: 10px 12px;
+        border-radius: 16px;
+      }
+      #status-title {
+        margin-bottom: 6px;
+        font-size: 10px;
+      }
+      #hud {
+        font-size: 16px;
+        margin-bottom: 6px;
+      }
+      #run-speed {
+        font-size: 10px;
+        letter-spacing: 0.08em;
+      }
+      #tool-rail {
+        left: 12px;
+        right: 12px;
+        bottom: 12px;
+        top: auto;
+        flex-direction: row;
+        flex-wrap: nowrap;
+        gap: 8px;
+        padding: 8px;
+        border-radius: 18px;
+        overflow-x: auto;
+      }
+      #tool-rail::before,
+      #line-type-strip::before,
+      #file-actions::before,
+      #layer-strip::before {
+        display: none;
+      }
+      #tool-rail button {
+        min-width: auto;
+      }
+      #bottom-dock {
+        gap: 10px;
+        padding: 10px 8px 12px;
+      }
+      #transport,
+      #line-type-strip,
+      #file-actions,
+      #layer-strip {
+        width: 100%;
+        padding: 8px;
+        gap: 8px;
+        border-radius: 18px;
+        flex-wrap: nowrap;
+        justify-content: flex-start;
+        overflow-x: auto;
+        scrollbar-width: none;
+      }
+      #transport::-webkit-scrollbar,
+      #line-type-strip::-webkit-scrollbar,
+      #file-actions::-webkit-scrollbar,
+      #layer-strip::-webkit-scrollbar,
+      #tool-rail::-webkit-scrollbar {
+        display: none;
+      }
+      button {
+        min-height: 38px;
+        padding: 9px 11px;
+        font-size: 12px;
+      }
+      button.play-button {
+        min-width: 120px;
+      }
+      button.line-type-button {
+        min-width: 88px;
+      }
+      button.layer-label {
+        min-width: 138px;
+      }
+      button.layer-state-button {
+        min-width: 64px;
       }
     }
     #canvas-container,

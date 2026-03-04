@@ -10,6 +10,8 @@ interface UIState {
   activeLayerName: string;
   activeLayerIndex: number;
   layerCount: number;
+  activeLayerVisible: boolean;
+  activeLayerEditable: boolean;
   speed: number;
 }
 
@@ -33,6 +35,8 @@ export class UIRenderer {
     activeLayerName,
     activeLayerIndex,
     layerCount,
+    activeLayerVisible,
+    activeLayerEditable,
     speed,
   }: UIState) {
     const stateLabel = this.titleCase(state);
@@ -40,9 +44,10 @@ export class UIRenderer {
 
     if (state === GameState.EDITING) {
       this.statusTitle.textContent = 'Editor';
+      const layerState = `${activeLayerVisible ? 'Shown' : 'Hidden'} / ${activeLayerEditable ? 'Edit' : 'Locked'}`;
       this.runSpeed.textContent =
         `${this.titleCase(toolName)} tool | ${this.getTrackLabel(lineType)} track | ` +
-        `Layer ${activeLayerIndex}/${layerCount}: ${activeLayerName}`;
+        `Layer ${activeLayerIndex}/${layerCount}: ${activeLayerName} (${layerState})`;
       return;
     }
 
