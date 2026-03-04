@@ -35,6 +35,7 @@ export class Toolbar {
     this.addToolBtn('line', 'Line (2)');
     this.addToolBtn('eraser', 'Eraser (3)');
     this.addToolBtn('curve', 'Curve (4)');
+    this.addToolBtn('flag', 'Flag (5)');
 
     this.addBtn(this.fileActions, 'New / Clear', () => this.onClear?.());
     this.addBtn(this.fileActions, 'Save', () => this.onSave?.());
@@ -48,7 +49,7 @@ export class Toolbar {
     this.stopBtn.classList.add('subtle');
 
     this.addLineTypeBtn(LineType.SOLID, 'Solid (Q)');
-    this.addLineTypeBtn(LineType.ACC, 'Accel (W)');
+    this.addLineTypeBtn(LineType.ACC, 'Speed (W)');
     this.addLineTypeBtn(LineType.SCENERY, 'Scenery (E)');
   }
 

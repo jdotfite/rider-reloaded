@@ -10,6 +10,7 @@ export class InputManager {
   private isPanning = false;
   private quickErasing = false;
   private isSpaceDown = false;
+  private activePointerId: number | null = null;
   private lastMouse = new Vec2();
   private mouseDown = false;
 
@@ -38,48 +39,66 @@ export class InputManager {
   }
 
   private setupEvents() {
-    this.canvas.addEventListener('mousedown', this.onMouseDown);
-    this.canvas.addEventListener('mousemove', this.onMouseMove);
-    this.canvas.addEventListener('mouseup', this.onMouseUp);
+    this.canvas.addEventListener('pointerdown', this.onPointerDown);
+    this.canvas.addEventListener('pointermove', this.onPointerMove);
+    this.canvas.addEventListener('pointerup', this.onPointerUp);
+    this.canvas.addEventListener('pointercancel', this.onPointerCancel);
     this.canvas.addEventListener('wheel', this.onWheel, { passive: false });
     this.canvas.addEventListener('contextmenu', e => e.preventDefault());
     window.addEventListener('keydown', this.onKeyDown);
     window.addEventListener('keyup', this.onKeyUp);
   }
 
-  private screenPos(e: MouseEvent): Vec2 {
+  private screenPos(e: { clientX: number; clientY: number }): Vec2 {
     const rect = this.canvas.getBoundingClientRect();
     return new Vec2(e.clientX - rect.left, e.clientY - rect.top);
   }
 
-  private onMouseDown = (e: MouseEvent) => {
-    const sp = this.screenPos(e);
-    this.lastMouse.copyFrom(sp);
-
-    // Middle mouse or space+left = pan
-    if (e.button === 1 || (e.button === 0 && this.isSpaceDown)) {
-      this.isPanning = true;
-      this.canvas.style.cursor = 'grabbing';
-      e.preventDefault();
+  private onPointerDown = (e: PointerEvent) => {
+    if (this.activePointerId !== null) {
       return;
     }
 
-    if (e.button === 2 && this.getState() === GameState.EDITING) {
+    const sp = this.screenPos(e);
+    this.lastMouse.copyFrom(sp);
+    this.activePointerId = e.pointerId;
+    this.canvas.setPointerCapture(e.pointerId);
+
+    if (e.pointerType !== 'mouse') {
+      e.preventDefault();
+    }
+
+    // Middle mouse or space+left = pan
+    if (e.pointerType === 'mouse' && (e.button === 1 || (e.button === 0 && this.isSpaceDown))) {
+      this.isPanning = true;
+      this.canvas.style.cursor = 'grabbing';
+      return;
+    }
+
+    if (e.pointerType === 'mouse' && e.button === 2 && this.getState() === GameState.EDITING) {
       this.quickErasing = true;
       const wp = this.camera.screenToWorld(sp);
       this.onQuickEraseStart?.(wp);
       return;
     }
 
-    if (e.button === 0 && this.tool && this.getState() === GameState.EDITING) {
+    if (this.isPrimaryDrawPointer(e) && this.tool && this.getState() === GameState.EDITING) {
       this.mouseDown = true;
       const wp = this.camera.screenToWorld(sp);
-      this.tool.onMouseDown(wp, sp, e.button);
+      this.tool.onMouseDown(wp, sp, this.getToolButton(e));
     }
   };
 
-  private onMouseMove = (e: MouseEvent) => {
+  private onPointerMove = (e: PointerEvent) => {
+    if (this.activePointerId !== null && e.pointerId !== this.activePointerId) {
+      return;
+    }
+
     const sp = this.screenPos(e);
+
+    if (e.pointerType !== 'mouse') {
+      e.preventDefault();
+    }
 
     if (this.isPanning) {
       const dx = sp.x - this.lastMouse.x;
@@ -101,26 +120,54 @@ export class InputManager {
     }
   };
 
-  private onMouseUp = (e: MouseEvent) => {
+  private onPointerUp = (e: PointerEvent) => {
+    if (this.activePointerId !== e.pointerId) {
+      return;
+    }
+
     const sp = this.screenPos(e);
+
+    if (e.pointerType !== 'mouse') {
+      e.preventDefault();
+    }
 
     if (this.isPanning && (e.button === 1 || e.button === 0)) {
       this.isPanning = false;
       this.canvas.style.cursor = '';
+      this.releasePointer(e.pointerId);
       return;
     }
 
     if (this.quickErasing && e.button === 2) {
       this.quickErasing = false;
       this.onQuickEraseEnd?.();
+      this.releasePointer(e.pointerId);
       return;
     }
 
     if (this.mouseDown && this.tool && this.getState() === GameState.EDITING) {
       this.mouseDown = false;
       const wp = this.camera.screenToWorld(sp);
-      this.tool.onMouseUp(wp, sp, e.button);
+      this.tool.onMouseUp(wp, sp, this.getToolButton(e));
     }
+
+    this.releasePointer(e.pointerId);
+  };
+
+  private onPointerCancel = (e: PointerEvent) => {
+    if (this.activePointerId !== e.pointerId) {
+      return;
+    }
+
+    if (this.quickErasing) {
+      this.quickErasing = false;
+      this.onQuickEraseEnd?.();
+    }
+
+    this.isPanning = false;
+    this.mouseDown = false;
+    this.canvas.style.cursor = '';
+    this.releasePointer(e.pointerId);
   };
 
   private onWheel = (e: WheelEvent) => {
@@ -177,6 +224,7 @@ export class InputManager {
     if (e.code === 'Digit2') this.onToolSwitch?.('line');
     if (e.code === 'Digit3') this.onToolSwitch?.('eraser');
     if (e.code === 'Digit4') this.onToolSwitch?.('curve');
+    if (e.code === 'Digit5') this.onToolSwitch?.('flag');
     if (e.code === 'KeyQ') this.onLineTypeSwitch?.('solid');
     if (e.code === 'KeyW') this.onLineTypeSwitch?.('acc');
     if (e.code === 'KeyE') this.onLineTypeSwitch?.('scenery');
@@ -193,5 +241,24 @@ export class InputManager {
 
   private getState(): GameState {
     return this.getGameState?.() ?? GameState.EDITING;
+  }
+
+  private isPrimaryDrawPointer(e: PointerEvent): boolean {
+    if (e.pointerType === 'mouse') {
+      return e.button === 0;
+    }
+
+    return e.isPrimary;
+  }
+
+  private getToolButton(e: PointerEvent): number {
+    return e.pointerType === 'mouse' ? e.button : 0;
+  }
+
+  private releasePointer(pointerId: number) {
+    if (this.canvas.hasPointerCapture(pointerId)) {
+      this.canvas.releasePointerCapture(pointerId);
+    }
+    this.activePointerId = null;
   }
 }

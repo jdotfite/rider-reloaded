@@ -8,6 +8,7 @@ export interface LineOptions {
   flipped?: boolean;
   leftExtended?: boolean;
   rightExtended?: boolean;
+  layer?: number;
   multiplier?: number;
 }
 
@@ -19,6 +20,7 @@ export class Line {
   readonly flipped: boolean;
   readonly leftExtended: boolean;
   readonly rightExtended: boolean;
+  readonly layer: number;
 
   // Derived geometry (computed once)
   readonly delta: Vec2;      // p2 - p1
@@ -36,6 +38,7 @@ export class Line {
     this.flipped = options.flipped ?? false;
     this.leftExtended = options.leftExtended ?? false;
     this.rightExtended = options.rightExtended ?? false;
+    this.layer = options.layer ?? 0;
 
     this.delta = p2.sub(p1);
     this.length = this.delta.length();

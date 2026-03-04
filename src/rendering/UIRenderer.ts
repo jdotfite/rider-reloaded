@@ -45,7 +45,7 @@ export class UIRenderer {
       case LineType.SOLID:
         return 'Solid';
       case LineType.ACC:
-        return 'Accel';
+        return 'Speed';
       case LineType.SCENERY:
         return 'Scenery';
     }

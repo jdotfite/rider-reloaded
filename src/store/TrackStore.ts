@@ -7,26 +7,57 @@ import { AccLine } from '../physics/lines/AccLine';
 import { SceneryLine } from '../physics/lines/SceneryLine';
 
 export interface SerializedTrackLine {
-  type: LineType;
+  id: number;
+  type: number;
   x1: number;
   y1: number;
   x2: number;
   y2: number;
-  flipped?: boolean;
-  leftExtended?: boolean;
-  rightExtended?: boolean;
+  flipped?: 1;
+  extended?: 1;
+  leftExtended?: 1;
+  rightExtended?: 1;
+  layer: number;
   multiplier?: number;
 }
 
+export interface SerializedTrackLayer {
+  id: number;
+  name: string;
+  visible: boolean;
+  editable: boolean;
+}
+
 export interface SerializedTrack {
-  version: 1;
+  version: string;
+  label: string;
+  creator: string;
   startPosition: { x: number; y: number };
+  layers: SerializedTrackLayer[];
   lines: SerializedTrackLine[];
 }
 
 interface TrackSnapshot {
   lines: Line[];
   startPosition: Vec2;
+}
+
+interface NormalizedTrackLine {
+  type: LineType;
+  x1: number;
+  y1: number;
+  x2: number;
+  y2: number;
+  flipped: boolean;
+  leftExtended: boolean;
+  rightExtended: boolean;
+  layer: number;
+  multiplier?: number;
+}
+
+interface NormalizedTrack {
+  startPosition: Vec2;
+  lines: NormalizedTrackLine[];
 }
 
 export class TrackStore {
@@ -81,31 +112,52 @@ export class TrackStore {
     return true;
   }
 
+  setStartPosition(position: Vec2): boolean {
+    if (this.startPosition.distanceToSq(position) === 0) return false;
+    this.beginMutation();
+    this.startPosition = position.clone();
+    return true;
+  }
+
   serialize(): SerializedTrack {
     return {
-      version: 1,
+      version: '6.2',
+      label: 'Untitled Track',
+      creator: 'Rider Reloaded',
       startPosition: {
         x: this.startPosition.x,
         y: this.startPosition.y,
       },
+      layers: [
+        {
+          id: 0,
+          name: 'Main',
+          visible: true,
+          editable: true,
+        },
+      ],
       lines: this.lines.map(line => ({
-        type: line.type,
+        id: line.id,
+        type: this.encodeLineType(line.type),
         x1: line.p1.x,
         y1: line.p1.y,
         x2: line.p2.x,
         y2: line.p2.y,
-        flipped: line.flipped || undefined,
-        leftExtended: line.leftExtended || undefined,
-        rightExtended: line.rightExtended || undefined,
+        flipped: line.flipped ? 1 : undefined,
+        extended: line.leftExtended || line.rightExtended ? 1 : undefined,
+        leftExtended: line.leftExtended ? 1 : undefined,
+        rightExtended: line.rightExtended ? 1 : undefined,
+        layer: line.layer,
         multiplier: line instanceof AccLine && line.multiplier !== 1 ? line.multiplier : undefined,
       })),
     };
   }
 
-  load(track: SerializedTrack): boolean {
-    if (!this.isValidTrack(track)) return false;
+  load(track: unknown): boolean {
+    const normalizedTrack = this.normalizeTrack(track);
+    if (!normalizedTrack) return false;
 
-    const loadedLines = track.lines.map(line => this.createLine(
+    const loadedLines = normalizedTrack.lines.map(line => this.createLine(
       new Vec2(line.x1, line.y1),
       new Vec2(line.x2, line.y2),
       line.type,
@@ -113,12 +165,13 @@ export class TrackStore {
         flipped: line.flipped,
         leftExtended: line.leftExtended,
         rightExtended: line.rightExtended,
+        layer: line.layer,
         multiplier: line.multiplier,
       }
     ));
 
     this.beginMutation();
-    this.startPosition = new Vec2(track.startPosition.x, track.startPosition.y);
+    this.startPosition = normalizedTrack.startPosition;
     this.lines = loadedLines;
     return true;
   }
@@ -195,36 +248,86 @@ export class TrackStore {
     }
   }
 
-  private isValidTrack(track: unknown): track is SerializedTrack {
-    if (!track || typeof track !== 'object') return false;
+  private normalizeTrack(track: unknown): NormalizedTrack | null {
+    if (!track || typeof track !== 'object') return null;
 
-    const candidate = track as Partial<SerializedTrack>;
-    if (!candidate.startPosition || !Array.isArray(candidate.lines)) return false;
+    const candidate = track as {
+      startPosition?: { x?: unknown; y?: unknown };
+      lines?: Array<Record<string, unknown>>;
+    };
+    if (!candidate.startPosition || !Array.isArray(candidate.lines)) return null;
 
-    const start = candidate.startPosition as { x?: unknown; y?: unknown };
-    if (typeof start.x !== 'number' || typeof start.y !== 'number') return false;
+    const { x, y } = candidate.startPosition;
+    if (typeof x !== 'number' || typeof y !== 'number') return null;
 
+    const normalizedLines: NormalizedTrackLine[] = [];
     for (const line of candidate.lines) {
-      if (!line || typeof line !== 'object') return false;
-      const candidateLine = line as Partial<SerializedTrackLine>;
-      if (!Object.values(LineType).includes(candidateLine.type as LineType)) return false;
+      if (!line || typeof line !== 'object') return null;
+
+      const type = this.decodeLineType(line.type);
+      if (!type) return null;
+
       if (
-        typeof candidateLine.x1 !== 'number' ||
-        typeof candidateLine.y1 !== 'number' ||
-        typeof candidateLine.x2 !== 'number' ||
-        typeof candidateLine.y2 !== 'number'
+        typeof line.x1 !== 'number' ||
+        typeof line.y1 !== 'number' ||
+        typeof line.x2 !== 'number' ||
+        typeof line.y2 !== 'number'
       ) {
-          return false;
+        return null;
       }
 
       if (
-        candidateLine.multiplier != null &&
-        (typeof candidateLine.multiplier !== 'number' || !Number.isFinite(candidateLine.multiplier))
+        line.multiplier != null &&
+        (typeof line.multiplier !== 'number' || !Number.isFinite(line.multiplier))
       ) {
-        return false;
+        return null;
       }
+
+      const extended = this.toBoolean(line.extended) ?? false;
+      const leftExtended = this.toBoolean(line.leftExtended) ?? extended;
+      const rightExtended = this.toBoolean(line.rightExtended) ?? extended;
+
+      normalizedLines.push({
+        type,
+        x1: line.x1,
+        y1: line.y1,
+        x2: line.x2,
+        y2: line.y2,
+        flipped: this.toBoolean(line.flipped) ?? false,
+        leftExtended,
+        rightExtended,
+        layer: typeof line.layer === 'number' && Number.isFinite(line.layer) ? line.layer : 0,
+        multiplier: typeof line.multiplier === 'number' ? line.multiplier : undefined,
+      });
     }
 
-    return true;
+    return {
+      startPosition: new Vec2(x, y),
+      lines: normalizedLines,
+    };
+  }
+
+  private toBoolean(value: unknown): boolean | undefined {
+    if (typeof value === 'boolean') return value;
+    if (typeof value === 'number') return value !== 0;
+    return undefined;
+  }
+
+  private encodeLineType(type: LineType): number {
+    switch (type) {
+      case LineType.SOLID:
+        return 0;
+      case LineType.ACC:
+        return 1;
+      case LineType.SCENERY:
+        return 2;
+    }
+  }
+
+  private decodeLineType(type: unknown): LineType | null {
+    if (type === LineType.SOLID || type === 0) return LineType.SOLID;
+    if (type === LineType.ACC || type === 1) return LineType.ACC;
+    if (type === LineType.SCENERY || type === 2) return LineType.SCENERY;
+    return null;
   }
 }

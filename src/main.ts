@@ -10,7 +10,8 @@ import { PencilTool } from './input/tools/PencilTool';
 import { LineTool } from './input/tools/LineTool';
 import { EraserTool } from './input/tools/EraserTool';
 import { CurveTool } from './input/tools/CurveTool';
-import { SerializedTrack, TrackStore } from './store/TrackStore';
+import { FlagTool } from './input/tools/FlagTool';
+import { TrackStore } from './store/TrackStore';
 import { Rider } from './physics/Rider';
 import { PhysicsEngine } from './physics/PhysicsEngine';
 import { SpatialGrid } from './physics/grid/SpatialGrid';
@@ -50,10 +51,14 @@ const pencilTool = new PencilTool(store, () => currentLineType);
 const lineTool = new LineTool(store, () => currentLineType);
 const eraserTool = new EraserTool(store);
 const curveTool = new CurveTool(store, () => currentLineType);
+const flagTool = new FlagTool((position) => {
+  if (!store.setStartPosition(position)) return;
+  rider.setStartPosition(store.startPosition);
+});
 currentTool = pencilTool;
 const loadInput = document.createElement('input');
 loadInput.type = 'file';
-loadInput.accept = '.json,application/json';
+loadInput.accept = '.track.json,.json,application/json';
 loadInput.style.display = 'none';
 document.body.appendChild(loadInput);
 
@@ -129,7 +134,7 @@ loadInput.addEventListener('change', async () => {
   if (!file || gameLoop.state !== GameState.EDITING) return;
 
   try {
-    const parsed = JSON.parse(await file.text()) as SerializedTrack;
+    const parsed = JSON.parse(await file.text());
     if (!store.load(parsed)) {
       window.alert('Invalid track file.');
       return;
@@ -148,6 +153,7 @@ function switchTool(name: string) {
   else if (name === 'line') currentTool = lineTool;
   else if (name === 'eraser') currentTool = eraserTool;
   else if (name === 'curve') currentTool = curveTool;
+  else if (name === 'flag') currentTool = flagTool;
   input.setTool(currentTool);
   toolbar.setActiveTool(name);
 }
@@ -181,7 +187,7 @@ function saveTrack() {
   const url = URL.createObjectURL(blob);
   const anchor = document.createElement('a');
   anchor.href = url;
-  anchor.download = 'line-rider-track.json';
+  anchor.download = 'line-rider.track.json';
   anchor.click();
   setTimeout(() => URL.revokeObjectURL(url), 0);
 }
