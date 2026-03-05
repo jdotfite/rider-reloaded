@@ -8,6 +8,8 @@ export const LINE_WIDTH = 2;
 export const INITIAL_RIDER_VELOCITY = { x: 0.4, y: 0 };
 export const MAX_LINE_COLLIDE_DIST = 10; // perpendicular distance threshold
 export const ACC_LINE_BOOST = 0.1;
+export const SNAP_RADIUS = 8; // world units for endpoint snapping
+export const SELECT_RADIUS = 6; // world units for line selection
 
 // Colors — monochrome palette
 export const COLOR_SOLID = '#111111';

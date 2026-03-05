@@ -11,6 +11,7 @@ import { LineTool } from './input/tools/LineTool';
 import { EraserTool } from './input/tools/EraserTool';
 import { CurveTool } from './input/tools/CurveTool';
 import { FlagTool } from './input/tools/FlagTool';
+import { SelectTool } from './input/tools/SelectTool';
 import { TrackStore } from './store/TrackStore';
 import { Rider } from './physics/Rider';
 import { PhysicsEngine } from './physics/PhysicsEngine';
@@ -22,6 +23,8 @@ import { LineType } from './physics/lines/LineTypes';
 import { Tool } from './input/tools/Tool';
 import { ERASER_RADIUS, TIMESTEP } from './constants';
 import { exportTrackAsSvg } from './export/svgExport';
+import { TriggerStore } from './store/TriggerStore';
+import { TriggerRenderer } from './rendering/TriggerRenderer';
 
 // Core
 const canvas = document.getElementById('canvas') as HTMLCanvasElement;
@@ -29,6 +32,8 @@ const camera = new Camera();
 const renderer = new Renderer(canvas, camera);
 const store = new TrackStore();
 const grid = new SpatialGrid();
+const triggerStore = new TriggerStore();
+const triggerRenderer = new TriggerRenderer();
 
 // Start position
 store.startPosition = new Vec2(0, 0);
@@ -52,6 +57,7 @@ const pencilTool = new PencilTool(store, () => currentLineType);
 const lineTool = new LineTool(store, () => currentLineType);
 const eraserTool = new EraserTool(store);
 const curveTool = new CurveTool(store, () => currentLineType);
+const selectTool = new SelectTool(store);
 const flagTool = new FlagTool((position) => {
   if (!store.setStartPosition(position)) return;
   rider.setStartPosition(store.startPosition);
@@ -106,6 +112,7 @@ input.onLoadTrack = () => openLoadDialog();
 
 // Camera follow state
 let cameraFollowing = false;
+let onionSkinning = false;
 let savedCameraPos: Vec2 | null = null;
 let savedCameraZoom: number = 1;
 
@@ -162,6 +169,9 @@ gameLoop.setSnapshotCallbacks(
 toolbar.onToolSelect = (name) => switchTool(name);
 toolbar.onSmoothToggle = (enabled) => {
   pencilTool.smoothing = enabled;
+};
+toolbar.onOnionSkinToggle = (enabled) => {
+  onionSkinning = enabled;
 };
 toolbar.onLineTypeSelect = (type) => {
   currentLineType = type;
@@ -295,6 +305,13 @@ loadInput.addEventListener('change', async () => {
       return;
     }
 
+    // Load triggers if present
+    if (parsed.triggers && Array.isArray(parsed.triggers)) {
+      triggerStore.load(parsed.triggers);
+    } else {
+      triggerStore.clear();
+    }
+
     stopPlayback();
     fitView();
   } catch {
@@ -309,6 +326,7 @@ function switchTool(name: string) {
   else if (name === 'line') currentTool = lineTool;
   else if (name === 'eraser') currentTool = eraserTool;
   else if (name === 'curve') currentTool = curveTool;
+  else if (name === 'select') currentTool = selectTool;
   else if (name === 'flag') currentTool = flagTool;
   input.setTool(currentTool);
   toolbar.setActiveTool(name);
@@ -317,6 +335,7 @@ function switchTool(name: string) {
 function clearTrack() {
   if (gameLoop.state !== GameState.EDITING) return;
   store.clear();
+  triggerStore.clear();
   rider.setStartPosition(store.startPosition);
   fitView();
 }
@@ -340,7 +359,9 @@ function endQuickErase() {
 function saveTrack() {
   if (gameLoop.state !== GameState.EDITING) return;
 
-  const data = JSON.stringify(store.serialize(), null, 2);
+  const trackData = store.serialize();
+  (trackData as unknown as Record<string, unknown>).triggers = triggerStore.serialize();
+  const data = JSON.stringify(trackData, null, 2);
   const blob = new Blob([data], { type: 'application/json' });
   const url = URL.createObjectURL(blob);
   const anchor = document.createElement('a');
@@ -468,15 +489,51 @@ renderer.addRenderCallback((ctx) => {
     currentTool.render(ctx);
   }
 
+  // Draw triggers (edit mode only)
+  triggerRenderer.render(ctx, triggerStore.triggers, gameLoop.state === GameState.EDITING);
+
+  // Onion skinning: draw ghost riders from previous snapshots
+  if (onionSkinning && gameLoop.state !== GameState.EDITING) {
+    const ghosts = gameLoop.getOnionSnapshots(4);
+    for (let i = ghosts.length - 1; i >= 0; i--) {
+      const opacity = 0.1 + (ghosts.length - 1 - i) * 0.05;
+      ctx.globalAlpha = opacity;
+      const ghostData = Rider.renderDataFromSnapshot(ghosts[i].snapshot);
+      riderRenderer.render(ctx, ghostData);
+    }
+    ctx.globalAlpha = 1;
+  }
+
   // Draw rider
   const renderData = rider.getRenderData(renderAlpha);
   riderRenderer.render(ctx, renderData);
 
-  // Camera follow during playback
+  // Camera follow during playback + trigger evaluation
   if (cameraFollowing && gameLoop.state === GameState.PLAYING) {
     const center = rider.getCenter(renderAlpha);
-    camera.position.x += (center.x - camera.position.x) * 0.1;
-    camera.position.y += (center.y - camera.position.y) * 0.1;
+
+    // Evaluate triggers
+    const active = triggerStore.getActiveTriggers(center);
+    let targetZoom = savedCameraZoom;
+    let focusTarget: { x: number; y: number } | null = null;
+    for (const t of active) {
+      if (t.type === 'zoom' && t.zoomTarget != null) {
+        targetZoom = t.zoomTarget;
+      }
+      if (t.type === 'camera-focus' && t.focusX != null && t.focusY != null) {
+        focusTarget = { x: t.focusX, y: t.focusY };
+      }
+    }
+
+    if (active.length > 0) {
+      // Smooth zoom toward trigger target
+      camera.zoom += (targetZoom - camera.zoom) * 0.05;
+    }
+
+    const fx = focusTarget ? focusTarget.x : center.x;
+    const fy = focusTarget ? focusTarget.y : center.y;
+    camera.position.x += (fx - camera.position.x) * 0.1;
+    camera.position.y += (fy - camera.position.y) * 0.1;
   }
 });
 

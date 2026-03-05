@@ -52,6 +52,7 @@ export class Toolbar {
   onSvgImport: (() => void) | null = null;
   onSvgExport: (() => void) | null = null;
   onSmoothToggle: ((enabled: boolean) => void) | null = null;
+  onOnionSkinToggle: ((enabled: boolean) => void) | null = null;
   onScreenshot: (() => void) | null = null;
   onStepForward: (() => void) | null = null;
   onStepBack: (() => void) | null = null;
@@ -121,6 +122,7 @@ export class Toolbar {
     this.addToolGridBtn('line', '📏', 'Line');
     this.addToolGridBtn('eraser', '✕', 'Erase');
     this.addToolGridBtn('curve', '↩', 'Curve');
+    this.addToolGridBtn('select', '⊡', 'Select');
     this.addToolGridBtn('flag', '⚑', 'Flag');
 
     // Smooth toggle
@@ -128,6 +130,14 @@ export class Toolbar {
     if (smoothCheckbox) {
       smoothCheckbox.addEventListener('change', () => {
         this.onSmoothToggle?.(smoothCheckbox.checked);
+      });
+    }
+
+    // Onion skin toggle
+    const onionCheckbox = document.getElementById('onion-checkbox') as HTMLInputElement;
+    if (onionCheckbox) {
+      onionCheckbox.addEventListener('change', () => {
+        this.onOnionSkinToggle?.(onionCheckbox.checked);
       });
     }
 

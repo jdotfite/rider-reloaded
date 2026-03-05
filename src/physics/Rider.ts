@@ -162,6 +162,14 @@ export class Rider {
     );
   }
 
+  static renderDataFromSnapshot(snap: RiderSnapshot): RiderRenderData {
+    return {
+      points: snap.positions.map(p => ({ x: p.px, y: p.py })),
+      mounted: snap.riderMounted,
+      sledIntact: snap.sledIntact,
+    };
+  }
+
   getCenterSpeed(): number {
     const buttVelocity = this.points[BUTT].vel;
     const shoulderVelocity = this.points[SHOULDER].vel;

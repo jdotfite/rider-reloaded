@@ -40,6 +40,7 @@ export interface SerializedTrack {
   label: string;
   creator: string;
   startPosition: { x: number; y: number };
+  riders?: Array<{ startPosition: { x: number; y: number } }>;
   layers: SerializedTrackLayer[];
   lines: SerializedTrackLine[];
 }
@@ -241,6 +242,12 @@ export class TrackStore {
         x: this.startPosition.x,
         y: this.startPosition.y,
       },
+      riders: [{
+        startPosition: {
+          x: this.startPosition.x,
+          y: this.startPosition.y,
+        },
+      }],
       layers: this.layers.map(layer => ({ ...layer })),
       lines: this.lines.map(line => ({
         id: line.id,
@@ -365,12 +372,25 @@ export class TrackStore {
 
     const candidate = track as {
       startPosition?: { x?: unknown; y?: unknown };
+      riders?: Array<{ startPosition?: { x?: unknown; y?: unknown } }>;
       layers?: Array<Record<string, unknown>>;
       lines?: Array<Record<string, unknown>>;
     };
-    if (!candidate.startPosition || !Array.isArray(candidate.lines)) return null;
+    if (!Array.isArray(candidate.lines)) return null;
 
-    const { x, y } = candidate.startPosition;
+    // Support community format with riders array
+    let x: number | undefined;
+    let y: number | undefined;
+    if (candidate.startPosition && typeof candidate.startPosition.x === 'number' && typeof candidate.startPosition.y === 'number') {
+      x = candidate.startPosition.x;
+      y = candidate.startPosition.y;
+    } else if (Array.isArray(candidate.riders) && candidate.riders.length > 0) {
+      const r = candidate.riders[0];
+      if (r.startPosition && typeof r.startPosition.x === 'number' && typeof r.startPosition.y === 'number') {
+        x = r.startPosition.x;
+        y = r.startPosition.y;
+      }
+    }
     if (typeof x !== 'number' || typeof y !== 'number') return null;
 
     const layers = this.normalizeLayers(candidate.layers);
@@ -507,6 +527,75 @@ export class TrackStore {
       ?? layers.find(layer => layer.editable)
       ?? layers[0]
     ).id;
+  }
+
+  findNearestEndpoint(point: Vec2, radius: number, excludeLineIds?: Set<number>): Vec2 | null {
+    let bestDist = radius * radius;
+    let best: Vec2 | null = null;
+    for (const line of this.lines) {
+      if (excludeLineIds?.has(line.id)) continue;
+      for (const p of [line.p1, line.p2]) {
+        const d = point.distanceToSq(p);
+        if (d < bestDist) {
+          bestDist = d;
+          best = p;
+        }
+      }
+    }
+    return best ? best.clone() : null;
+  }
+
+  getLineAt(point: Vec2, radius: number): Line | null {
+    const radiusSq = radius * radius;
+    let bestDist = radiusSq;
+    let bestLine: Line | null = null;
+    for (const line of this.lines) {
+      if (line.layer !== this.activeLayerId) continue;
+      const d = line.distanceToPointSq(point);
+      if (d < bestDist) {
+        bestDist = d;
+        bestLine = line;
+      }
+    }
+    return bestLine;
+  }
+
+  getLinesInRect(minX: number, minY: number, maxX: number, maxY: number): Line[] {
+    return this.lines.filter(line => {
+      if (line.layer !== this.activeLayerId) return false;
+      const lx1 = Math.min(line.p1.x, line.p2.x);
+      const lx2 = Math.max(line.p1.x, line.p2.x);
+      const ly1 = Math.min(line.p1.y, line.p2.y);
+      const ly2 = Math.max(line.p1.y, line.p2.y);
+      return lx2 >= minX && lx1 <= maxX && ly2 >= minY && ly1 <= maxY;
+    });
+  }
+
+  moveLines(lineIds: Set<number>, dx: number, dy: number) {
+    if (lineIds.size === 0) return;
+    this.beginMutation();
+    const offset = new Vec2(dx, dy);
+    this.lines = this.lines.map(line => {
+      if (!lineIds.has(line.id)) return line;
+      return this.createLine(
+        line.p1.add(offset),
+        line.p2.add(offset),
+        line.type,
+        {
+          flipped: line.flipped,
+          leftExtended: line.leftExtended,
+          rightExtended: line.rightExtended,
+          layer: line.layer,
+          multiplier: line instanceof AccLine ? (line as AccLine).multiplier : undefined,
+        },
+      );
+    });
+  }
+
+  removeLines(lineIds: Set<number>) {
+    if (lineIds.size === 0) return;
+    this.beginMutation();
+    this.lines = this.lines.filter(line => !lineIds.has(line.id));
   }
 
   private canEditActiveLayer(): boolean {

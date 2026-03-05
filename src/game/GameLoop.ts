@@ -141,6 +141,17 @@ export class GameLoop {
     this.accumulator = 0;
   }
 
+  /** Get snapshots near current frame for onion skinning */
+  getOnionSnapshots(count: number): FrameSnapshot[] {
+    const result: FrameSnapshot[] = [];
+    for (let i = this.snapshots.length - 1; i >= 0 && result.length < count; i--) {
+      if (this.snapshots[i].frame < this.frame) {
+        result.push(this.snapshots[i]);
+      }
+    }
+    return result;
+  }
+
   seekToFrame(targetFrame: number) {
     // Find the nearest snapshot before or at targetFrame
     let bestSnap: FrameSnapshot | null = null;
