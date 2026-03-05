@@ -10,6 +10,7 @@ export class InputManager {
   private isPanning = false;
   private quickErasing = false;
   private isSpaceDown = false;
+  private spacePanned = false;
   private activeMousePointerId: number | null = null;
   private touchPointers: Map<number, Vec2> = new Map();
   private touchDrawingPointerId: number | null = null;
@@ -110,8 +111,7 @@ export class InputManager {
       e.preventDefault();
       if (!this.isSpaceDown) {
         this.isSpaceDown = true;
-        // Space always toggles play/pause from any state
-        this.onPlayPauseToggle?.();
+        this.spacePanned = false;
       }
     }
 
@@ -147,7 +147,7 @@ export class InputManager {
       this.onClearTrack?.();
     }
 
-    if (e.code === 'KeyF') {
+    if (e.code === 'KeyF' && !(this.tool && this.tool.name === 'edit')) {
       e.preventDefault();
       this.onFitView?.();
     }
@@ -158,6 +158,7 @@ export class InputManager {
     if (e.code === 'Digit4') this.onToolSwitch?.('curve');
     if (e.code === 'Digit5') this.onToolSwitch?.('flag');
     if (e.code === 'Digit6') this.onToolSwitch?.('select');
+    if (e.code === 'Digit7') this.onToolSwitch?.('edit');
     if (e.code === 'KeyQ') this.onLineTypeSwitch?.('solid');
     if (e.code === 'KeyW') this.onLineTypeSwitch?.('acc');
     if (e.code === 'KeyE') this.onLineTypeSwitch?.('scenery');
@@ -172,15 +173,27 @@ export class InputManager {
 
   private onKeyUp = (e: KeyboardEvent) => {
     if (e.code === 'Space') {
+      const wasPanning = this.spacePanned;
       this.isSpaceDown = false;
+      this.spacePanned = false;
       if (!this.isPanning) {
         this.canvas.style.cursor = '';
+      }
+      // Only toggle play/pause if space wasn't used for panning
+      if (!wasPanning) {
+        this.onPlayPauseToggle?.();
       }
     }
   };
 
   private getState(): GameState {
     return this.getGameState?.() ?? GameState.EDITING;
+  }
+
+  /** Drawing/erasing allowed in EDITING and PAUSED states */
+  private canDraw(): boolean {
+    const s = this.getState();
+    return s === GameState.EDITING || s === GameState.PAUSED;
   }
 
   private onMousePointerDown(e: PointerEvent) {
@@ -195,18 +208,19 @@ export class InputManager {
 
     if (e.button === 1 || (e.button === 0 && this.isSpaceDown)) {
       this.isPanning = true;
+      this.spacePanned = true;
       this.canvas.style.cursor = 'grabbing';
       return;
     }
 
-    if (e.button === 2 && this.getState() === GameState.EDITING) {
+    if (e.button === 2 && this.canDraw()) {
       this.quickErasing = true;
       const wp = this.camera.screenToWorld(sp);
       this.onQuickEraseStart?.(wp);
       return;
     }
 
-    if (e.button === 0 && this.tool && this.getState() === GameState.EDITING) {
+    if (e.button === 0 && this.tool && this.canDraw()) {
       this.mouseDown = true;
       const wp = this.camera.screenToWorld(sp);
       this.tool.onMouseDown(wp, sp, 0);
@@ -228,15 +242,18 @@ export class InputManager {
       return;
     }
 
-    if (this.quickErasing && this.getState() === GameState.EDITING) {
+    if (this.quickErasing && this.canDraw()) {
       const wp = this.camera.screenToWorld(sp);
       this.onQuickEraseMove?.(wp);
       return;
     }
 
-    if (this.tool && this.getState() === GameState.EDITING) {
+    if (this.tool && this.canDraw()) {
       const wp = this.camera.screenToWorld(sp);
       this.tool.onMouseMove(wp, sp);
+      // Update cursor from tool
+      const cursor = this.tool.getCursor?.() ?? '';
+      this.canvas.style.cursor = cursor;
     }
   }
 
@@ -263,7 +280,7 @@ export class InputManager {
       return;
     }
 
-    if (this.mouseDown && this.tool && this.getState() === GameState.EDITING) {
+    if (this.mouseDown && this.tool && this.canDraw()) {
       this.mouseDown = false;
       const wp = this.camera.screenToWorld(sp);
       this.tool.onMouseUp(wp, sp, e.button);
@@ -304,7 +321,7 @@ export class InputManager {
       this.touchDrawingPointerId = e.pointerId;
       this.resetTouchGesture();
 
-      if (this.tool && this.getState() === GameState.EDITING) {
+      if (this.tool && this.canDraw()) {
         this.mouseDown = true;
         const wp = this.camera.screenToWorld(sp);
         this.tool.onMouseDown(wp, sp, 0);
@@ -334,7 +351,7 @@ export class InputManager {
       this.touchDrawingPointerId === e.pointerId &&
       this.mouseDown &&
       this.tool &&
-      this.getState() === GameState.EDITING
+      this.canDraw()
     ) {
       const wp = this.camera.screenToWorld(sp);
       this.tool.onMouseMove(wp, sp);
@@ -354,7 +371,7 @@ export class InputManager {
       wasDrawingPointer &&
       this.mouseDown &&
       this.tool &&
-      this.getState() === GameState.EDITING &&
+      this.canDraw() &&
       this.touchPointers.size === 1
     ) {
       this.mouseDown = false;
@@ -440,7 +457,7 @@ export class InputManager {
       this.touchDrawingPointerId === null ||
       !this.mouseDown ||
       !this.tool ||
-      this.getState() !== GameState.EDITING
+      !this.canDraw()
     ) {
       this.touchDrawingPointerId = null;
       this.mouseDown = false;

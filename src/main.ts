@@ -12,6 +12,7 @@ import { EraserTool } from './input/tools/EraserTool';
 import { CurveTool } from './input/tools/CurveTool';
 import { FlagTool } from './input/tools/FlagTool';
 import { SelectTool } from './input/tools/SelectTool';
+import { EditTool } from './input/tools/EditTool';
 import { TrackStore } from './store/TrackStore';
 import { Rider } from './physics/Rider';
 import { PhysicsEngine } from './physics/PhysicsEngine';
@@ -31,6 +32,7 @@ const canvas = document.getElementById('canvas') as HTMLCanvasElement;
 const camera = new Camera();
 const renderer = new Renderer(canvas, camera);
 const store = new TrackStore();
+store.onMutation = () => markGridDirty();
 const grid = new SpatialGrid();
 const triggerStore = new TriggerStore();
 const triggerRenderer = new TriggerRenderer();
@@ -58,6 +60,8 @@ const lineTool = new LineTool(store, () => currentLineType);
 const eraserTool = new EraserTool(store);
 const curveTool = new CurveTool(store, () => currentLineType);
 const selectTool = new SelectTool(store);
+let snapEnabled = true;
+const editTool = new EditTool(store, () => camera.zoom, () => snapEnabled);
 const flagTool = new FlagTool((position) => {
   if (!store.setStartPosition(position)) return;
   rider.setStartPosition(store.startPosition);
@@ -88,14 +92,10 @@ input.onPlayPauseToggle = () => {
 input.onStop = () => stopPlayback();
 input.onFitView = () => fitView();
 input.onUndo = () => {
-  if (gameLoop.state === GameState.EDITING) {
-    store.undo();
-  }
+  if (canEdit()) store.undo();
 };
 input.onRedo = () => {
-  if (gameLoop.state === GameState.EDITING) {
-    store.redo();
-  }
+  if (canEdit()) store.redo();
 };
 input.onToolSwitch = (name: string) => switchTool(name);
 input.onLineTypeSwitch = (type: string) => {
@@ -115,32 +115,41 @@ let cameraFollowing = false;
 let onionSkinning = false;
 let savedCameraPos: Vec2 | null = null;
 let savedCameraZoom: number = 1;
+let gridDirty = false; // Track changes made while paused
+
+function canEdit(): boolean {
+  return gameLoop.state === GameState.EDITING || gameLoop.state === GameState.PAUSED;
+}
+
+function markGridDirty() {
+  if (gameLoop.state === GameState.PAUSED) {
+    gridDirty = true;
+  }
+}
+
+/** Rebuild grid + re-simulate to current frame if track was edited while paused */
+function ensureGridFresh() {
+  if (!gridDirty) return;
+  gridDirty = false;
+  const currentFrame = gameLoop.frame;
+  grid.rebuild(store.lines);
+  rider.reset();
+  gameLoop.resetSimulation();
+  gameLoop.seekToFrame(currentFrame);
+}
 
 // Toolbar
 const toolbar = new Toolbar();
 toolbar.setActiveTool('pencil');
 toolbar.setActiveLineType(LineType.SOLID);
 toolbar.setPlaybackState(GameState.EDITING);
-toolbar.setLayerState(
-  store.getActiveLayer().name,
-  store.getActiveLayerIndex() + 1,
-  store.layers.length,
-  store.getActiveLayer().visible,
-  store.getActiveLayer().editable,
-);
+toolbar.setLayerState(store.layers, store.getActiveLayerIndex());
 
 // Game loop
 const gameLoop = new GameLoop(physics, () => {
   renderer.render();
   toolbar.setPlaybackState(gameLoop.state);
-  const activeLayer = store.getActiveLayer();
-  toolbar.setLayerState(
-    activeLayer.name,
-    store.getActiveLayerIndex() + 1,
-    store.layers.length,
-    activeLayer.visible,
-    activeLayer.editable,
-  );
+  toolbar.setLayerState(store.layers, store.getActiveLayerIndex());
 
   // Update stats in canvas HUD
   const speed = rider.getCenterSpeed() * (1000 / TIMESTEP);
@@ -173,20 +182,19 @@ toolbar.onSmoothToggle = (enabled) => {
 toolbar.onOnionSkinToggle = (enabled) => {
   onionSkinning = enabled;
 };
+toolbar.onSnapToggle = (enabled) => {
+  snapEnabled = enabled;
+};
 toolbar.onLineTypeSelect = (type) => {
   currentLineType = type;
   toolbar.setActiveLineType(type);
 };
 toolbar.onClear = () => clearTrack();
 toolbar.onUndo = () => {
-  if (gameLoop.state === GameState.EDITING) {
-    store.undo();
-  }
+  if (canEdit()) store.undo();
 };
 toolbar.onRedo = () => {
-  if (gameLoop.state === GameState.EDITING) {
-    store.redo();
-  }
+  if (canEdit()) store.redo();
 };
 toolbar.onSave = () => saveTrack();
 toolbar.onLoad = () => openLoadDialog();
@@ -216,20 +224,32 @@ toolbar.onTimelineSeek = (frame) => {
     rider.reset();
     savedCameraPos = camera.position.clone();
     savedCameraZoom = camera.zoom;
-    cameraFollowing = true;
+    cameraFollowing = false; // Don't auto-follow during scrub, let user keep their view
     gameLoop.play();
     gameLoop.pause();
+    gridDirty = false;
+  }
+  if (gridDirty) {
+    ensureGridFresh();
   }
   gameLoop.seekToFrame(frame);
 };
 
-// Draw/Ride toggle
-toolbar.onDrawRideToggle = () => {
+// Draw/Ride toggle — split behavior
+toolbar.onDrawClick = () => {
+  if (gameLoop.state === GameState.PLAYING) {
+    gameLoop.pause(); // Pause but keep rider visible, allow drawing
+  }
+  // If EDITING or PAUSED, no-op (already in draw mode)
+};
+toolbar.onRideClick = () => {
   if (gameLoop.state === GameState.EDITING) {
     startPlayback();
-  } else {
-    stopPlayback();
+  } else if (gameLoop.state === GameState.PAUSED) {
+    ensureGridFresh();
+    gameLoop.play(); // Resume from current frame
   }
+  // If PLAYING, no-op
 };
 
 // Screenshot
@@ -251,6 +271,9 @@ toolbar.onStepForward = () => {
     cameraFollowing = true;
     gameLoop.play();
     gameLoop.pause();
+    gridDirty = false;
+  } else if (gridDirty) {
+    ensureGridFresh();
   }
   gameLoop.stepForward();
 };
@@ -260,6 +283,9 @@ toolbar.onStepBack = () => {
   if (gameLoop.state === GameState.EDITING) return;
   if (gameLoop.state === GameState.PLAYING) {
     gameLoop.pause();
+  }
+  if (gridDirty) {
+    ensureGridFresh();
   }
   if (gameLoop.frame > 0) {
     gameLoop.seekToFrame(gameLoop.frame - 1);
@@ -327,6 +353,7 @@ function switchTool(name: string) {
   else if (name === 'eraser') currentTool = eraserTool;
   else if (name === 'curve') currentTool = curveTool;
   else if (name === 'select') currentTool = selectTool;
+  else if (name === 'edit') currentTool = editTool;
   else if (name === 'flag') currentTool = flagTool;
   input.setTool(currentTool);
   toolbar.setActiveTool(name);
@@ -341,18 +368,18 @@ function clearTrack() {
 }
 
 function beginQuickErase(worldPos: Vec2) {
-  if (gameLoop.state !== GameState.EDITING) return;
+  if (!canEdit()) return;
   store.beginTransaction();
   store.removeLinesNear(worldPos, ERASER_RADIUS);
 }
 
 function continueQuickErase(worldPos: Vec2) {
-  if (gameLoop.state !== GameState.EDITING) return;
+  if (!canEdit()) return;
   store.removeLinesNear(worldPos, ERASER_RADIUS);
 }
 
 function endQuickErase() {
-  if (gameLoop.state !== GameState.EDITING) return;
+  if (!canEdit()) return;
   store.endTransaction();
 }
 
@@ -459,6 +486,9 @@ function startPlayback() {
     savedCameraPos = camera.position.clone();
     savedCameraZoom = camera.zoom;
     cameraFollowing = true;
+    gridDirty = false;
+  } else if (gameLoop.state === GameState.PAUSED && gridDirty) {
+    ensureGridFresh();
   }
   gameLoop.play();
 }
@@ -481,16 +511,16 @@ renderer.addRenderCallback((ctx) => {
   // Draw flag
   flagRenderer.render(ctx, store.startPosition);
 
-  // Draw lines
-  lineRenderer.render(ctx, store.lines, store.layers);
+  // Draw lines (show direction indicators when not playing)
+  lineRenderer.render(ctx, store.lines, store.layers, gameLoop.state !== GameState.PLAYING);
 
-  // Draw active tool preview
-  if (gameLoop.state === GameState.EDITING && currentTool.render) {
+  // Draw active tool preview (editing or paused)
+  if (gameLoop.state !== GameState.PLAYING && currentTool.render) {
     currentTool.render(ctx);
   }
 
-  // Draw triggers (edit mode only)
-  triggerRenderer.render(ctx, triggerStore.triggers, gameLoop.state === GameState.EDITING);
+  // Draw triggers (edit mode or paused)
+  triggerRenderer.render(ctx, triggerStore.triggers, gameLoop.state !== GameState.PLAYING);
 
   // Onion skinning: draw ghost riders from previous snapshots
   if (onionSkinning && gameLoop.state !== GameState.EDITING) {

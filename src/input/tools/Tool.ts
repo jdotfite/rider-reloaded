@@ -6,4 +6,5 @@ export interface Tool {
   onMouseMove(worldPos: Vec2, screenPos: Vec2): void;
   onMouseUp(worldPos: Vec2, screenPos: Vec2, button: number): void;
   render?(ctx: CanvasRenderingContext2D): void;
+  getCursor?(): string | null;
 }

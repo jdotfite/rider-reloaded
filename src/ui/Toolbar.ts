@@ -49,6 +49,8 @@ export class Toolbar {
   onSpeedChange: ((speed: number) => void) | null = null;
   onTimelineSeek: ((frame: number) => void) | null = null;
   onDrawRideToggle: (() => void) | null = null;
+  onDrawClick: (() => void) | null = null;
+  onRideClick: (() => void) | null = null;
   onSvgImport: (() => void) | null = null;
   onSvgExport: (() => void) | null = null;
   onSmoothToggle: ((enabled: boolean) => void) | null = null;
@@ -56,6 +58,7 @@ export class Toolbar {
   onScreenshot: (() => void) | null = null;
   onStepForward: (() => void) | null = null;
   onStepBack: (() => void) | null = null;
+  onSnapToggle: ((enabled: boolean) => void) | null = null;
 
   private toolButtons: Map<string, HTMLButtonElement> = new Map();
   private lineTypeButtons: Map<LineType, HTMLButtonElement> = new Map();
@@ -66,6 +69,7 @@ export class Toolbar {
   // Layer state
   private layerRows: HTMLElement[] = [];
   private isSeeking = false;
+  private lastLayerFingerprint = '';
 
   constructor() {
     // Left sidebar elements
@@ -99,8 +103,8 @@ export class Toolbar {
 
   private build() {
     // Draw/Ride toggle
-    this.drawBtn.addEventListener('click', () => this.onDrawRideToggle?.());
-    this.rideBtn.addEventListener('click', () => this.onDrawRideToggle?.());
+    this.drawBtn.addEventListener('click', () => this.onDrawClick?.());
+    this.rideBtn.addEventListener('click', () => this.onRideClick?.());
 
     // File actions (left sidebar)
     this.addBtn(this.fileActions, 'Clear', () => this.onClear?.());
@@ -123,6 +127,7 @@ export class Toolbar {
     this.addToolGridBtn('eraser', '✕', 'Erase');
     this.addToolGridBtn('curve', '↩', 'Curve');
     this.addToolGridBtn('select', '⊡', 'Select');
+    this.addToolGridBtn('edit', '✎', 'Edit');
     this.addToolGridBtn('flag', '⚑', 'Flag');
 
     // Smooth toggle
@@ -138,6 +143,14 @@ export class Toolbar {
     if (onionCheckbox) {
       onionCheckbox.addEventListener('change', () => {
         this.onOnionSkinToggle?.(onionCheckbox.checked);
+      });
+    }
+
+    // Snap toggle
+    const snapCheckbox = document.getElementById('snap-checkbox') as HTMLInputElement;
+    if (snapCheckbox) {
+      snapCheckbox.addEventListener('change', () => {
+        this.onSnapToggle?.(snapCheckbox.checked);
       });
     }
 
@@ -326,39 +339,49 @@ export class Toolbar {
     this.stopBtn.disabled = state === GameState.EDITING;
     this.pauseBtn.classList.toggle('active', state === GameState.PAUSED);
 
-    // Draw/Ride toggle
-    this.drawBtn.classList.toggle('active', state === GameState.EDITING);
-    this.rideBtn.classList.toggle('active', state !== GameState.EDITING);
+    // Draw/Ride toggle — DRAW active when editing or paused (can draw), RIDE active when playing
+    this.drawBtn.classList.toggle('active', state !== GameState.PLAYING);
+    this.rideBtn.classList.toggle('active', state === GameState.PLAYING);
 
     // Timeline — always enabled so user can scrub anytime
   }
 
-  setLayerState(name: string, index: number, count: number, visible: boolean, editable: boolean) {
+  setLayerState(layers: Array<{ id: number; name: string; visible: boolean; editable: boolean }>, activeIndex: number) {
+    // Build fingerprint to skip unnecessary rebuilds
+    const fingerprint = layers.map((l, i) =>
+      `${l.id}:${l.name}:${l.visible}:${l.editable}:${i === activeIndex}`
+    ).join('|');
+    if (fingerprint === this.lastLayerFingerprint) return;
+    this.lastLayerFingerprint = fingerprint;
+
     // Rebuild layer list
     this.layerList.innerHTML = '';
     this.layerRows = [];
 
-    for (let i = 0; i < count; i++) {
+    for (let i = 0; i < layers.length; i++) {
+      const layer = layers[i];
+      const isActive = i === activeIndex;
+
       const row = document.createElement('div');
-      row.className = 'layer-row' + (i === index - 1 ? ' active' : '');
+      row.className = 'layer-row' + (isActive ? ' active' : '');
 
       const nameSpan = document.createElement('span');
       nameSpan.className = 'layer-name';
-      nameSpan.textContent = i === index - 1 ? name : `Layer ${i + 1}`;
+      nameSpan.textContent = layer.name;
 
       const visBtn = document.createElement('button');
       visBtn.className = 'layer-btn';
-      visBtn.textContent = (i === index - 1 && !visible) ? '🔇' : '👁';
+      visBtn.textContent = layer.visible ? '👁' : '🔇';
       visBtn.title = 'Toggle visibility';
-      if (i === index - 1) {
+      if (isActive) {
         visBtn.addEventListener('click', () => this.onLayerToggleVisibility?.());
       }
 
       const editBtn = document.createElement('button');
       editBtn.className = 'layer-btn';
-      editBtn.textContent = (i === index - 1 && !editable) ? '🔒' : '✏';
+      editBtn.textContent = layer.editable ? '✏' : '🔒';
       editBtn.title = 'Toggle editability';
-      if (i === index - 1) {
+      if (isActive) {
         editBtn.addEventListener('click', () => this.onLayerToggleEditability?.());
       }
 
@@ -370,7 +393,7 @@ export class Toolbar {
       const layerIdx = i;
       row.addEventListener('click', (e) => {
         if ((e.target as HTMLElement).tagName === 'BUTTON') return;
-        const diff = layerIdx - (index - 1);
+        const diff = layerIdx - activeIndex;
         if (diff < 0) {
           for (let j = 0; j < Math.abs(diff); j++) this.onLayerPrev?.();
         } else if (diff > 0) {

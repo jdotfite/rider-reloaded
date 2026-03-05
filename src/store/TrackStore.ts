@@ -35,6 +35,15 @@ export interface TrackLayer {
   editable: boolean;
 }
 
+export interface SerializedCurveGroup {
+  id: number;
+  lineIds: number[];
+  startPoint: { x: number; y: number };
+  endPoint: { x: number; y: number };
+  cp1: { x: number; y: number };
+  cp2: { x: number; y: number };
+}
+
 export interface SerializedTrack {
   version: string;
   label: string;
@@ -43,6 +52,16 @@ export interface SerializedTrack {
   riders?: Array<{ startPosition: { x: number; y: number } }>;
   layers: SerializedTrackLayer[];
   lines: SerializedTrackLine[];
+  curveGroups?: SerializedCurveGroup[];
+}
+
+export interface CurveGroup {
+  id: number;
+  lineIds: number[];
+  startPoint: Vec2;
+  endPoint: Vec2;
+  cp1: Vec2;
+  cp2: Vec2;
 }
 
 interface TrackSnapshot {
@@ -50,6 +69,7 @@ interface TrackSnapshot {
   startPosition: Vec2;
   layers: TrackLayer[];
   activeLayerId: number;
+  curveGroups: CurveGroup[];
 }
 
 interface NormalizedTrackLine {
@@ -76,6 +96,11 @@ export class TrackStore {
   startPosition: Vec2 = new Vec2(0, 0);
   layers: TrackLayer[] = [this.createDefaultLayer()];
   activeLayerId = 0;
+  curveGroups: CurveGroup[] = [];
+  nextCurveGroupId = 0;
+
+  /** Fires on every mutation (addLine, removeLines, replaceLine, etc.) */
+  onMutation: (() => void) | null = null;
 
   private undoStack: TrackSnapshot[] = [];
   private redoStack: TrackSnapshot[] = [];
@@ -107,6 +132,38 @@ export class TrackStore {
     return added;
   }
 
+  flipLine(lineId: number): Line | null {
+    const existing = this.lines.find(l => l.id === lineId);
+    if (!existing) return null;
+    this.beginMutation();
+    const flipped = this.createLine(existing.p1, existing.p2, existing.type, {
+      id: existing.id,
+      flipped: !existing.flipped,
+      leftExtended: existing.leftExtended,
+      rightExtended: existing.rightExtended,
+      layer: existing.layer,
+      multiplier: existing instanceof AccLine ? (existing as AccLine).multiplier : undefined,
+    });
+    this.lines = this.lines.map(l => l.id === lineId ? flipped : l);
+    return flipped;
+  }
+
+  replaceLine(lineId: number, p1: Vec2, p2: Vec2): Line | null {
+    const existing = this.lines.find(l => l.id === lineId);
+    if (!existing) return null;
+    this.beginMutation();
+    const replacement = this.createLine(p1, p2, existing.type, {
+      id: existing.id,
+      flipped: existing.flipped,
+      leftExtended: existing.leftExtended,
+      rightExtended: existing.rightExtended,
+      layer: existing.layer,
+      multiplier: existing instanceof AccLine ? (existing as AccLine).multiplier : undefined,
+    });
+    this.lines = this.lines.map(l => l.id === lineId ? replacement : l);
+    return replacement;
+  }
+
   removeLinesNear(point: Vec2, radius: number): number {
     if (this.lines.length === 0 || !this.canEditActiveLayer()) return 0;
 
@@ -118,8 +175,16 @@ export class TrackStore {
     const removed = this.lines.length - nextLines.length;
     if (removed === 0) return 0;
 
+    const removedIds = new Set<number>();
+    for (const line of this.lines) {
+      if (line.layer === this.activeLayerId && line.distanceToPointSq(point) <= radiusSq) {
+        removedIds.add(line.id);
+      }
+    }
+
     this.beginMutation();
     this.lines = nextLines;
+    this.invalidateCurveGroups(removedIds);
     return removed;
   }
 
@@ -139,6 +204,8 @@ export class TrackStore {
     this.lines = [];
     this.layers = [this.createDefaultLayer()];
     this.activeLayerId = 0;
+    this.curveGroups = [];
+    this.nextCurveGroupId = 0;
     return true;
   }
 
@@ -263,6 +330,14 @@ export class TrackStore {
         layer: line.layer,
         multiplier: line instanceof AccLine && line.multiplier !== 1 ? line.multiplier : undefined,
       })),
+      curveGroups: this.curveGroups.map(g => ({
+        id: g.id,
+        lineIds: [...g.lineIds],
+        startPoint: { x: g.startPoint.x, y: g.startPoint.y },
+        endPoint: { x: g.endPoint.x, y: g.endPoint.y },
+        cp1: { x: g.cp1.x, y: g.cp1.y },
+        cp2: { x: g.cp2.x, y: g.cp2.y },
+      })),
     };
   }
 
@@ -283,11 +358,34 @@ export class TrackStore {
       }
     ));
 
+    // Load curve groups if present
+    const candidate = track as Record<string, unknown>;
+    const loadedCurveGroups: CurveGroup[] = [];
+    if (Array.isArray(candidate.curveGroups)) {
+      for (const g of candidate.curveGroups) {
+        if (g && typeof g === 'object' &&
+          typeof g.id === 'number' &&
+          Array.isArray(g.lineIds) &&
+          g.startPoint && g.endPoint && g.cp1 && g.cp2) {
+          loadedCurveGroups.push({
+            id: g.id,
+            lineIds: g.lineIds,
+            startPoint: new Vec2(g.startPoint.x, g.startPoint.y),
+            endPoint: new Vec2(g.endPoint.x, g.endPoint.y),
+            cp1: new Vec2(g.cp1.x, g.cp1.y),
+            cp2: new Vec2(g.cp2.x, g.cp2.y),
+          });
+        }
+      }
+    }
+
     this.beginMutation();
     this.startPosition = normalizedTrack.startPosition;
     this.layers = normalizedTrack.layers;
     this.activeLayerId = this.getPreferredActiveLayerId(normalizedTrack.layers);
     this.lines = loadedLines;
+    this.curveGroups = loadedCurveGroups;
+    this.nextCurveGroupId = loadedCurveGroups.reduce((max, g) => Math.max(max, g.id + 1), 0);
     return true;
   }
 
@@ -330,6 +428,7 @@ export class TrackStore {
       this.trimUndo();
       this.redoStack.length = 0;
     }
+    this.onMutation?.();
   }
 
   private trimUndo() {
@@ -349,6 +448,14 @@ export class TrackStore {
       startPosition: this.startPosition.clone(),
       layers: this.layers.map(layer => ({ ...layer })),
       activeLayerId: this.activeLayerId,
+      curveGroups: this.curveGroups.map(g => ({
+        ...g,
+        lineIds: [...g.lineIds],
+        startPoint: g.startPoint.clone(),
+        endPoint: g.endPoint.clone(),
+        cp1: g.cp1.clone(),
+        cp2: g.cp2.clone(),
+      })),
     };
   }
 
@@ -357,6 +464,18 @@ export class TrackStore {
     this.startPosition = snapshot.startPosition.clone();
     this.layers = snapshot.layers.map(layer => ({ ...layer }));
     this.activeLayerId = snapshot.activeLayerId;
+    this.curveGroups = snapshot.curveGroups.map(g => ({
+      ...g,
+      lineIds: [...g.lineIds],
+      startPoint: g.startPoint.clone(),
+      endPoint: g.endPoint.clone(),
+      cp1: g.cp1.clone(),
+      cp2: g.cp2.clone(),
+    }));
+  }
+
+  createLinePublic(p1: Vec2, p2: Vec2, type: LineType, options: LineOptions = {}): Line {
+    return this.createLine(p1, p2, type, options);
   }
 
   private createLine(p1: Vec2, p2: Vec2, type: LineType, options: LineOptions = {}): Line {
@@ -529,6 +648,25 @@ export class TrackStore {
     ).id;
   }
 
+  findNearestHandle(point: Vec2, radius: number): { lineId: number; endpoint: 'p1' | 'p2'; position: Vec2 } | null {
+    let bestDist = radius * radius;
+    let best: { lineId: number; endpoint: 'p1' | 'p2'; position: Vec2 } | null = null;
+    for (const line of this.lines) {
+      if (line.layer !== this.activeLayerId) continue;
+      const d1 = point.distanceToSq(line.p1);
+      if (d1 < bestDist) {
+        bestDist = d1;
+        best = { lineId: line.id, endpoint: 'p1', position: line.p1.clone() };
+      }
+      const d2 = point.distanceToSq(line.p2);
+      if (d2 < bestDist) {
+        bestDist = d2;
+        best = { lineId: line.id, endpoint: 'p2', position: line.p2.clone() };
+      }
+    }
+    return best;
+  }
+
   findNearestEndpoint(point: Vec2, radius: number, excludeLineIds?: Set<number>): Vec2 | null {
     let bestDist = radius * radius;
     let best: Vec2 | null = null;
@@ -582,6 +720,7 @@ export class TrackStore {
         line.p2.add(offset),
         line.type,
         {
+          id: line.id,
           flipped: line.flipped,
           leftExtended: line.leftExtended,
           rightExtended: line.rightExtended,
@@ -596,6 +735,13 @@ export class TrackStore {
     if (lineIds.size === 0) return;
     this.beginMutation();
     this.lines = this.lines.filter(line => !lineIds.has(line.id));
+    this.invalidateCurveGroups(lineIds);
+  }
+
+  private invalidateCurveGroups(removedIds: Set<number>) {
+    this.curveGroups = this.curveGroups.filter(g =>
+      !g.lineIds.some(id => removedIds.has(id))
+    );
   }
 
   private canEditActiveLayer(): boolean {

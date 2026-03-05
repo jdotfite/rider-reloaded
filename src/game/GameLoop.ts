@@ -121,6 +121,12 @@ export class GameLoop {
     this.snapshots = [];
   }
 
+  /** Reset frame counter and clear stale snapshots (e.g. after grid rebuild) */
+  resetSimulation() {
+    this.frame = 0;
+    this.snapshots = [];
+  }
+
   stepForward() {
     if (this.state === GameState.PLAYING) {
       this.pause();

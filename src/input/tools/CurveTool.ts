@@ -3,12 +3,12 @@ import {
   COLOR_ACC,
   COLOR_SCENERY,
   COLOR_SOLID,
-  MIN_LINE_LENGTH,
   SNAP_RADIUS,
 } from '../../constants';
 import { Tool } from './Tool';
 import { TrackStore } from '../../store/TrackStore';
 import { LineType } from '../../physics/lines/LineTypes';
+import { sampleCubicBezier } from '../../math/bezier';
 
 type CurveStage = 'idle' | 'setting-end' | 'setting-cp1' | 'setting-cp2';
 
@@ -150,21 +150,23 @@ export class CurveTool implements Tool {
   }
 
   private commitCurve() {
-    const points = this.getPreviewPoints();
-    if (points.length < 2) {
+    const segments = sampleCubicBezier(this.startPoint, this.cp1, this.cp2, this.endPoint);
+    if (segments.length === 0) {
       this.reset();
       return;
     }
 
-    const segments: Array<{ p1: Vec2; p2: Vec2 }> = [];
-    for (let i = 1; i < points.length; i++) {
-      segments.push({
-        p1: points[i - 1],
-        p2: points[i],
+    const added = this.store.addLines(segments, this.getLineType());
+    if (added.length > 0) {
+      this.store.curveGroups.push({
+        id: this.store.nextCurveGroupId++,
+        lineIds: added.map(l => l.id),
+        startPoint: this.startPoint.clone(),
+        endPoint: this.endPoint.clone(),
+        cp1: this.cp1.clone(),
+        cp2: this.cp2.clone(),
       });
     }
-
-    this.store.addLines(segments, this.getLineType());
     this.reset();
   }
 
@@ -172,30 +174,10 @@ export class CurveTool implements Tool {
     if (this.stage === 'idle') return [];
     if (this.stage === 'setting-end') return [this.startPoint, this.endPoint];
 
-    const approxLength =
-      this.startPoint.distanceTo(this.cp1) +
-      this.cp1.distanceTo(this.cp2) +
-      this.cp2.distanceTo(this.endPoint);
-    const steps = Math.max(8, Math.min(64, Math.ceil(approxLength / MIN_LINE_LENGTH)));
-    const points: Vec2[] = [];
-
-    for (let i = 0; i <= steps; i++) {
-      points.push(this.sampleCubic(i / steps));
-    }
-
+    const segments = sampleCubicBezier(this.startPoint, this.cp1, this.cp2, this.endPoint);
+    if (segments.length === 0) return [];
+    const points = [segments[0].p1, ...segments.map(s => s.p2)];
     return points;
-  }
-
-  private sampleCubic(t: number): Vec2 {
-    const mt = 1 - t;
-    const mt2 = mt * mt;
-    const mt3 = mt2 * mt;
-    const t2 = t * t;
-    const t3 = t2 * t;
-    return new Vec2(
-      mt3 * this.startPoint.x + 3 * mt2 * t * this.cp1.x + 3 * mt * t2 * this.cp2.x + t3 * this.endPoint.x,
-      mt3 * this.startPoint.y + 3 * mt2 * t * this.cp1.y + 3 * mt * t2 * this.cp2.y + t3 * this.endPoint.y,
-    );
   }
 
   private drawAnchor(ctx: CanvasRenderingContext2D, point: Vec2, color: string) {

@@ -5,6 +5,7 @@ import { MAX_LINE_COLLIDE_DIST } from '../../constants';
 let nextLineId = 0;
 
 export interface LineOptions {
+  id?: number;
   flipped?: boolean;
   leftExtended?: boolean;
   rightExtended?: boolean;
@@ -31,7 +32,12 @@ export class Line {
   readonly rightBound: number;
 
   constructor(p1: Vec2, p2: Vec2, type: LineType, options: LineOptions = {}) {
-    this.id = nextLineId++;
+    if (options.id !== undefined) {
+      this.id = options.id;
+      if (options.id >= nextLineId) nextLineId = options.id + 1;
+    } else {
+      this.id = nextLineId++;
+    }
     this.p1 = p1.clone();
     this.p2 = p2.clone();
     this.type = type;

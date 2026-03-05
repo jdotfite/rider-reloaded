@@ -1,7 +1,6 @@
 import { Vec2 } from '../../math/Vec2';
 import { Tool } from './Tool';
 import { TrackStore } from '../../store/TrackStore';
-import { Line } from '../../physics/lines/Line';
 import { SELECT_RADIUS } from '../../constants';
 
 type SelectState = 'idle' | 'box-selecting' | 'dragging';
@@ -70,16 +69,6 @@ export class SelectTool implements Tool {
         this.store.moveLines(this.selectedIds, dx, dy);
         this.dragCurrent = worldPos.clone();
         this.dragCommitted = true;
-        // Update selectedIds to point to new line objects
-        const newIds = new Set<number>();
-        for (const line of this.store.lines) {
-          // After moveLines, new lines were created with new IDs
-          // We need to track by position instead — but since moveLines replaces,
-          // let's just select all lines on the active layer (we'll refine below)
-        }
-        // Actually moveLines creates new Line objects with new IDs.
-        // Let's track the new IDs by rebuilding after move.
-        this.rebuildSelectionAfterMove();
       }
     }
   }
@@ -167,22 +156,4 @@ export class SelectTool implements Tool {
     return found ? { minX, minY, maxX, maxY } : null;
   }
 
-  private rebuildSelectionAfterMove() {
-    // After moveLines replaces lines, old IDs are gone.
-    // moveLines creates new lines, so we need to find them.
-    // Since moveLines processes all lines, new lines that were moved
-    // will have new IDs. We track by counting lines on the active layer.
-    // Better approach: moveLines should return new IDs.
-    // For now, select all lines on active layer that aren't in the old set of non-selected lines.
-    const oldNonSelected = new Set(
-      this.store.lines
-        .filter(l => !this.selectedIds.has(l.id))
-        .map(l => l.id)
-    );
-    this.selectedIds = new Set(
-      this.store.lines
-        .filter(l => !oldNonSelected.has(l.id))
-        .map(l => l.id)
-    );
-  }
 }
