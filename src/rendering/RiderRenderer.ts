@@ -17,28 +17,78 @@ const FILL_WHITE = '#ffffff';
 const FILL_SLED = '#222222';
 const FILL_SCARF = '#333333';
 
-/**
- * SVG reference points — where BUTT and SHOULDER sit in the SVG coordinate space.
- * Adjust these to re-anchor the character if the SVG changes.
- */
 const SVG_W = 1874.68;
 const SVG_H = 1383.15;
+
+// Body reference points in SVG space (butt seat, shoulder/neck)
 const SVG_BUTT = { x: 1050, y: 1000 };
 const SVG_SHOULDER = { x: 1020, y: 570 };
 
+// Sled reference points in SVG space (left-bottom, right-bottom of sled deck)
+const SVG_SLED_TAIL = { x: 200, y: 1140 };
+const SVG_SLED_NOSE = { x: 1550, y: 1140 };
+
 export class RiderRenderer {
-  private svgImage: HTMLImageElement;
-  private imageReady = false;
+  private combinedImage: HTMLImageElement;
+  private bodyImage: HTMLImageElement;
+  private sledImage: HTMLImageElement;
+  private combinedReady = false;
+  private bodyReady = false;
+  private sledReady = false;
 
   constructor() {
-    this.svgImage = new Image();
-    const blob = new Blob([CHARACTER_SVG], { type: 'image/svg+xml' });
+    this.combinedImage = new Image();
+    this.bodyImage = new Image();
+    this.sledImage = new Image();
+    this.loadImages();
+  }
+
+  private loadImages() {
+    // Load the combined character+sled image
+    this.loadSvgImage(CHARACTER_SVG, this.combinedImage, () => { this.combinedReady = true; });
+
+    // Parse SVG and split into body-only and sled-only images
+    const parser = new DOMParser();
+    const doc = parser.parseFromString(CHARACTER_SVG, 'image/svg+xml');
+    const svgEl = doc.querySelector('svg');
+    if (!svgEl) return;
+
+    const defs = svgEl.querySelector('defs');
+    const topGroups = Array.from(svgEl.children).filter(el => el.tagName === 'g');
+
+    // First 2 groups = body (character), last 2 groups = sled
+    const bodyGroups = topGroups.slice(0, 2);
+    const sledGroups = topGroups.slice(2);
+
+    // Build body-only SVG
+    const bodySvg = svgEl.cloneNode(false) as SVGSVGElement;
+    if (defs) bodySvg.appendChild(defs.cloneNode(true));
+    bodyGroups.forEach(g => bodySvg.appendChild(g.cloneNode(true)));
+    this.loadSvgImage(
+      new XMLSerializer().serializeToString(bodySvg),
+      this.bodyImage,
+      () => { this.bodyReady = true; },
+    );
+
+    // Build sled-only SVG
+    const sledSvg = svgEl.cloneNode(false) as SVGSVGElement;
+    if (defs) sledSvg.appendChild(defs.cloneNode(true));
+    sledGroups.forEach(g => sledSvg.appendChild(g.cloneNode(true)));
+    this.loadSvgImage(
+      new XMLSerializer().serializeToString(sledSvg),
+      this.sledImage,
+      () => { this.sledReady = true; },
+    );
+  }
+
+  private loadSvgImage(svgString: string, img: HTMLImageElement, onReady: () => void) {
+    const blob = new Blob([svgString], { type: 'image/svg+xml' });
     const url = URL.createObjectURL(blob);
-    this.svgImage.onload = () => {
-      this.imageReady = true;
+    img.onload = () => {
+      onReady();
       URL.revokeObjectURL(url);
     };
-    this.svgImage.src = url;
+    img.src = url;
   }
 
   render(ctx: CanvasRenderingContext2D, rider: RiderRenderData | null) {
@@ -48,35 +98,47 @@ export class RiderRenderer {
     ctx.lineCap = 'round';
     ctx.lineJoin = 'round';
 
-    // Scarf drawn behind the character
+    // Scarf behind everything
     if (rider.points.length > SCARF_START + 1) {
       this.drawScarf(ctx, p, rider.points.length);
     }
 
-    // SVG character when mounted + sled intact + image loaded
-    if (rider.mounted && rider.sledIntact && this.imageReady) {
-      this.drawSvgCharacter(ctx, p);
+    if (rider.mounted && rider.sledIntact && this.combinedReady) {
+      // Mounted: single combined image, body-oriented transform
+      this.drawSvgTransformed(ctx, this.combinedImage, p[BUTT], p[SHOULDER], SVG_BUTT, SVG_SHOULDER);
+    } else if (this.bodyReady) {
+      // Dismounted: body and sled rendered independently
+      if (rider.sledIntact && this.sledReady) {
+        this.drawSvgTransformed(ctx, this.sledImage, p[TAIL], p[NOSE], SVG_SLED_TAIL, SVG_SLED_NOSE);
+      }
+      this.drawSvgTransformed(ctx, this.bodyImage, p[BUTT], p[SHOULDER], SVG_BUTT, SVG_SHOULDER);
     } else {
-      // Fallback stick figure
+      // Fallback stick figure (images not loaded yet)
       if (rider.sledIntact) this.drawSled(ctx, p);
       this.drawBody(ctx, p);
       this.drawHead(ctx, p);
     }
   }
 
-  private drawSvgCharacter(ctx: CanvasRenderingContext2D, p: Array<{ x: number; y: number }>) {
-    const buttX = p[BUTT].x, buttY = p[BUTT].y;
-    const shX = p[SHOULDER].x, shY = p[SHOULDER].y;
-
-    // Physics torso vector
-    const pdx = shX - buttX;
-    const pdy = shY - buttY;
+  /**
+   * Draw an SVG image transformed so that svgFrom→svgTo maps to physFrom→physTo.
+   * This determines position, rotation, and scale.
+   */
+  private drawSvgTransformed(
+    ctx: CanvasRenderingContext2D,
+    image: HTMLImageElement,
+    physFrom: { x: number; y: number },
+    physTo: { x: number; y: number },
+    svgFrom: { x: number; y: number },
+    svgTo: { x: number; y: number },
+  ) {
+    const pdx = physTo.x - physFrom.x;
+    const pdy = physTo.y - physFrom.y;
     const physAngle = Math.atan2(pdy, pdx);
     const physLen = Math.sqrt(pdx * pdx + pdy * pdy) || 1;
 
-    // SVG torso vector
-    const sdx = SVG_SHOULDER.x - SVG_BUTT.x;
-    const sdy = SVG_SHOULDER.y - SVG_BUTT.y;
+    const sdx = svgTo.x - svgFrom.x;
+    const sdy = svgTo.y - svgFrom.y;
     const svgAngle = Math.atan2(sdy, sdx);
     const svgLen = Math.sqrt(sdx * sdx + sdy * sdy) || 1;
 
@@ -84,16 +146,11 @@ export class RiderRenderer {
     const rotation = physAngle - svgAngle;
 
     ctx.save();
-    // 1. Move to physics BUTT position
-    ctx.translate(buttX, buttY);
-    // 2. Rotate from SVG orientation to physics orientation
+    ctx.translate(physFrom.x, physFrom.y);
     ctx.rotate(rotation);
-    // 3. Scale from SVG units to physics units
     ctx.scale(scale, scale);
-    // 4. Offset so SVG_BUTT aligns with origin (now at physics BUTT)
-    ctx.translate(-SVG_BUTT.x, -SVG_BUTT.y);
-    // 5. Draw the full SVG (body + sled)
-    ctx.drawImage(this.svgImage, 0, 0, SVG_W, SVG_H);
+    ctx.translate(-svgFrom.x, -svgFrom.y);
+    ctx.drawImage(image, 0, 0, SVG_W, SVG_H);
     ctx.restore();
   }
 
@@ -113,28 +170,23 @@ export class RiderRenderer {
     ctx.fill();
     ctx.stroke();
 
-    // Runner
     const rdx = p[NOSE].x - p[TAIL].x;
     const rdy = p[NOSE].y - p[TAIL].y;
     const rlen = Math.sqrt(rdx * rdx + rdy * rdy) || 1;
-    const rnx = rdx / rlen;
-    const rny = rdy / rlen;
-    const rpx = rny;
-    const rpy = -rnx;
+    const rnx = rdx / rlen, rny = rdy / rlen;
+    const rpx = rny, rpy = -rnx;
     const ext = 2.5, off = 1.5;
     const rx1 = p[TAIL].x - rnx * ext + rpx * off;
     const ry1 = p[TAIL].y - rny * ext + rpy * off;
     const rx2 = p[NOSE].x + rnx * ext + rpx * off;
     const ry2 = p[NOSE].y + rny * ext + rpy * off;
-    const curlX = rx2 + rnx * 2.5 - rpx * 3;
-    const curlY = ry2 + rny * 2.5 - rpy * 3;
 
     ctx.strokeStyle = STROKE;
     ctx.lineWidth = 2;
     ctx.beginPath();
     ctx.moveTo(rx1, ry1);
     ctx.lineTo(rx2, ry2);
-    ctx.quadraticCurveTo(rx2 + rnx * 2, ry2 + rny * 2, curlX, curlY);
+    ctx.quadraticCurveTo(rx2 + rnx * 2, ry2 + rny * 2, rx2 + rnx * 2.5 - rpx * 3, ry2 + rny * 2.5 - rpy * 3);
     ctx.stroke();
   }
 
@@ -143,21 +195,17 @@ export class RiderRenderer {
     ctx.lineCap = 'round';
     ctx.lineJoin = 'round';
 
-    // Legs
     ctx.lineWidth = 2.2;
     ctx.beginPath(); ctx.moveTo(p[LFOOT].x, p[LFOOT].y); ctx.lineTo(p[BUTT].x, p[BUTT].y); ctx.stroke();
     ctx.beginPath(); ctx.moveTo(p[RFOOT].x, p[RFOOT].y); ctx.lineTo(p[BUTT].x, p[BUTT].y); ctx.stroke();
 
-    // Torso
     ctx.lineWidth = 2.8;
     ctx.beginPath(); ctx.moveTo(p[BUTT].x, p[BUTT].y); ctx.lineTo(p[SHOULDER].x, p[SHOULDER].y); ctx.stroke();
 
-    // Arms
     ctx.lineWidth = 2.2;
     ctx.beginPath(); ctx.moveTo(p[SHOULDER].x, p[SHOULDER].y); ctx.lineTo(p[LHAND].x, p[LHAND].y); ctx.stroke();
     ctx.beginPath(); ctx.moveTo(p[SHOULDER].x, p[SHOULDER].y); ctx.lineTo(p[RHAND].x, p[RHAND].y); ctx.stroke();
 
-    // Joints
     this.drawJoint(ctx, p[BUTT].x, p[BUTT].y, 1.8);
     this.drawJoint(ctx, p[SHOULDER].x, p[SHOULDER].y, 1.8);
     this.drawDot(ctx, p[LHAND].x, p[LHAND].y, 1.2);
@@ -170,8 +218,7 @@ export class RiderRenderer {
     const dx = p[SHOULDER].x - p[BUTT].x;
     const dy = p[SHOULDER].y - p[BUTT].y;
     const len = Math.sqrt(dx * dx + dy * dy) || 1;
-    const nx = dx / len;
-    const ny = dy / len;
+    const nx = dx / len, ny = dy / len;
     const headRadius = 4.5;
     const hx = p[SHOULDER].x + nx * (headRadius + 1);
     const hy = p[SHOULDER].y + ny * (headRadius + 1);
@@ -184,18 +231,15 @@ export class RiderRenderer {
     ctx.fill();
     ctx.stroke();
 
-    // Eye
-    const handMidX = (p[LHAND].x + p[RHAND].x) / 2;
-    const handMidY = (p[LHAND].y + p[RHAND].y) / 2;
-    const fdx = handMidX - p[SHOULDER].x;
-    const fdy = handMidY - p[SHOULDER].y;
+    const hmx = (p[LHAND].x + p[RHAND].x) / 2;
+    const hmy = (p[LHAND].y + p[RHAND].y) / 2;
+    const fdx = hmx - p[SHOULDER].x;
+    const fdy = hmy - p[SHOULDER].y;
     const fLen = Math.sqrt(fdx * fdx + fdy * fdy) || 1;
-    const eyeX = hx + (fdx / fLen) * 1.8 + nx * -0.5;
-    const eyeY = hy + (fdy / fLen) * 1.8 + ny * -0.5;
 
     ctx.fillStyle = STROKE;
     ctx.beginPath();
-    ctx.arc(eyeX, eyeY, 0.9, 0, Math.PI * 2);
+    ctx.arc(hx + (fdx / fLen) * 1.8 + nx * -0.5, hy + (fdy / fLen) * 1.8 + ny * -0.5, 0.9, 0, Math.PI * 2);
     ctx.fill();
   }
 
@@ -223,22 +267,20 @@ export class RiderRenderer {
       ctx.stroke();
     }
 
-    // Small flag at scarf tip
     const lastIdx = Math.min(SCARF_START + scarfCount - 1, totalPoints - 1);
     const prevIdx = lastIdx - 1;
     if (prevIdx >= SCARF_START) {
       const edx = p[lastIdx].x - p[prevIdx].x;
       const edy = p[lastIdx].y - p[prevIdx].y;
       const elen = Math.sqrt(edx * edx + edy * edy) || 1;
-      const epx = -edy / elen;
-      const epy = edx / elen;
-      const flagSize = 2;
+      const epx = -edy / elen, epy = edx / elen;
+      const fs = 2;
 
       ctx.fillStyle = FILL_SCARF;
       ctx.beginPath();
       ctx.moveTo(p[lastIdx].x, p[lastIdx].y);
-      ctx.lineTo(p[lastIdx].x + epx * flagSize + edx / elen * flagSize, p[lastIdx].y + epy * flagSize + edy / elen * flagSize);
-      ctx.lineTo(p[lastIdx].x - epx * flagSize + edx / elen * flagSize, p[lastIdx].y - epy * flagSize + edy / elen * flagSize);
+      ctx.lineTo(p[lastIdx].x + epx * fs + edx / elen * fs, p[lastIdx].y + epy * fs + edy / elen * fs);
+      ctx.lineTo(p[lastIdx].x - epx * fs + edx / elen * fs, p[lastIdx].y - epy * fs + edy / elen * fs);
       ctx.closePath();
       ctx.fill();
     }

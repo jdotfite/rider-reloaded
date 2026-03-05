@@ -160,6 +160,13 @@ export class InputManager {
     if (e.code === 'KeyQ') this.onLineTypeSwitch?.('solid');
     if (e.code === 'KeyW') this.onLineTypeSwitch?.('acc');
     if (e.code === 'KeyE') this.onLineTypeSwitch?.('scenery');
+
+    // Arrow key panning
+    const panAmount = e.shiftKey ? 200 : 80;
+    if (e.code === 'ArrowLeft') { e.preventDefault(); this.camera.pan(panAmount, 0); }
+    if (e.code === 'ArrowRight') { e.preventDefault(); this.camera.pan(-panAmount, 0); }
+    if (e.code === 'ArrowUp') { e.preventDefault(); this.camera.pan(0, panAmount); }
+    if (e.code === 'ArrowDown') { e.preventDefault(); this.camera.pan(0, -panAmount); }
   };
 
   private onKeyUp = (e: KeyboardEvent) => {
