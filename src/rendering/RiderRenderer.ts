@@ -103,11 +103,8 @@ export class RiderRenderer {
       this.drawScarf(ctx, p, rider.points.length);
     }
 
-    if (rider.mounted && rider.sledIntact && this.combinedReady) {
-      // Mounted: single combined image, body-oriented transform
-      this.drawSvgTransformed(ctx, this.combinedImage, p[BUTT], p[SHOULDER], SVG_BUTT, SVG_SHOULDER);
-    } else if (this.bodyReady) {
-      // Dismounted: body and sled rendered independently
+    if (this.bodyReady) {
+      // Always render body and sled separately so each follows its own physics
       if (rider.sledIntact && this.sledReady) {
         this.drawSvgTransformed(ctx, this.sledImage, p[TAIL], p[NOSE], SVG_SLED_TAIL, SVG_SLED_NOSE);
       }
@@ -253,20 +250,23 @@ export class RiderRenderer {
     ctx.lineCap = 'round';
     ctx.lineJoin = 'round';
 
-    const maxWidth = 3.0;
+    // Thin ribbon: starts narrow at neck, tapers further toward tip
+    const neckWidth = 1.0;
+    const tipWidth = 0.4;
     for (let i = 0; i < scarfCount; i++) {
       const fromIdx = i === 0 ? SHOULDER : SCARF_START + i - 1;
       const toIdx = SCARF_START + i;
       if (toIdx >= totalPoints) break;
 
       const t = i / scarfCount;
-      ctx.lineWidth = maxWidth * (1 - t * 0.7);
+      ctx.lineWidth = neckWidth + (tipWidth - neckWidth) * t;
       ctx.beginPath();
       ctx.moveTo(p[fromIdx].x, p[fromIdx].y);
       ctx.lineTo(p[toIdx].x, p[toIdx].y);
       ctx.stroke();
     }
 
+    // Small forked tail at the end
     const lastIdx = Math.min(SCARF_START + scarfCount - 1, totalPoints - 1);
     const prevIdx = lastIdx - 1;
     if (prevIdx >= SCARF_START) {
@@ -274,7 +274,7 @@ export class RiderRenderer {
       const edy = p[lastIdx].y - p[prevIdx].y;
       const elen = Math.sqrt(edx * edx + edy * edy) || 1;
       const epx = -edy / elen, epy = edx / elen;
-      const fs = 2;
+      const fs = 0.8;
 
       ctx.fillStyle = FILL_SCARF;
       ctx.beginPath();
