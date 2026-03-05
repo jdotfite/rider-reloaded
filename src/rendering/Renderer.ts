@@ -66,7 +66,7 @@ export class Renderer {
   }
 
   private drawOriginMarker(ctx: CanvasRenderingContext2D) {
-    ctx.strokeStyle = '#ccc';
+    ctx.strokeStyle = '#bbb';
     ctx.lineWidth = 1 / this.camera.zoom;
     ctx.beginPath();
     ctx.moveTo(-20, 0);

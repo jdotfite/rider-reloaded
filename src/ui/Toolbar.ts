@@ -2,16 +2,31 @@ import { LineType } from '../physics/lines/LineTypes';
 import { GameState } from '../game/GameState';
 
 export class Toolbar {
-  private static readonly COMPACT_BREAKPOINT = 1240;
-  private static readonly ICON_BREAKPOINT = 560;
-
-  private toolRail: HTMLElement;
+  // Left sidebar
   private fileActions: HTMLElement;
-  private transport: HTMLElement;
-  private layerStrip: HTMLElement;
+  private layerList: HTMLElement;
+  private layerControls: HTMLElement;
   private lineTypeStrip: HTMLElement;
-  private labelMode: 'wide' | 'compact' | 'icon' = 'wide';
+  private sidebarLeftFooter: HTMLElement;
 
+  // Right sidebar
+  private drawBtn: HTMLButtonElement;
+  private rideBtn: HTMLButtonElement;
+  private toolGrid: HTMLElement;
+
+  // Bottom bar
+  private transport: HTMLElement;
+  private timelineScrubber: HTMLInputElement;
+  private timelineStart: HTMLElement;
+  private timelineEnd: HTMLElement;
+  private speedButtons: HTMLButtonElement[] = [];
+
+  // Canvas HUD
+  private statScore: HTMLElement;
+  private statSpeed: HTMLElement;
+  private frameDisplay: HTMLElement;
+
+  // Callbacks
   onToolSelect: ((tool: string) => void) | null = null;
   onLineTypeSelect: ((type: LineType) => void) | null = null;
   onClear: (() => void) | null = null;
@@ -31,113 +46,256 @@ export class Toolbar {
   onLayerMovePrev: (() => void) | null = null;
   onLayerMoveNext: (() => void) | null = null;
   onLayerRename: (() => void) | null = null;
+  onSpeedChange: ((speed: number) => void) | null = null;
+  onTimelineSeek: ((frame: number) => void) | null = null;
+  onDrawRideToggle: (() => void) | null = null;
+  onSvgImport: (() => void) | null = null;
+  onSvgExport: (() => void) | null = null;
+  onSmoothToggle: ((enabled: boolean) => void) | null = null;
+  onScreenshot: (() => void) | null = null;
+  onStepForward: (() => void) | null = null;
+  onStepBack: (() => void) | null = null;
 
   private toolButtons: Map<string, HTMLButtonElement> = new Map();
   private lineTypeButtons: Map<LineType, HTMLButtonElement> = new Map();
   private playBtn!: HTMLButtonElement;
   private pauseBtn!: HTMLButtonElement;
   private stopBtn!: HTMLButtonElement;
-  private fitBtn!: HTMLButtonElement;
-  private layerPrevBtn!: HTMLButtonElement;
-  private layerLabelBtn!: HTMLButtonElement;
-  private layerVisibilityBtn!: HTMLButtonElement;
-  private layerEditBtn!: HTMLButtonElement;
-  private layerNextBtn!: HTMLButtonElement;
-  private layerMovePrevBtn!: HTMLButtonElement;
-  private layerMoveNextBtn!: HTMLButtonElement;
-  private layerRenameBtn!: HTMLButtonElement;
-  private layerNewBtn!: HTMLButtonElement;
-  private responsiveButtons: Map<HTMLButtonElement, { wide: string; compact: string; icon: string }> = new Map();
+
+  // Layer state
+  private layerRows: HTMLElement[] = [];
+  private isSeeking = false;
 
   constructor() {
-    this.toolRail = this.requireElement('tool-rail');
+    // Left sidebar elements
     this.fileActions = this.requireElement('file-actions');
-    this.transport = this.requireElement('transport');
-    this.layerStrip = this.requireElement('layer-strip');
+    this.layerList = this.requireElement('layer-list');
+    this.layerControls = this.requireElement('layer-controls');
     this.lineTypeStrip = this.requireElement('line-type-strip');
+    this.sidebarLeftFooter = this.requireElement('sidebar-left-footer');
+
+    // Right sidebar elements
+    this.drawBtn = this.requireElement('draw-btn') as HTMLButtonElement;
+    this.rideBtn = this.requireElement('ride-btn') as HTMLButtonElement;
+    this.toolGrid = this.requireElement('tool-grid');
+
+    // Bottom bar
+    this.transport = this.requireElement('transport');
+    this.timelineScrubber = this.requireElement('timeline-scrubber') as HTMLInputElement;
+    this.timelineStart = this.requireElement('timeline-start');
+    this.timelineEnd = this.requireElement('timeline-end');
+
+    // Canvas HUD
+    this.statScore = this.requireElement('stat-score');
+    this.statSpeed = this.requireElement('stat-speed');
+    this.frameDisplay = this.requireElement('frame-display');
+
     this.build();
-    this.applyResponsiveLabels();
-    window.addEventListener('resize', this.applyResponsiveLabels);
+    this.setupTimelineScrubber();
+    this.setupSpeedPresets();
+    this.setupPlaceholders();
   }
 
   private build() {
-    this.addToolBtn('pencil', 'Pencil (1)', 'Pen', 'P');
-    this.addToolBtn('line', 'Line (2)', 'Line', 'L');
-    this.addToolBtn('eraser', 'Eraser (3)', 'Erase', 'X');
-    this.addToolBtn('curve', 'Curve (4)', 'Curve', 'C');
-    this.addToolBtn('flag', 'Flag (5)', 'Flag', 'F');
+    // Draw/Ride toggle
+    this.drawBtn.addEventListener('click', () => this.onDrawRideToggle?.());
+    this.rideBtn.addEventListener('click', () => this.onDrawRideToggle?.());
 
-    this.addBtn(this.fileActions, 'Clear', () => this.onClear?.(), 'Clr', 'C');
-    this.addBtn(this.fileActions, 'Undo', () => this.onUndo?.(), 'Undo', 'U');
-    this.addBtn(this.fileActions, 'Redo', () => this.onRedo?.(), 'Redo', 'R');
-    this.addBtn(this.fileActions, 'Save', () => this.onSave?.(), 'Save', 'S');
-    this.addBtn(this.fileActions, 'Load', () => this.onLoad?.(), 'Load', 'L');
+    // File actions (left sidebar)
+    this.addBtn(this.fileActions, 'Clear', () => this.onClear?.());
+    this.addBtn(this.fileActions, 'Undo', () => this.onUndo?.());
+    this.addBtn(this.fileActions, 'Redo', () => this.onRedo?.());
 
-    this.playBtn = this.addBtn(this.transport, 'Play', () => this.onPlay?.(), 'Play', '>');
-    this.playBtn.classList.add('play-button');
-    this.pauseBtn = this.addBtn(this.transport, 'Pause', () => this.onPause?.(), 'Pause', '||');
-    this.pauseBtn.classList.add('subtle');
-    this.stopBtn = this.addBtn(this.transport, 'Stop', () => this.onStop?.(), 'Stop', '[]');
-    this.stopBtn.classList.add('subtle');
-    this.fitBtn = this.addBtn(this.transport, 'Fit', () => this.onFit?.(), 'Fit', 'F');
-    this.fitBtn.classList.add('subtle');
+    // Layer controls
+    this.addBtn(this.layerControls, 'Edit', () => this.onLayerRename?.());
+    this.addBtn(this.layerControls, '‹', () => this.onLayerPrev?.());
+    this.addBtn(this.layerControls, '+ Layer', () => this.onLayerNew?.());
 
-    this.layerPrevBtn = this.addBtn(this.layerStrip, '<', () => this.onLayerPrev?.());
-    this.layerPrevBtn.classList.add('layer-button');
-    this.layerLabelBtn = this.addBtn(this.layerStrip, 'Main', () => {});
-    this.layerLabelBtn.classList.add('subtle', 'layer-label');
-    this.layerLabelBtn.disabled = true;
-    this.layerVisibilityBtn = this.addBtn(this.layerStrip, 'Shown', () => this.onLayerToggleVisibility?.(), 'Visible', 'V');
-    this.layerVisibilityBtn.classList.add('layer-state-button');
-    this.layerEditBtn = this.addBtn(this.layerStrip, 'Edit', () => this.onLayerToggleEditability?.(), 'Editable', 'E');
-    this.layerEditBtn.classList.add('layer-state-button');
-    this.layerNextBtn = this.addBtn(this.layerStrip, '>', () => this.onLayerNext?.());
-    this.layerNextBtn.classList.add('layer-button');
-    this.layerMovePrevBtn = this.addBtn(this.layerStrip, '<<', () => this.onLayerMovePrev?.());
-    this.layerMovePrevBtn.classList.add('layer-button');
-    this.layerMoveNextBtn = this.addBtn(this.layerStrip, '>>', () => this.onLayerMoveNext?.());
-    this.layerMoveNextBtn.classList.add('layer-button');
-    this.layerRenameBtn = this.addBtn(this.layerStrip, 'Rename', () => this.onLayerRename?.(), 'Ren', 'N');
-    this.layerRenameBtn.classList.add('layer-state-button');
-    this.layerNewBtn = this.addBtn(this.layerStrip, '+ Layer', () => this.onLayerNew?.(), '+', '+');
+    // Line type buttons (left sidebar)
+    this.addLineTypeBtn(LineType.SOLID, 'Solid (Q)', 'Solid');
+    this.addLineTypeBtn(LineType.ACC, 'Speed (W)', 'Accel');
+    this.addLineTypeBtn(LineType.SCENERY, 'Scenery (E)', 'Scene');
 
-    this.addLineTypeBtn(LineType.SOLID, 'Solid (Q)', 'Solid', 'N');
-    this.addLineTypeBtn(LineType.ACC, 'Speed (W)', 'Speed', 'R');
-    this.addLineTypeBtn(LineType.SCENERY, 'Scenery (E)', 'Scene', 'S');
+    // Tool grid (right sidebar, 2-column)
+    this.addToolGridBtn('pencil', '✏️', 'Pen');
+    this.addToolGridBtn('line', '📏', 'Line');
+    this.addToolGridBtn('eraser', '✕', 'Erase');
+    this.addToolGridBtn('curve', '↩', 'Curve');
+    this.addToolGridBtn('flag', '⚑', 'Flag');
+
+    // Smooth toggle
+    const smoothCheckbox = document.getElementById('smooth-checkbox') as HTMLInputElement;
+    if (smoothCheckbox) {
+      smoothCheckbox.addEventListener('change', () => {
+        this.onSmoothToggle?.(smoothCheckbox.checked);
+      });
+    }
+
+    // Edit actions (undo/redo in right sidebar)
+    const editActions = document.getElementById('edit-actions');
+    if (editActions) {
+      this.addBtn(editActions, 'Undo', () => this.onUndo?.());
+      this.addBtn(editActions, 'Redo', () => this.onRedo?.());
+    }
+
+    // Transport buttons (bottom bar) — play/pause/stop already in HTML
+    this.pauseBtn = this.requireElement('pause-btn') as HTMLButtonElement;
+    this.playBtn = this.requireElement('play-btn') as HTMLButtonElement;
+    this.stopBtn = this.requireElement('stop-btn') as HTMLButtonElement;
+    const fitBtn = this.requireElement('btn-zoom') as HTMLButtonElement;
+
+    this.pauseBtn.addEventListener('click', () => this.onPause?.());
+    this.playBtn.addEventListener('click', () => this.onPlay?.());
+    this.stopBtn.addEventListener('click', () => this.onStop?.());
+    fitBtn.addEventListener('click', () => this.onFit?.());
+
+    // Sidebar footer icons
+    this.addFooterBtn('💾', 'Save', () => this.onSave?.());
+    this.addFooterBtn('📂', 'Load', () => this.onLoad?.());
+    this.addFooterBtn('📦', 'Export', () => alert('Export coming soon'));
+    this.addFooterBtn('☁', 'Cloud', () => alert('Cloud save coming soon'));
+    this.addFooterBtn('📷', 'Screenshot', () => this.onScreenshot?.());
+    this.addFooterBtn('🔧', 'Settings', () => alert('Settings coming soon'));
   }
 
-  private addToolBtn(name: string, label: string, compactLabel?: string, iconLabel?: string) {
-    const btn = this.addBtn(this.toolRail, label, () => this.onToolSelect?.(name), compactLabel, iconLabel);
+  private addToolGridBtn(name: string, icon: string, label: string) {
+    const btn = document.createElement('button');
+    btn.dataset.tool = name;
+    btn.innerHTML = `<span class="tool-icon">${icon}</span><span class="tool-label">${label}</span>`;
+    btn.addEventListener('click', () => this.onToolSelect?.(name));
+    this.toolGrid.appendChild(btn);
     this.toolButtons.set(name, btn);
   }
 
-  private addLineTypeBtn(type: LineType, label: string, compactLabel?: string, iconLabel?: string) {
-    const btn = this.addBtn(this.lineTypeStrip, label, () => this.onLineTypeSelect?.(type), compactLabel, iconLabel);
-    btn.classList.add('line-type-button');
+  private addLineTypeBtn(type: LineType, tooltip: string, label: string) {
+    const btn = document.createElement('button');
+    btn.textContent = label;
+    btn.title = tooltip;
     btn.dataset.color = type;
+    btn.addEventListener('click', () => this.onLineTypeSelect?.(type));
+    this.lineTypeStrip.appendChild(btn);
     this.lineTypeButtons.set(type, btn);
   }
 
-  private addBtn(
-    container: HTMLElement,
-    label: string,
-    onClick: () => void,
-    compactLabel: string = label,
-    iconLabel: string = compactLabel,
-  ): HTMLButtonElement {
+  private addBtn(container: HTMLElement, label: string, onClick: () => void): HTMLButtonElement {
     const btn = document.createElement('button');
-    this.setResponsiveLabel(btn, label, compactLabel, iconLabel);
+    btn.textContent = label;
     btn.addEventListener('click', onClick);
     container.appendChild(btn);
     return btn;
   }
 
+  private addFooterBtn(icon: string, title: string, onClick: () => void) {
+    const btn = document.createElement('button');
+    btn.textContent = icon;
+    btn.title = title;
+    btn.addEventListener('click', onClick);
+    this.sidebarLeftFooter.appendChild(btn);
+  }
+
   private requireElement(id: string): HTMLElement {
     const element = document.getElementById(id);
-    if (!element) {
-      throw new Error(`Missing toolbar element: ${id}`);
-    }
+    if (!element) throw new Error(`Missing toolbar element: ${id}`);
     return element;
+  }
+
+  private seekThrottleTimer: ReturnType<typeof setTimeout> | null = null;
+  private pendingSeekFrame: number | null = null;
+
+  private setupTimelineScrubber() {
+    // 'input' fires continuously during drag
+    this.timelineScrubber.addEventListener('input', () => {
+      this.isSeeking = true;
+      const frame = parseInt(this.timelineScrubber.value, 10);
+      this.pendingSeekFrame = frame;
+
+      // Update time display immediately (cheap)
+      const fps = 40;
+      const seconds = frame / fps;
+      const mins = Math.floor(seconds / 60);
+      const secs = (seconds % 60).toFixed(3);
+      this.timelineStart.textContent = `${mins}:${secs.padStart(6, '0')}`;
+      this.frameDisplay.textContent = `F${frame}`;
+
+      // Throttle the actual physics seek to ~80ms intervals
+      if (!this.seekThrottleTimer) {
+        this.seekThrottleTimer = setTimeout(() => {
+          this.seekThrottleTimer = null;
+          if (this.pendingSeekFrame !== null) {
+            this.onTimelineSeek?.(this.pendingSeekFrame);
+          }
+        }, 80);
+      }
+    });
+
+    // 'change' fires on release — do final seek
+    this.timelineScrubber.addEventListener('change', () => {
+      if (this.seekThrottleTimer) {
+        clearTimeout(this.seekThrottleTimer);
+        this.seekThrottleTimer = null;
+      }
+      if (this.pendingSeekFrame !== null) {
+        this.onTimelineSeek?.(this.pendingSeekFrame);
+        this.pendingSeekFrame = null;
+      }
+      this.isSeeking = false;
+    });
+  }
+
+  private setupSpeedPresets() {
+    const container = this.requireElement('speed-presets');
+    const buttons = container.querySelectorAll<HTMLButtonElement>('.speed-btn');
+    buttons.forEach((btn) => {
+      this.speedButtons.push(btn);
+      btn.addEventListener('click', () => {
+        const speed = parseFloat(btn.dataset.speed || '1');
+        this.setActiveSpeed(speed);
+        this.onSpeedChange?.(speed);
+      });
+    });
+  }
+
+  private setupPlaceholders() {
+    // Top bar buttons
+    const btnSound = document.getElementById('btn-sound');
+    const btnEffects = document.getElementById('btn-effects');
+    const btnSettings = document.getElementById('btn-settings');
+    const hotkeysClose = document.getElementById('hotkeys-close');
+    btnSound?.addEventListener('click', () => alert('Sound controls coming soon'));
+    btnEffects?.addEventListener('click', () => alert('Effects coming soon'));
+    btnSettings?.addEventListener('click', () => {
+      document.body.classList.toggle('hotkeys-open');
+    });
+    hotkeysClose?.addEventListener('click', () => {
+      document.body.classList.remove('hotkeys-open');
+    });
+    window.addEventListener('keydown', (e) => {
+      if (e.code === 'Escape' && document.body.classList.contains('hotkeys-open')) {
+        document.body.classList.remove('hotkeys-open');
+      }
+    });
+
+    // SVG import/export
+    const svgImport = document.getElementById('svg-import-btn');
+    const svgExport = document.getElementById('svg-export-btn');
+    svgImport?.addEventListener('click', () => {
+      this.onSvgImport?.();
+      if (!this.onSvgImport) alert('SVG Import coming soon');
+    });
+    svgExport?.addEventListener('click', () => this.onSvgExport?.());
+
+    // Step forward / backward
+    const stepFwd = document.getElementById('step-fwd-btn');
+    const stepBack = document.getElementById('step-back-btn');
+    stepFwd?.addEventListener('click', () => this.onStepForward?.());
+    stepBack?.addEventListener('click', () => this.onStepBack?.());
+  }
+
+  private setActiveSpeed(speed: number) {
+    for (const btn of this.speedButtons) {
+      const btnSpeed = parseFloat(btn.dataset.speed || '1');
+      btn.classList.toggle('active', btnSpeed === speed);
+    }
   }
 
   setActiveTool(name: string) {
@@ -153,63 +311,90 @@ export class Toolbar {
   }
 
   setPlaybackState(state: GameState) {
-    this.setResponsiveLabel(this.playBtn, state === GameState.PAUSED ? 'Resume' : 'Play', 'Play', '>');
     this.playBtn.disabled = state === GameState.PLAYING;
     this.pauseBtn.disabled = state !== GameState.PLAYING;
     this.stopBtn.disabled = state === GameState.EDITING;
     this.pauseBtn.classList.toggle('active', state === GameState.PAUSED);
+
+    // Draw/Ride toggle
+    this.drawBtn.classList.toggle('active', state === GameState.EDITING);
+    this.rideBtn.classList.toggle('active', state !== GameState.EDITING);
+
+    // Timeline — always enabled so user can scrub anytime
   }
 
   setLayerState(name: string, index: number, count: number, visible: boolean, editable: boolean) {
-    this.layerLabelBtn.textContent = this.labelMode === 'icon' ? `${index}/${count}` : `${index}/${count} ${name}`;
-    this.layerLabelBtn.title = name;
-    const multipleLayers = count > 1;
-    this.layerPrevBtn.disabled = !multipleLayers;
-    this.layerNextBtn.disabled = !multipleLayers;
-    this.layerMovePrevBtn.disabled = !multipleLayers || index <= 1;
-    this.layerMoveNextBtn.disabled = !multipleLayers || index >= count;
-    this.setResponsiveLabel(
-      this.layerVisibilityBtn,
-      visible ? 'Shown' : 'Hidden',
-      visible ? 'Visible' : 'Hidden',
-      visible ? 'V' : 'H',
-    );
-    this.layerVisibilityBtn.classList.toggle('active', !visible);
-    this.setResponsiveLabel(
-      this.layerEditBtn,
-      editable ? 'Edit' : 'Locked',
-      editable ? 'Editable' : 'Locked',
-      editable ? 'E' : 'L',
-    );
-    this.layerEditBtn.classList.toggle('active', !editable);
+    // Rebuild layer list
+    this.layerList.innerHTML = '';
+    this.layerRows = [];
+
+    for (let i = 0; i < count; i++) {
+      const row = document.createElement('div');
+      row.className = 'layer-row' + (i === index - 1 ? ' active' : '');
+
+      const nameSpan = document.createElement('span');
+      nameSpan.className = 'layer-name';
+      nameSpan.textContent = i === index - 1 ? name : `Layer ${i + 1}`;
+
+      const visBtn = document.createElement('button');
+      visBtn.className = 'layer-btn';
+      visBtn.textContent = (i === index - 1 && !visible) ? '🔇' : '👁';
+      visBtn.title = 'Toggle visibility';
+      if (i === index - 1) {
+        visBtn.addEventListener('click', () => this.onLayerToggleVisibility?.());
+      }
+
+      const editBtn = document.createElement('button');
+      editBtn.className = 'layer-btn';
+      editBtn.textContent = (i === index - 1 && !editable) ? '🔒' : '✏';
+      editBtn.title = 'Toggle editability';
+      if (i === index - 1) {
+        editBtn.addEventListener('click', () => this.onLayerToggleEditability?.());
+      }
+
+      row.appendChild(visBtn);
+      row.appendChild(editBtn);
+      row.appendChild(nameSpan);
+
+      // Click row to select layer
+      const layerIdx = i;
+      row.addEventListener('click', (e) => {
+        if ((e.target as HTMLElement).tagName === 'BUTTON') return;
+        const diff = layerIdx - (index - 1);
+        if (diff < 0) {
+          for (let j = 0; j < Math.abs(diff); j++) this.onLayerPrev?.();
+        } else if (diff > 0) {
+          for (let j = 0; j < diff; j++) this.onLayerNext?.();
+        }
+      });
+
+      this.layerList.appendChild(row);
+      this.layerRows.push(row);
+    }
   }
 
-  private setResponsiveLabel(button: HTMLButtonElement, wide: string, compact: string, icon: string = compact) {
-    this.responsiveButtons.set(button, { wide, compact, icon });
-    button.title = wide;
-    button.setAttribute('aria-label', wide);
-    button.textContent =
-      this.labelMode === 'icon' ? icon : this.labelMode === 'compact' ? compact : wide;
+  updateStats(lineCount: number, speed: number) {
+    this.statScore.textContent = String(lineCount);
+    this.statSpeed.textContent = speed.toFixed(0);
   }
 
-  private applyResponsiveLabels = () => {
-    if (window.innerWidth <= Toolbar.ICON_BREAKPOINT) {
-      this.labelMode = 'icon';
-    } else if (window.innerWidth <= Toolbar.COMPACT_BREAKPOINT) {
-      this.labelMode = 'compact';
-    } else {
-      this.labelMode = 'wide';
-    }
+  updateTimeline(frame: number, maxFrame: number) {
+    if (this.isSeeking) return;
+    this.timelineScrubber.max = String(maxFrame);
+    this.timelineScrubber.value = String(frame);
 
-    for (const [button, labels] of this.responsiveButtons) {
-      button.title = labels.wide;
-      button.setAttribute('aria-label', labels.wide);
-      button.textContent =
-        this.labelMode === 'icon'
-          ? labels.icon
-          : this.labelMode === 'compact'
-            ? labels.compact
-            : labels.wide;
-    }
-  };
+    // Format as time
+    const fps = 40;
+    const seconds = frame / fps;
+    const mins = Math.floor(seconds / 60);
+    const secs = (seconds % 60).toFixed(3);
+    this.timelineStart.textContent = `${mins}:${secs.padStart(6, '0')}`;
+
+    const maxSeconds = maxFrame / fps;
+    const maxMins = Math.floor(maxSeconds / 60);
+    const maxSecs = (maxSeconds % 60).toFixed(3);
+    this.timelineEnd.textContent = `${maxMins}:${maxSecs.padStart(6, '0')}`;
+
+    this.frameDisplay.textContent = `F${frame}`;
+  }
 }

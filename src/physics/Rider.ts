@@ -15,6 +15,12 @@ import {
 import { INITIAL_RIDER_VELOCITY } from '../constants';
 import { RiderRenderData } from '../rendering/RiderRenderer';
 
+export interface RiderSnapshot {
+  positions: Array<{ px: number; py: number; ppx: number; ppy: number }>;
+  riderMounted: boolean;
+  sledIntact: boolean;
+}
+
 export class Rider {
   points: Point[] = [];
   collisionPoints: CollisionPoint[] = [];
@@ -102,6 +108,31 @@ export class Rider {
   setStartPosition(startPos: Vec2) {
     this.startPos = startPos.clone();
     this.reset();
+  }
+
+  /** Save a lightweight snapshot of all point positions + binding state */
+  saveSnapshot(): RiderSnapshot {
+    return {
+      positions: this.points.map(p => ({
+        px: p.pos.x, py: p.pos.y,
+        ppx: p.prevPos.x, ppy: p.prevPos.y,
+      })),
+      riderMounted: this.binding.riderMounted,
+      sledIntact: this.binding.sledIntact,
+    };
+  }
+
+  /** Restore from a snapshot */
+  restoreSnapshot(snap: RiderSnapshot) {
+    for (let i = 0; i < snap.positions.length && i < this.points.length; i++) {
+      const s = snap.positions[i];
+      this.points[i].pos.x = s.px;
+      this.points[i].pos.y = s.py;
+      this.points[i].prevPos.x = s.ppx;
+      this.points[i].prevPos.y = s.ppy;
+    }
+    this.binding.riderMounted = snap.riderMounted;
+    this.binding.sledIntact = snap.sledIntact;
   }
 
   getRenderData(alpha: number = 1): RiderRenderData {

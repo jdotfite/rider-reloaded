@@ -3,378 +3,384 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Line Rider</title>
+  <title>Line Rider: Reloaded</title>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
     :root {
-      --paper: #f4f3ef;
-      --panel: rgba(252, 251, 247, 0.88);
-      --panel-strong: rgba(255, 255, 255, 0.96);
-      --line: rgba(24, 24, 24, 0.14);
-      --ink: #141414;
-      --muted: #6f6b64;
-      --accent: #d14a37;
-      --accent-soft: #f1d3cd;
-      --shadow: 0 18px 44px rgba(26, 28, 30, 0.12);
-      --radius-lg: 28px;
-      --radius-md: 18px;
-      --radius-sm: 12px;
-      --ui-font: "Candara", "Segoe UI", sans-serif;
-      --brand-font: "Trebuchet MS", "Segoe UI", sans-serif;
+      --bg: #ffffff;
+      --bg-alt: #f5f5f5;
+      --surface: #fafafa;
+      --border: #e0e0e0;
+      --border-light: #eeeeee;
+      --ink: #111111;
+      --ink-secondary: #555555;
+      --muted: #999999;
+      --black: #111111;
+      --white: #ffffff;
+      --canvas-bg: #f0f0f0;
+      --radius: 10px;
+      --radius-sm: 6px;
+      --radius-full: 999px;
+      --font: "Inter", "Segoe UI", -apple-system, sans-serif;
+      --font-mono: "SF Mono", "Consolas", "Courier New", monospace;
     }
     html, body {
       width: 100%;
       height: 100%;
       overflow: hidden;
-      background:
-        radial-gradient(circle at 18% 16%, rgba(255, 240, 213, 0.7), transparent 26%),
-        radial-gradient(circle at 82% 22%, rgba(221, 229, 240, 0.8), transparent 24%),
-        linear-gradient(180deg, #f9f8f4 0%, #ecebe6 100%);
+      background: var(--bg);
       color: var(--ink);
-      font-family: var(--ui-font);
+      font-family: var(--font);
+      -webkit-font-smoothing: antialiased;
     }
+
+    /* ── APP GRID ── */
     #app {
-      width: 100%;
-      height: 100%;
       display: grid;
-      grid-template-rows: auto minmax(0, 1fr) auto;
-      position: relative;
+      grid-template-rows: auto 1fr auto;
+      height: 100vh;
       overflow: hidden;
-      min-height: 0;
     }
+
+    /* ── TOPBAR ── */
     #topbar {
       display: flex;
       align-items: center;
       justify-content: space-between;
-      padding: 18px 28px 14px;
-      position: relative;
-      z-index: 10;
+      padding: 0 20px;
+      height: 48px;
+      border-bottom: 1px solid var(--border);
+      background: var(--white);
     }
     #brand-lockup {
       display: flex;
       align-items: center;
-      gap: 14px;
+      gap: 10px;
     }
     #brand-mark {
-      font: 700 48px/0.95 var(--brand-font);
-      letter-spacing: -0.04em;
-    }
-    #brand-pill {
-      border-radius: 999px;
-      background: var(--accent);
-      color: #fff7f2;
-      padding: 7px 14px 6px;
-      font: 700 13px/1 var(--ui-font);
-      text-transform: uppercase;
-      letter-spacing: 0.18em;
-      box-shadow: 0 10px 20px rgba(209, 74, 55, 0.18);
-    }
-    #topbar-meta {
-      display: flex;
-      align-items: center;
-      gap: 12px;
-      color: var(--muted);
-      font: 700 12px/1 var(--ui-font);
+      font: 800 18px/1 var(--font);
       letter-spacing: 0.08em;
       text-transform: uppercase;
+      color: var(--black);
     }
-    .meta-chip {
-      padding: 8px 12px;
-      border: 1px solid rgba(20, 20, 20, 0.08);
-      border-radius: 999px;
-      background: rgba(255, 255, 255, 0.55);
-      backdrop-filter: blur(8px);
+    #brand-pill {
+      border-radius: var(--radius-full);
+      background: var(--black);
+      color: var(--white);
+      padding: 4px 10px 3px;
+      font: 700 9px/1 var(--font);
+      text-transform: uppercase;
+      letter-spacing: 0.16em;
     }
+    #sled-info {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font: 600 11px/1 var(--font);
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--muted);
+    }
+    #topbar-actions {
+      display: flex;
+      align-items: center;
+      gap: 2px;
+    }
+    #topbar-actions button {
+      width: 34px;
+      height: 34px;
+      min-width: 34px;
+      min-height: 34px;
+      padding: 0;
+      font-size: 14px;
+      border-radius: var(--radius-sm);
+      background: transparent;
+      border: 1px solid transparent;
+      color: var(--ink-secondary);
+    }
+    #topbar-actions button:hover {
+      background: var(--bg-alt);
+      border-color: var(--border);
+    }
+
+    /* ── MAIN AREA ── */
+    #main {
+      display: grid;
+      grid-template-columns: 240px 1fr 220px;
+      min-height: 0;
+      overflow: hidden;
+    }
+
+    /* ── BUTTONS (base) ── */
+    button {
+      border: 1px solid var(--border);
+      background: var(--white);
+      color: var(--ink);
+      cursor: pointer;
+      border-radius: var(--radius-sm);
+      padding: 6px 12px;
+      min-height: 32px;
+      font: 600 12px/1 var(--font);
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      white-space: nowrap;
+      transition: background 120ms ease, border-color 120ms ease;
+    }
+    button:hover {
+      background: var(--bg-alt);
+      border-color: #ccc;
+    }
+    button:active {
+      background: #eee;
+    }
+    button:disabled {
+      opacity: 0.3;
+      cursor: default;
+    }
+    button:disabled:hover {
+      background: var(--white);
+      border-color: var(--border);
+    }
+    button.active {
+      background: var(--black);
+      border-color: var(--black);
+      color: var(--white);
+    }
+    button.active:hover {
+      background: #333;
+      border-color: #333;
+    }
+    button.subtle {
+      background: transparent;
+      border-color: transparent;
+      color: var(--ink-secondary);
+    }
+    button.subtle:hover {
+      background: var(--bg-alt);
+      border-color: var(--border);
+      color: var(--ink);
+    }
+
+    /* ── LEFT SIDEBAR ── */
+    #sidebar-left {
+      display: flex;
+      flex-direction: column;
+      background: var(--white);
+      border-right: 1px solid var(--border);
+      overflow-y: auto;
+      scrollbar-width: thin;
+      scrollbar-color: #ddd transparent;
+    }
+    #sidebar-left-tabs {
+      display: flex;
+      border-bottom: 1px solid var(--border);
+    }
+    .sidebar-tab {
+      flex: 1;
+      border: none;
+      border-radius: 0;
+      background: transparent;
+      color: var(--muted);
+      font: 700 10px/1 var(--font);
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      padding: 12px 8px;
+      min-height: 38px;
+    }
+    .sidebar-tab:hover {
+      background: var(--bg-alt);
+    }
+    .sidebar-tab.active {
+      color: var(--ink);
+      background: transparent;
+      border-bottom: 2px solid var(--black);
+    }
+
+    /* Section labels */
+    .section-label {
+      font: 700 9px/1 var(--font);
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      color: var(--muted);
+      padding: 14px 14px 6px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .dropdown-arrow { font-size: 11px; opacity: 0.4; }
+
+    /* File actions */
+    #file-actions {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      padding: 8px 10px;
+      border-bottom: 1px solid var(--border-light);
+    }
+    #file-actions button {
+      flex: 1;
+      min-height: 28px;
+      padding: 4px 6px;
+      font-size: 11px;
+    }
+
+    /* Layers panel */
+    #layers-panel {
+      border-bottom: 1px solid var(--border-light);
+      padding-bottom: 8px;
+    }
+    #layer-list {
+      padding: 4px 10px;
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+    }
+    .layer-row {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      padding: 6px 8px;
+      border-radius: var(--radius-sm);
+      background: transparent;
+      border: 1px solid transparent;
+      font-size: 12px;
+      cursor: pointer;
+    }
+    .layer-row:hover {
+      background: var(--bg-alt);
+    }
+    .layer-row.active {
+      border-color: var(--black);
+      background: var(--bg-alt);
+    }
+    .layer-row .layer-name {
+      flex: 1;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      font-weight: 600;
+      color: var(--ink);
+    }
+    .layer-row .layer-btn {
+      width: 22px;
+      height: 22px;
+      min-width: 22px;
+      min-height: 22px;
+      padding: 0;
+      font-size: 10px;
+      border-radius: 4px;
+      border: 1px solid var(--border-light);
+      background: transparent;
+    }
+    .layer-row .layer-btn:hover {
+      background: var(--bg-alt);
+    }
+    #layer-controls {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      padding: 6px 10px;
+    }
+    #layer-controls button {
+      flex: 1;
+      min-height: 26px;
+      padding: 4px 6px;
+      font-size: 11px;
+    }
+
+    /* Track type */
+    #track-type-panel {
+      border-bottom: 1px solid var(--border-light);
+      padding-bottom: 10px;
+    }
+    #line-type-strip {
+      display: flex;
+      gap: 4px;
+      padding: 4px 10px;
+    }
+    #line-type-strip button {
+      flex: 1;
+      min-height: 30px;
+      padding: 4px 4px;
+      font-size: 11px;
+      border-radius: var(--radius-sm);
+    }
+    /* Line type color indicators — subtle bottom bar */
+    button[data-color="solid"] {
+      box-shadow: inset 0 -2px 0 #222;
+    }
+    button[data-color="acc"] {
+      box-shadow: inset 0 -2px 0 #888;
+    }
+    button[data-color="scenery"] {
+      box-shadow: inset 0 -2px 0 #bbb;
+    }
+    button[data-color="solid"].active { box-shadow: inset 0 -2px 0 #fff; }
+    button[data-color="acc"].active { box-shadow: inset 0 -2px 0 #ccc; }
+    button[data-color="scenery"].active { box-shadow: inset 0 -2px 0 #ddd; }
+
+    /* Script panel */
+    #script-panel {
+      border-bottom: 1px solid var(--border-light);
+      padding-bottom: 10px;
+    }
+    #script-editor {
+      margin: 4px 10px;
+      padding: 10px;
+      border-radius: var(--radius-sm);
+      background: var(--bg-alt);
+      border: 1px solid var(--border-light);
+      font-family: var(--font-mono);
+      font-size: 11px;
+      color: var(--muted);
+      min-height: 48px;
+      overflow: auto;
+    }
+    #script-code { margin: 0; font-family: inherit; }
+    #add-command-btn {
+      margin: 6px 10px;
+      width: calc(100% - 20px);
+      min-height: 26px;
+      padding: 4px 8px;
+      font-size: 11px;
+      opacity: 0.4;
+    }
+
+    /* Left sidebar footer */
+    #sidebar-left-footer {
+      margin-top: auto;
+      display: flex;
+      align-items: center;
+      gap: 2px;
+      padding: 8px 10px;
+      border-top: 1px solid var(--border-light);
+    }
+    #sidebar-left-footer button {
+      flex: 1;
+      width: 32px;
+      height: 32px;
+      min-width: 28px;
+      min-height: 28px;
+      padding: 0;
+      font-size: 13px;
+      border-radius: var(--radius-sm);
+      background: transparent;
+      border: 1px solid transparent;
+      color: var(--ink-secondary);
+    }
+    #sidebar-left-footer button:hover {
+      background: var(--bg-alt);
+      border-color: var(--border);
+    }
+
+    /* ── CANVAS ── */
     #canvas-container {
       position: relative;
       overflow: hidden;
       min-height: 0;
-      margin: 0 22px;
-      border-radius: 34px;
-      background:
-        radial-gradient(circle at 20% 20%, rgba(255, 255, 255, 0.72), transparent 28%),
-        radial-gradient(circle at 80% 14%, rgba(253, 239, 218, 0.7), transparent 24%),
-        linear-gradient(180deg, #f8f7f3 0%, #f1f0ea 100%);
-      border: 1px solid rgba(28, 28, 28, 0.08);
-      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.5), var(--shadow);
-    }
-    #canvas-atmosphere {
-      position: absolute;
-      inset: 0;
-      pointer-events: none;
-      background:
-        radial-gradient(circle at 14% 18%, rgba(225, 223, 218, 0.55) 0 3%, transparent 3.3%),
-        radial-gradient(circle at 70% 28%, rgba(210, 208, 202, 0.52) 0 1.2%, transparent 1.5%),
-        radial-gradient(circle at 78% 30%, rgba(210, 208, 202, 0.52) 0 0.9%, transparent 1.2%),
-        radial-gradient(circle at 32% 26%, rgba(220, 218, 213, 0.5) 0 2.2%, transparent 2.5%),
-        linear-gradient(180deg, rgba(244, 243, 239, 0.15), rgba(225, 223, 217, 0.08));
-      opacity: 0.7;
-    }
-    #tool-rail {
-      position: absolute;
-      top: 22px;
-      right: 22px;
-      display: flex;
-      flex-direction: column;
-      gap: 10px;
-      padding: 12px;
-      border-radius: 24px;
-      background: var(--panel);
-      border: 1px solid rgba(22, 22, 22, 0.08);
-      box-shadow: var(--shadow);
-      backdrop-filter: blur(14px);
-      z-index: 5;
-    }
-    #tool-rail::before,
-    #line-type-strip::before,
-    #file-actions::before,
-    #layer-strip::before {
-      content: attr(data-label);
-      font: 700 11px/1 var(--ui-font);
-      letter-spacing: 0.14em;
-      text-transform: uppercase;
-      color: var(--muted);
-      margin: 0 6px 4px;
-    }
-    #tool-rail button {
-      min-width: 108px;
-      justify-content: flex-start;
-    }
-    #status-card {
-      position: absolute;
-      left: 22px;
-      top: 22px;
-      padding: 14px 18px;
-      border-radius: 22px;
-      background: rgba(255, 255, 255, 0.78);
-      border: 1px solid rgba(24, 24, 24, 0.08);
-      box-shadow: var(--shadow);
-      backdrop-filter: blur(12px);
-      z-index: 5;
-      min-width: 220px;
-    }
-    #status-title {
-      font: 700 11px/1 var(--ui-font);
-      letter-spacing: 0.14em;
-      text-transform: uppercase;
-      color: var(--muted);
-      margin-bottom: 10px;
-    }
-    #hud {
-      font: 700 19px/1 var(--ui-font);
-      letter-spacing: -0.02em;
-      margin-bottom: 8px;
-    }
-    #run-speed {
-      font: 700 12px/1.2 var(--ui-font);
-      letter-spacing: 0.12em;
-      text-transform: uppercase;
-      color: var(--accent);
-    }
-    #bottom-dock {
-      display: grid;
-      grid-template-columns: minmax(280px, 1.2fr) auto minmax(260px, 1fr);
-      grid-template-areas:
-        "file transport track"
-        "layers layers layers"
-        "rename rename rename";
-      align-items: start;
-      gap: 16px;
-      padding: 18px 22px 22px;
-      z-index: 10;
-    }
-    #bottom-dock > * {
-      min-width: 0;
-    }
-    #file-actions,
-    #line-type-strip,
-    #layer-strip,
-    #layer-rename-panel {
-      display: flex;
-      align-items: center;
-      gap: 10px;
-      padding: 12px;
-      border-radius: var(--radius-lg);
-      background: var(--panel);
-      border: 1px solid rgba(22, 22, 22, 0.08);
-      box-shadow: var(--shadow);
-      backdrop-filter: blur(14px);
-      flex-wrap: nowrap;
-      overflow-x: auto;
-      overflow-y: hidden;
-      scrollbar-width: none;
-      max-width: 100%;
-    }
-    #transport {
-      display: flex;
-      align-items: center;
-      gap: 10px;
-      padding: 12px;
-      border-radius: 999px;
-      background: var(--panel-strong);
-      border: 1px solid rgba(22, 22, 22, 0.08);
-      box-shadow: var(--shadow);
-      flex-wrap: nowrap;
-      overflow-x: auto;
-      overflow-y: hidden;
-      scrollbar-width: none;
-      justify-content: center;
-    }
-    #mobile-more-toggle {
-      display: none;
-      flex: 1 1 100%;
-      border-radius: 999px;
-    }
-    #file-actions {
-      grid-area: file;
-      width: 100%;
-    }
-    #layer-strip {
-      grid-area: layers;
-      width: 100%;
-      justify-content: flex-start;
-    }
-    #line-type-strip {
-      grid-area: track;
-      width: 100%;
-      justify-content: flex-end;
-    }
-    #layer-rename-panel {
-      display: none;
-      grid-area: rename;
-      width: 100%;
-      justify-content: flex-start;
-    }
-    #transport {
-      grid-area: transport;
-    }
-    body.layer-renaming #layer-rename-panel {
-      display: flex;
-    }
-    #layer-rename-panel input {
-      flex: 1 1 180px;
-      min-width: 0;
-      min-height: 44px;
-      border-radius: var(--radius-sm);
-      border: 1px solid rgba(24, 24, 24, 0.08);
-      background: rgba(255, 255, 255, 0.9);
-      color: var(--ink);
-      padding: 10px 12px;
-      font: 700 14px/1 var(--ui-font);
-      outline: none;
-    }
-    #layer-rename-panel input:focus {
-      border-color: rgba(20, 20, 20, 0.18);
-      box-shadow: 0 0 0 3px rgba(20, 20, 20, 0.06);
-    }
-    #transport::-webkit-scrollbar,
-    #line-type-strip::-webkit-scrollbar,
-    #file-actions::-webkit-scrollbar,
-    #layer-strip::-webkit-scrollbar,
-    #layer-rename-panel::-webkit-scrollbar {
-      display: none;
-    }
-    button {
-      border: 1px solid rgba(24, 24, 24, 0.08);
-      background: rgba(255, 255, 255, 0.86);
-      color: var(--ink);
-      cursor: pointer;
-      border-radius: var(--radius-sm);
-      padding: 11px 14px;
-      min-height: 44px;
-      font: 700 14px/1 var(--ui-font);
-      letter-spacing: 0.01em;
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      gap: 8px;
-      white-space: nowrap;
-      transition: transform 140ms ease, border-color 140ms ease, background 140ms ease, box-shadow 140ms ease;
-      box-shadow: 0 10px 18px rgba(20, 20, 20, 0.06);
-    }
-    button:hover {
-      transform: translateY(-1px);
-      border-color: rgba(20, 20, 20, 0.16);
-      background: rgba(255, 255, 255, 0.96);
-    }
-    button:disabled {
-      opacity: 0.42;
-      cursor: default;
-      transform: none;
-      box-shadow: none;
-    }
-    button:disabled:hover {
-      transform: none;
-      border-color: rgba(24, 24, 24, 0.08);
-      background: rgba(255, 255, 255, 0.86);
-    }
-    button.layer-label:disabled {
-      opacity: 1;
-      box-shadow: 0 10px 18px rgba(20, 20, 20, 0.06);
-    }
-    button.active {
-      background: linear-gradient(180deg, #1d1d1d 0%, #080808 100%);
-      border-color: #080808;
-      color: #fff;
-      box-shadow: 0 14px 26px rgba(10, 10, 10, 0.18);
-    }
-    button.play-button {
-      min-width: 168px;
-      border-radius: 999px;
-      background: linear-gradient(180deg, #1f1f1f 0%, #0a0a0a 100%);
-      color: #fff;
-      border-color: #090909;
-      box-shadow: 0 16px 30px rgba(10, 10, 10, 0.2);
-    }
-    button.play-button:hover {
-      background: linear-gradient(180deg, #262626 0%, #0f0f0f 100%);
-    }
-    button.line-type-button {
-      min-width: 100px;
-    }
-    button.layer-button {
-      min-width: 44px;
-    }
-    button.layer-label {
-      min-width: 0;
-      max-width: 280px;
-      flex: 1 1 190px;
-      justify-content: flex-start;
-      overflow: hidden;
-      text-overflow: ellipsis;
-    }
-    button.layer-state-button {
-      min-width: 62px;
-    }
-    button[data-color="solid"] {
-      box-shadow: inset 0 -3px 0 #2266cc, 0 10px 18px rgba(20, 20, 20, 0.06);
-    }
-    button[data-color="acc"] {
-      box-shadow: inset 0 -3px 0 #cc2222, 0 10px 18px rgba(20, 20, 20, 0.06);
-    }
-    button[data-color="scenery"] {
-      box-shadow: inset 0 -3px 0 #00aa00, 0 10px 18px rgba(20, 20, 20, 0.06);
-    }
-    button.subtle {
-      background: rgba(255, 255, 255, 0.6);
-      color: var(--muted);
-    }
-    .toolbar-separator {
-      width: 100%;
-      height: 1px;
-      background: linear-gradient(90deg, transparent, var(--line), transparent);
-      margin: 2px 0;
-    }
-    .inline-separator {
-      width: 1px;
-      align-self: stretch;
-      background: linear-gradient(180deg, transparent, var(--line), transparent);
-      margin: 0 2px;
-    }
-    #canvas-shell {
-      position: absolute;
-      inset: 0;
-      padding: 0;
+      background: var(--canvas-bg);
     }
     canvas {
       display: block;
@@ -382,291 +388,646 @@
       height: 100%;
       touch-action: none;
     }
-    @media (max-width: 980px) {
-      #topbar {
-        padding: 14px 16px 10px;
+    #canvas-hud {
+      position: absolute;
+      top: 12px;
+      right: 12px;
+      display: flex;
+      flex-direction: column;
+      align-items: flex-end;
+      gap: 4px;
+      pointer-events: none;
+      z-index: 5;
+    }
+    #canvas-hud div {
+      padding: 5px 10px;
+      border-radius: var(--radius-sm);
+      background: rgba(255, 255, 255, 0.85);
+      border: 1px solid var(--border);
+      font: 700 11px/1 var(--font);
+      letter-spacing: 0.04em;
+      color: var(--ink);
+    }
+
+    /* ── RIGHT SIDEBAR ── */
+    #sidebar-right {
+      display: flex;
+      flex-direction: column;
+      background: var(--white);
+      border-left: 1px solid var(--border);
+      overflow-y: auto;
+      scrollbar-width: thin;
+      scrollbar-color: #ddd transparent;
+    }
+
+    /* Draw/Ride toggle */
+    #draw-ride-toggle {
+      display: flex;
+      gap: 4px;
+      padding: 10px 10px 6px;
+    }
+    #draw-ride-toggle button {
+      flex: 1;
+      min-height: 34px;
+      font: 700 11px/1 var(--font);
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      border-radius: var(--radius-sm);
+    }
+
+    /* Tool grid */
+    #tool-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 6px;
+      padding: 8px 10px;
+    }
+    #tool-grid button {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 4px;
+      padding: 14px 8px;
+      border-radius: var(--radius);
+      background: var(--bg-alt);
+      border: 1px solid var(--border-light);
+      min-height: 64px;
+    }
+    #tool-grid button:hover {
+      background: #eee;
+      border-color: #ccc;
+    }
+    #tool-grid button.active {
+      background: var(--black);
+      border-color: var(--black);
+      color: var(--white);
+    }
+    #tool-grid button.active:hover {
+      background: #333;
+    }
+    .tool-icon { font-size: 24px; line-height: 1; }
+    .tool-label { font-size: 10px; color: var(--muted); font-weight: 600; letter-spacing: 0.04em; }
+    #tool-grid button.active .tool-label { color: rgba(255,255,255,0.7); }
+
+    /* Tool options */
+    #tool-options {
+      padding: 4px 10px;
+    }
+    #smooth-toggle {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font: 600 11px/1 var(--font);
+      color: var(--ink-secondary);
+      cursor: pointer;
+      padding: 6px 8px;
+      border-radius: var(--radius-sm);
+    }
+    #smooth-toggle:hover {
+      background: var(--bg-alt);
+    }
+    #smooth-checkbox {
+      width: 14px;
+      height: 14px;
+      accent-color: var(--black);
+      cursor: pointer;
+    }
+
+    /* Edit actions (undo/redo in right sidebar) */
+    #edit-actions {
+      display: flex;
+      gap: 4px;
+      padding: 4px 10px 8px;
+    }
+    #edit-actions button {
+      flex: 1;
+      min-height: 28px;
+      padding: 4px 8px;
+      font-size: 11px;
+    }
+
+    /* SVG import/export */
+    #svg-import-btn, #svg-export-btn {
+      margin: 4px 10px;
+      width: calc(100% - 20px);
+      min-height: 32px;
+      padding: 6px 12px;
+      font-size: 10px;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      border-radius: var(--radius-sm);
+    }
+    #svg-export-btn {
+      background: var(--black);
+      border-color: var(--black);
+      color: var(--white);
+    }
+    #svg-export-btn:hover {
+      background: #333;
+      border-color: #333;
+    }
+
+    /* Rider customization */
+    #rider-customization {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 4px;
+      padding: 8px 10px;
+    }
+    .rider-slot {
+      width: 100%;
+      aspect-ratio: 1;
+      border-radius: var(--radius-sm);
+      background: var(--bg-alt);
+      border: 1px solid var(--border-light);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 14px;
+      color: var(--muted);
+      cursor: pointer;
+    }
+    .rider-slot:hover {
+      background: #eee;
+      border-color: #ccc;
+    }
+
+    /* ── BOTTOM BAR ── */
+    #bottom-bar {
+      background: var(--white);
+      border-top: 1px solid var(--border);
+      padding: 6px 16px 8px;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+
+    /* Timeline */
+    #timeline {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 2px 0;
+    }
+    #timeline-start, #timeline-end {
+      font: 600 10px/1 var(--font-mono);
+      color: var(--muted);
+      min-width: 52px;
+      letter-spacing: 0.02em;
+    }
+    #timeline-end { text-align: right; }
+    #frame-display {
+      font: 600 10px/1 var(--font-mono);
+      color: var(--muted);
+      min-width: 40px;
+      text-align: right;
+      letter-spacing: 0.02em;
+    }
+    #timeline-track { flex: 1; min-width: 0; }
+    #timeline-scrubber { width: 100%; }
+
+    /* Sliders */
+    input[type="range"] {
+      -webkit-appearance: none;
+      appearance: none;
+      background: var(--border);
+      border-radius: 4px;
+      height: 6px;
+      outline: none;
+      cursor: pointer;
+    }
+    input[type="range"]::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      appearance: none;
+      background: var(--black);
+      width: 16px;
+      height: 16px;
+      border-radius: 50%;
+      border: 2px solid var(--white);
+      box-shadow: 0 1px 4px rgba(0,0,0,0.25);
+      cursor: pointer;
+    }
+    input[type="range"]::-moz-range-thumb {
+      background: var(--black);
+      width: 16px;
+      height: 16px;
+      border-radius: 50%;
+      border: 2px solid var(--white);
+      box-shadow: 0 1px 4px rgba(0,0,0,0.25);
+      cursor: pointer;
+    }
+    /* Make the timeline scrubber track taller for easier clicking */
+    #timeline-scrubber {
+      height: 8px;
+      border-radius: 4px;
+    }
+
+    /* Transport + Speed row */
+    #transport-row {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    #transport {
+      display: flex;
+      align-items: center;
+      gap: 2px;
+    }
+    #transport button {
+      min-height: 30px;
+      padding: 4px 8px;
+      font-size: 12px;
+      border-radius: var(--radius-sm);
+    }
+    #play-btn {
+      background: var(--black);
+      border-color: var(--black);
+      color: var(--white);
+      width: 36px;
+      height: 36px;
+      min-width: 36px;
+      min-height: 36px;
+      border-radius: 50%;
+      font-size: 14px;
+      padding: 0;
+    }
+    #play-btn:hover {
+      background: #333;
+      border-color: #333;
+    }
+    #play-btn:disabled {
+      background: #bbb;
+      border-color: #bbb;
+    }
+
+    #speed-presets {
+      display: flex;
+      align-items: center;
+      gap: 2px;
+      margin-left: auto;
+    }
+    .speed-label {
+      font: 700 9px/1 var(--font);
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: var(--muted);
+      margin-right: 6px;
+    }
+    .speed-btn {
+      min-height: 26px;
+      padding: 4px 8px;
+      font-size: 10px;
+      font-weight: 600;
+      border-radius: var(--radius-full);
+      border: 1px solid var(--border);
+      background: transparent;
+    }
+    .speed-btn:hover {
+      background: var(--bg-alt);
+    }
+    .speed-btn.active {
+      background: var(--black);
+      border-color: var(--black);
+      color: var(--white);
+    }
+
+    #transport-right {
+      display: flex;
+      align-items: center;
+      gap: 2px;
+      margin-left: 6px;
+    }
+    #transport-right button {
+      width: 30px;
+      height: 30px;
+      min-width: 30px;
+      min-height: 30px;
+      padding: 0;
+      font-size: 13px;
+      border-radius: var(--radius-sm);
+    }
+
+    /* Hotkeys panel */
+    #hotkeys-panel {
+      display: none;
+      position: fixed;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      z-index: 200;
+      width: 360px;
+      max-height: 80vh;
+      background: var(--white);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      box-shadow: 0 12px 40px rgba(0,0,0,0.15);
+      overflow: hidden;
+    }
+    body.hotkeys-open #hotkeys-panel {
+      display: block;
+    }
+    #hotkeys-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 14px 16px;
+      border-bottom: 1px solid var(--border);
+      font: 700 13px/1 var(--font);
+    }
+    #hotkeys-close {
+      width: 28px;
+      height: 28px;
+      min-width: 28px;
+      min-height: 28px;
+      padding: 0;
+      font-size: 14px;
+      border-radius: var(--radius-sm);
+      background: transparent;
+      border: 1px solid transparent;
+    }
+    #hotkeys-close:hover {
+      background: var(--bg-alt);
+      border-color: var(--border);
+    }
+    #hotkeys-list {
+      padding: 8px 0;
+      overflow-y: auto;
+      max-height: calc(80vh - 50px);
+    }
+    .hk-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 6px 16px;
+      font: 500 12px/1 var(--font);
+      color: var(--ink-secondary);
+    }
+    .hk-row:hover {
+      background: var(--bg-alt);
+    }
+    kbd {
+      display: inline-block;
+      padding: 2px 7px;
+      font: 600 11px/1.4 var(--font-mono);
+      color: var(--ink);
+      background: var(--bg-alt);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      min-width: 24px;
+      text-align: center;
+    }
+
+    /* Layer rename modal */
+    #layer-rename-panel {
+      display: none;
+      position: fixed;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      z-index: 100;
+      padding: 16px;
+      border-radius: var(--radius);
+      background: var(--white);
+      border: 1px solid var(--border);
+      box-shadow: 0 8px 32px rgba(0,0,0,0.12);
+      gap: 8px;
+      flex-direction: row;
+      align-items: center;
+    }
+    body.layer-renaming #layer-rename-panel {
+      display: flex;
+    }
+    #layer-rename-panel input {
+      flex: 1;
+      min-width: 200px;
+      min-height: 34px;
+      border-radius: var(--radius-sm);
+      border: 1px solid var(--border);
+      background: var(--white);
+      color: var(--ink);
+      padding: 8px 12px;
+      font: 600 13px/1 var(--font);
+      outline: none;
+    }
+    #layer-rename-panel input:focus {
+      border-color: var(--black);
+      box-shadow: 0 0 0 2px rgba(0,0,0,0.08);
+    }
+
+    /* ── RESPONSIVE: 900–1199px ── */
+    @media (max-width: 1199px) {
+      #main {
+        grid-template-columns: 48px 1fr 48px;
       }
-      #brand-mark {
-        font-size: 34px;
-      }
-      #brand-pill {
-        font-size: 10px;
-        letter-spacing: 0.12em;
-      }
-      #topbar-meta {
-        display: none;
-      }
-      #canvas-container {
-        margin: 0 12px;
-      }
-      #tool-rail {
-        top: auto;
-        bottom: 18px;
-        right: 18px;
-        flex-direction: row;
-        flex-wrap: wrap;
-        max-width: calc(100% - 36px);
-      }
-      #tool-rail button {
-        min-width: 92px;
-      }
-      #bottom-dock {
-        display: flex;
-        flex-wrap: wrap;
-        justify-content: center;
-      }
-      #transport,
-      #line-type-strip,
+      #sidebar-left { overflow: visible; }
+      #sidebar-left-tabs,
       #file-actions,
-      #layer-strip,
-      #layer-rename-panel {
-        justify-content: center;
-        flex-wrap: wrap;
-        margin-left: 0;
-        margin-right: 0;
-        flex: 1 1 100%;
-      }
-      #status-card {
-        min-width: 0;
-        right: 18px;
-        left: 18px;
-      }
-    }
-    @media (max-width: 720px) {
-      #topbar {
-        padding: 10px 12px 8px;
-      }
-      #brand-lockup {
-        gap: 10px;
-      }
-      #brand-mark {
-        font-size: 28px;
-      }
-      #brand-pill {
-        padding: 5px 10px 4px;
-        font-size: 9px;
-        letter-spacing: 0.1em;
-      }
-      #canvas-container {
-        margin: 0 8px;
-        border-radius: 22px;
-      }
-      #status-card {
-        top: 12px;
-        left: 12px;
-        right: 12px;
-        padding: 10px 12px;
-        border-radius: 16px;
-      }
-      #status-title {
-        margin-bottom: 6px;
-        font-size: 10px;
-      }
-      #hud {
-        font-size: 16px;
-        margin-bottom: 6px;
-      }
-      #run-speed {
-        font-size: 10px;
-        letter-spacing: 0.08em;
-      }
-      #tool-rail {
-        left: 12px;
-        right: 12px;
-        bottom: 12px;
-        top: auto;
-        flex-direction: row;
-        flex-wrap: nowrap;
-        gap: 8px;
-        padding: 8px;
-        border-radius: 18px;
-        overflow-x: auto;
-        scrollbar-width: none;
-      }
-      #tool-rail::before,
-      #line-type-strip::before,
-      #file-actions::before,
-      #layer-strip::before {
+      #layers-panel,
+      #track-type-panel,
+      #script-panel,
+      .section-label:not(#sidebar-right .section-label) {
         display: none;
       }
-      #tool-rail button {
-        min-width: auto;
+      #sidebar-left-footer {
+        flex-direction: column;
+        padding: 6px 4px;
+        gap: 2px;
       }
-      #bottom-dock {
-        gap: 10px;
-        padding: 10px 8px 12px;
+      #sidebar-left-footer button { width: 34px; height: 34px; }
+      #draw-ride-toggle {
+        flex-direction: column;
+        padding: 6px 4px 4px;
       }
-      #transport,
-      #line-type-strip,
-      #file-actions,
-      #layer-strip,
-      #layer-rename-panel {
-        width: 100%;
-        padding: 8px;
-        gap: 8px;
-        border-radius: 18px;
-        flex-wrap: nowrap;
-        justify-content: flex-start;
-        overflow-x: auto;
-        scrollbar-width: none;
+      #draw-ride-toggle button { font-size: 9px; padding: 4px 2px; min-height: 28px; }
+      #tool-grid {
+        grid-template-columns: 1fr;
+        padding: 4px;
+        gap: 2px;
       }
-      #transport::-webkit-scrollbar,
-      #line-type-strip::-webkit-scrollbar,
-      #file-actions::-webkit-scrollbar,
-      #layer-strip::-webkit-scrollbar,
-      #tool-rail::-webkit-scrollbar {
-        display: none;
+      #tool-grid button { padding: 8px 4px; min-height: 40px; }
+      .tool-label { display: none; }
+      #svg-import-btn, #svg-export-btn {
+        margin: 2px 4px;
+        width: calc(100% - 8px);
+        font-size: 0;
+        padding: 4px;
+        min-height: 28px;
       }
-      button {
-        min-height: 42px;
-        padding: 10px 12px;
-        font-size: 12px;
-      }
-      button.play-button {
-        min-width: 120px;
-      }
-      button.line-type-button {
-        min-width: 88px;
-      }
-      button.layer-label {
-        min-width: 138px;
-      }
-      button.layer-state-button {
-        min-width: 64px;
-      }
+      #svg-import-btn::after { content: "▴"; font-size: 12px; }
+      #svg-export-btn::after { content: "↓"; font-size: 12px; }
+      #rider-customization, #sidebar-right .section-label { display: none; }
     }
-    @media (min-width: 981px) and (max-width: 1319px) {
-      #bottom-dock {
-        grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
-      }
-      #file-actions,
-      #line-type-strip {
-        padding: 10px;
-        gap: 8px;
-      }
-      #layer-strip {
-        padding: 10px;
-        gap: 8px;
-      }
-      button {
-        min-height: 42px;
-        padding: 10px 12px;
-        font-size: 13px;
-      }
-      button.play-button {
-        min-width: 136px;
-      }
-      button.layer-label {
-        max-width: 220px;
-      }
-    }
-    @media (max-width: 560px) {
-      #mobile-more-toggle {
-        display: inline-flex;
-      }
-      body:not(.mobile-ui-expanded) #file-actions,
-      body:not(.mobile-ui-expanded) #layer-strip {
-        display: none;
-      }
-      body.layer-renaming #layer-rename-panel {
-        display: flex;
-      }
-      #bottom-dock {
-        gap: 8px;
-      }
-      #transport {
-        order: 1;
-      }
-      #mobile-more-toggle {
-        order: 2;
-      }
-      #line-type-strip {
-        order: 3;
-      }
-      #file-actions {
-        order: 4;
-      }
-      #layer-strip {
-        order: 5;
-      }
-      #layer-rename-panel {
-        order: 6;
-      }
-      button {
-        min-height: 46px;
-        padding: 11px 14px;
-        font-size: 13px;
-      }
-      #tool-rail button {
-        min-height: 46px;
-        min-width: 46px;
-        width: 46px;
-        padding: 0;
-        justify-content: center;
-      }
-      button.play-button {
-        min-width: 54px;
-      }
-      button.line-type-button {
-        min-width: 52px;
-      }
-      button.layer-label {
-        min-width: 82px;
-      }
-      button.layer-state-button,
-      #mobile-more-toggle {
-        min-width: 52px;
-      }
-      #layer-rename-panel input {
-        min-height: 46px;
-        font-size: 13px;
-      }
-    }
-    @media (min-width: 1320px) {
-      #bottom-dock {
-        grid-template-columns: minmax(0, 1.1fr) auto minmax(0, 0.95fr) minmax(0, 1fr);
-        grid-template-areas:
-          "file transport track track"
-          "layers layers layers layers"
-          "rename rename rename rename";
-      }
+
+    /* ── RESPONSIVE: ≤899px ── */
+    @media (max-width: 899px) {
+      #main { grid-template-columns: 1fr; }
+      #sidebar-left, #sidebar-right { display: none; }
+      #topbar { padding: 0 12px; height: 42px; }
+      #brand-mark { font-size: 15px; }
+      #brand-pill { font-size: 8px; padding: 3px 7px 2px; }
+      #sled-info { display: none; }
     }
   </style>
 </head>
 <body>
   <div id="app">
-    <div id="topbar">
+    <!-- TOP BAR -->
+    <header id="topbar">
       <div id="brand-lockup">
-        <div id="brand-mark">Line Rider.</div>
-        <div id="brand-pill">Remastered</div>
+        <span id="brand-mark">Line Rider</span>
+        <span id="brand-pill">Reloaded</span>
       </div>
-      <div id="topbar-meta">
-        <div class="meta-chip">Draw</div>
-        <div class="meta-chip">Ride</div>
-        <div class="meta-chip">Refine</div>
+      <div id="sled-info">
+        <span>Classic Sled</span>
+      </div>
+      <div id="topbar-actions">
+        <button id="btn-sound" title="Sound">🔊</button>
+        <button id="btn-effects" title="Effects">✦</button>
+        <button id="btn-settings" title="Settings">⚙</button>
+      </div>
+    </header>
+
+    <!-- MAIN AREA -->
+    <div id="main">
+      <!-- LEFT SIDEBAR -->
+      <aside id="sidebar-left">
+        <div id="sidebar-left-tabs">
+          <button class="sidebar-tab active">PROJECT</button>
+          <button class="sidebar-tab">LAYERS</button>
+        </div>
+
+        <div id="file-actions"></div>
+
+        <div id="layers-panel">
+          <div class="section-label">LAYERS</div>
+          <div id="layer-list"></div>
+          <div id="layer-controls"></div>
+        </div>
+
+        <div id="track-type-panel">
+          <div class="section-label">TRACK TYPE <span class="dropdown-arrow">▾</span></div>
+          <div id="line-type-strip"></div>
+        </div>
+
+        <div id="script-panel">
+          <div class="section-label">SCRIPT <span class="dropdown-arrow">▾</span></div>
+          <div id="script-editor">
+            <pre id="script-code">// Scripts coming soon</pre>
+          </div>
+          <button id="add-command-btn" disabled>Add Command</button>
+        </div>
+
+        <div id="sidebar-left-footer"></div>
+      </aside>
+
+      <!-- CANVAS -->
+      <div id="canvas-container">
+        <canvas id="canvas"></canvas>
+        <div id="canvas-hud">
+          <div id="hud-score">SCORE: <span id="stat-score">0</span></div>
+          <div id="hud-speed"><span id="stat-speed">0</span> km/h</div>
+        </div>
+      </div>
+
+      <!-- RIGHT SIDEBAR -->
+      <aside id="sidebar-right">
+        <div id="draw-ride-toggle">
+          <button id="draw-btn" class="active">DRAW</button>
+          <button id="ride-btn">RIDE</button>
+        </div>
+
+        <div id="tool-grid"></div>
+
+        <div id="tool-options">
+          <label id="smooth-toggle">
+            <input type="checkbox" id="smooth-checkbox" />
+            <span>Smooth lines</span>
+          </label>
+        </div>
+
+        <div id="edit-actions"></div>
+
+        <button id="svg-import-btn">SVG Import ▴</button>
+
+        <div class="section-label">RIDER</div>
+        <div id="rider-customization">
+          <div class="rider-slot">🏂</div>
+          <div class="rider-slot">🛷</div>
+          <div class="rider-slot">+</div>
+          <div class="rider-slot">+</div>
+        </div>
+
+        <button id="svg-export-btn">↓ Export SVG</button>
+      </aside>
+    </div>
+
+    <!-- BOTTOM BAR -->
+    <footer id="bottom-bar">
+      <div id="timeline">
+        <span id="timeline-start">0:00.000</span>
+        <div id="timeline-track">
+          <input type="range" id="timeline-scrubber" min="0" max="4000" value="0" />
+        </div>
+        <span id="timeline-end">0:00.000</span>
+        <span id="frame-display">F0</span>
+      </div>
+
+      <div id="transport-row">
+        <div id="transport">
+          <button id="pause-btn" class="subtle" title="Pause">⏸</button>
+          <button id="play-btn" title="Play">▶</button>
+          <button id="stop-btn" class="subtle" title="Stop">⏹</button>
+          <button id="step-back-btn" class="subtle" title="Step Back">◀◀</button>
+          <button id="step-fwd-btn" class="subtle" title="Step Forward">▶▶</button>
+        </div>
+        <div id="speed-presets">
+          <span class="speed-label">SPEED</span>
+          <button class="speed-btn" data-speed="0.25">0.25x</button>
+          <button class="speed-btn" data-speed="0.5">0.5x</button>
+          <button class="speed-btn active" data-speed="1">1x</button>
+          <button class="speed-btn" data-speed="2">2x</button>
+        </div>
+        <div id="transport-right">
+          <button id="btn-transport-settings" class="subtle" title="Settings">⚙</button>
+          <button id="btn-zoom" class="subtle" title="Fit View">🔍</button>
+        </div>
+      </div>
+    </footer>
+
+    <!-- Hotkeys panel -->
+    <div id="hotkeys-panel">
+      <div id="hotkeys-header">
+        <span>Keyboard Shortcuts</span>
+        <button id="hotkeys-close">✕</button>
+      </div>
+      <div id="hotkeys-list">
+        <div class="hk-row"><kbd>Space</kbd><span>Play / Pause</span></div>
+        <div class="hk-row"><kbd>Escape</kbd><span>Stop</span></div>
+        <div class="hk-row"><kbd>1</kbd><span>Pencil tool</span></div>
+        <div class="hk-row"><kbd>2</kbd><span>Line tool</span></div>
+        <div class="hk-row"><kbd>3</kbd><span>Eraser tool</span></div>
+        <div class="hk-row"><kbd>4</kbd><span>Curve tool</span></div>
+        <div class="hk-row"><kbd>5</kbd><span>Flag tool</span></div>
+        <div class="hk-row"><kbd>Q</kbd><span>Solid line type</span></div>
+        <div class="hk-row"><kbd>W</kbd><span>Accel line type</span></div>
+        <div class="hk-row"><kbd>E</kbd><span>Scenery line type</span></div>
+        <div class="hk-row"><kbd>F</kbd><span>Fit view</span></div>
+        <div class="hk-row"><kbd>Ctrl+Z</kbd><span>Undo</span></div>
+        <div class="hk-row"><kbd>Ctrl+Shift+Z</kbd><span>Redo</span></div>
+        <div class="hk-row"><kbd>Ctrl+S</kbd><span>Save track</span></div>
+        <div class="hk-row"><kbd>Ctrl+O</kbd><span>Load track</span></div>
+        <div class="hk-row"><kbd>Delete</kbd><span>Clear track</span></div>
+        <div class="hk-row"><kbd>Scroll</kbd><span>Zoom in/out</span></div>
+        <div class="hk-row"><kbd>Middle-drag</kbd><span>Pan</span></div>
+        <div class="hk-row"><kbd>Right-drag</kbd><span>Quick erase</span></div>
       </div>
     </div>
-    <div id="canvas-container">
-      <div id="canvas-atmosphere"></div>
-      <div id="status-card">
-        <div id="status-title">Run Status</div>
-        <div id="hud"></div>
-        <div id="run-speed"></div>
-      </div>
-      <div id="tool-rail" data-label="Tools"></div>
-      <canvas id="canvas"></canvas>
-    </div>
-    <div id="bottom-dock">
-      <div id="file-actions" data-label="Project"></div>
-      <div id="transport"></div>
-      <button id="mobile-more-toggle" type="button">More</button>
-      <div id="layer-strip" data-label="Layers"></div>
-      <div id="layer-rename-panel">
-        <input id="layer-rename-input" type="text" maxlength="40" />
-        <button id="layer-rename-save" type="button">Save</button>
-        <button id="layer-rename-cancel" type="button">Cancel</button>
-      </div>
-      <div id="line-type-strip" data-label="Track"></div>
+
+    <!-- Layer rename modal -->
+    <div id="layer-rename-panel">
+      <input id="layer-rename-input" type="text" maxlength="40" placeholder="Layer name" />
+      <button id="layer-rename-save" type="button">Save</button>
+      <button id="layer-rename-cancel" type="button">Cancel</button>
     </div>
   </div>
   <script type="module" src="/src/main.ts"></script>

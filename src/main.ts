@@ -21,6 +21,7 @@ import { Toolbar } from './ui/Toolbar';
 import { LineType } from './physics/lines/LineTypes';
 import { Tool } from './input/tools/Tool';
 import { ERASER_RADIUS, TIMESTEP } from './constants';
+import { exportTrackAsSvg } from './export/svgExport';
 
 // Core
 const canvas = document.getElementById('canvas') as HTMLCanvasElement;
@@ -61,7 +62,7 @@ loadInput.type = 'file';
 loadInput.accept = '.track.json,.json,application/json';
 loadInput.style.display = 'none';
 document.body.appendChild(loadInput);
-const mobileMoreToggle = document.getElementById('mobile-more-toggle') as HTMLButtonElement | null;
+
 const layerRenameInput = document.getElementById('layer-rename-input') as HTMLInputElement | null;
 const layerRenameSave = document.getElementById('layer-rename-save') as HTMLButtonElement | null;
 const layerRenameCancel = document.getElementById('layer-rename-cancel') as HTMLButtonElement | null;
@@ -71,7 +72,13 @@ const input = new InputManager(canvas, camera);
 input.setTool(currentTool);
 input.getGameState = () => gameLoop.state;
 
-input.onPlayPauseToggle = () => gameLoop.togglePlayPause();
+input.onPlayPauseToggle = () => {
+  if (gameLoop.state === GameState.EDITING) {
+    startPlayback();
+  } else {
+    gameLoop.togglePlayPause();
+  }
+};
 input.onStop = () => stopPlayback();
 input.onFitView = () => fitView();
 input.onUndo = () => {
@@ -127,22 +134,35 @@ const gameLoop = new GameLoop(physics, () => {
     activeLayer.visible,
     activeLayer.editable,
   );
+
+  // Update stats in canvas HUD
+  const speed = rider.getCenterSpeed() * (1000 / TIMESTEP);
+  toolbar.updateStats(store.lines.length, speed);
+
+  // Update timeline during playback
+  if (gameLoop.state !== GameState.EDITING) {
+    toolbar.updateTimeline(gameLoop.frame, Math.max(gameLoop.maxFrame, gameLoop.frame));
+  }
+
   uiRenderer.update({
     frame: gameLoop.frame,
     state: gameLoop.state,
     lineCount: store.lines.length,
-    toolName: currentTool.name,
-    lineType: currentLineType,
-    activeLayerName: activeLayer.name,
-    activeLayerIndex: store.getActiveLayerIndex() + 1,
-    layerCount: store.layers.length,
-    activeLayerVisible: activeLayer.visible,
-    activeLayerEditable: activeLayer.editable,
-    speed: rider.getCenterSpeed() * (1000 / TIMESTEP),
+    speed,
   });
 });
 
+// Wire snapshot system for fast timeline seeking
+gameLoop.setSnapshotCallbacks(
+  () => rider.saveSnapshot(),
+  (snap) => rider.restoreSnapshot(snap),
+  () => rider.reset(),
+);
+
 toolbar.onToolSelect = (name) => switchTool(name);
+toolbar.onSmoothToggle = (enabled) => {
+  pencilTool.smoothing = enabled;
+};
 toolbar.onLineTypeSelect = (type) => {
   currentLineType = type;
   toolbar.setActiveLineType(type);
@@ -173,23 +193,82 @@ toolbar.onLayerMovePrev = () => moveLayer(-1);
 toolbar.onLayerMoveNext = () => moveLayer(1);
 toolbar.onLayerRename = () => renameLayer();
 
-if (mobileMoreToggle) {
-  const syncMobileUiToggle = () => {
-    if (window.innerWidth > 560) {
-      document.body.classList.remove('mobile-ui-expanded');
-    }
-    mobileMoreToggle.textContent = document.body.classList.contains('mobile-ui-expanded') ? 'Less' : 'More';
-  };
+// Speed presets
+toolbar.onSpeedChange = (speed) => {
+  gameLoop.playbackSpeed = speed;
+};
 
-  mobileMoreToggle.addEventListener('click', () => {
-    document.body.classList.toggle('mobile-ui-expanded');
-    syncMobileUiToggle();
-  });
+// Timeline seek — auto-starts playback if in editing mode
+toolbar.onTimelineSeek = (frame) => {
+  if (gameLoop.state === GameState.EDITING) {
+    // Auto-start so the user can scrub from edit mode
+    grid.rebuild(store.lines);
+    rider.reset();
+    savedCameraPos = camera.position.clone();
+    savedCameraZoom = camera.zoom;
+    cameraFollowing = true;
+    gameLoop.play();
+    gameLoop.pause();
+  }
+  gameLoop.seekToFrame(frame);
+};
 
-  window.addEventListener('resize', syncMobileUiToggle);
-  syncMobileUiToggle();
-}
+// Draw/Ride toggle
+toolbar.onDrawRideToggle = () => {
+  if (gameLoop.state === GameState.EDITING) {
+    startPlayback();
+  } else {
+    stopPlayback();
+  }
+};
 
+// Screenshot
+toolbar.onScreenshot = () => {
+  const dataUrl = canvas.toDataURL('image/png');
+  const anchor = document.createElement('a');
+  anchor.href = dataUrl;
+  anchor.download = 'line-rider-screenshot.png';
+  anchor.click();
+};
+
+// Step forward — enter playback if needed, then advance one frame
+toolbar.onStepForward = () => {
+  if (gameLoop.state === GameState.EDITING) {
+    grid.rebuild(store.lines);
+    rider.reset();
+    savedCameraPos = camera.position.clone();
+    savedCameraZoom = camera.zoom;
+    cameraFollowing = true;
+    gameLoop.play();
+    gameLoop.pause();
+  }
+  gameLoop.stepForward();
+};
+
+// Step back — seek to previous frame using snapshot system
+toolbar.onStepBack = () => {
+  if (gameLoop.state === GameState.EDITING) return;
+  if (gameLoop.state === GameState.PLAYING) {
+    gameLoop.pause();
+  }
+  if (gameLoop.frame > 0) {
+    gameLoop.seekToFrame(gameLoop.frame - 1);
+  }
+};
+
+// SVG export
+toolbar.onSvgExport = () => {
+  const svg = exportTrackAsSvg(store.lines, store.layers, store.startPosition);
+  const blob = new Blob([svg], { type: 'image/svg+xml' });
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement('a');
+  anchor.href = url;
+  anchor.download = 'line-rider-track.svg';
+  anchor.click();
+  setTimeout(() => URL.revokeObjectURL(url), 0);
+};
+
+// Layer rename modal
 if (layerRenameSave && layerRenameCancel && layerRenameInput) {
   layerRenameSave.addEventListener('click', () => commitLayerRename());
   layerRenameCancel.addEventListener('click', () => closeLayerRename());
@@ -346,18 +425,16 @@ function fitView() {
   const viewHeight = Math.max(1, camera.height - padding * 2);
   const zoom = Math.min(viewWidth / boundsWidth, viewHeight / boundsHeight);
 
-  camera.zoom = Math.max(0.1, Math.min(30, zoom));
+  // Cap zoom: don't zoom in beyond 1x (prevents huge rider on empty tracks)
+  camera.zoom = Math.max(0.1, Math.min(1, zoom));
   camera.position.x = (minX + maxX) / 2;
   camera.position.y = (minY + maxY) / 2;
 }
 
 function startPlayback() {
   if (gameLoop.state === GameState.EDITING) {
-    // Build grid from current lines
     grid.rebuild(store.lines);
-    // Reset rider
     rider.reset();
-    // Save camera for restore
     savedCameraPos = camera.position.clone();
     savedCameraZoom = camera.zoom;
     cameraFollowing = true;
@@ -391,14 +468,13 @@ renderer.addRenderCallback((ctx) => {
     currentTool.render(ctx);
   }
 
-  // Draw rider (always visible - shows start position when editing)
+  // Draw rider
   const renderData = rider.getRenderData(renderAlpha);
   riderRenderer.render(ctx, renderData);
 
   // Camera follow during playback
   if (cameraFollowing && gameLoop.state === GameState.PLAYING) {
     const center = rider.getCenter(renderAlpha);
-    // Exponential smoothing
     camera.position.x += (center.x - camera.position.x) * 0.1;
     camera.position.y += (center.y - camera.position.y) * 0.1;
   }

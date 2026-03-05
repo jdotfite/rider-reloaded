@@ -110,11 +110,8 @@ export class InputManager {
       e.preventDefault();
       if (!this.isSpaceDown) {
         this.isSpaceDown = true;
-        if (this.getState() !== GameState.EDITING) {
-          this.onPlayPauseToggle?.();
-        } else {
-          this.canvas.style.cursor = 'grab';
-        }
+        // Space always toggles play/pause from any state
+        this.onPlayPauseToggle?.();
       }
     }
 
@@ -138,6 +135,11 @@ export class InputManager {
       e.preventDefault();
       this.onLoadTrack?.();
       return;
+    }
+
+    if (e.code === 'Escape') {
+      e.preventDefault();
+      this.onStop?.();
     }
 
     if (e.code === 'Delete') {
