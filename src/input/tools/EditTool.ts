@@ -21,6 +21,7 @@ export class EditTool implements Tool {
   private state: EditState = 'idle';
   private hoveredHandle: HandleHit | null = null;
   private dragHandle: HandleHit | null = null;
+  private dragConnected: Array<{ lineId: number; endpoint: 'p1' | 'p2' }> = [];
   private dragStart = new Vec2();
   private dragCurrent = new Vec2();
 
@@ -87,6 +88,8 @@ export class EditTool implements Tool {
       this.state = 'dragging-endpoint';
       this.dragHandle = handle;
       this.dragStart = worldPos.clone();
+      // Find all other endpoints at the same position (connected lines)
+      this.dragConnected = this.findCoincidentEndpoints(handle.position, handle.lineId);
       this.store.beginTransaction();
       return;
     }
@@ -105,13 +108,26 @@ export class EditTool implements Tool {
 
   onMouseMove(worldPos: Vec2) {
     if (this.state === 'dragging-endpoint' && this.dragHandle) {
-      const excludeIds = new Set([this.dragHandle.lineId]);
+      // Exclude the primary line and all connected lines from snap targets
+      const excludeIds = new Set([this.dragHandle.lineId, ...this.dragConnected.map(c => c.lineId)]);
       const snapped = this.trySnap(worldPos, excludeIds);
+
+      // Move the primary handle
       const line = this.store.lines.find(l => l.id === this.dragHandle!.lineId);
       if (line) {
         const newP1 = this.dragHandle.endpoint === 'p1' ? snapped : line.p1;
         const newP2 = this.dragHandle.endpoint === 'p2' ? snapped : line.p2;
         this.store.replaceLine(this.dragHandle.lineId, newP1, newP2);
+      }
+
+      // Move all connected endpoints to the same position
+      for (const conn of this.dragConnected) {
+        const connLine = this.store.lines.find(l => l.id === conn.lineId);
+        if (connLine) {
+          const cP1 = conn.endpoint === 'p1' ? snapped : connLine.p1;
+          const cP2 = conn.endpoint === 'p2' ? snapped : connLine.p2;
+          this.store.replaceLine(conn.lineId, cP1, cP2);
+        }
       }
       return;
     }
@@ -156,6 +172,7 @@ export class EditTool implements Tool {
     }
     this.state = 'idle';
     this.dragHandle = null;
+    this.dragConnected = [];
     this.dragLineId = null;
     this.dragCurveGroupId = null;
   }
@@ -352,6 +369,22 @@ export class EditTool implements Tool {
     // Reattach group with updated line IDs
     group.lineIds = added;
     this.store.curveGroups.push(group);
+  }
+
+  /** Find all other endpoints that share the same position as the dragged one */
+  private findCoincidentEndpoints(pos: Vec2, excludeLineId: number): Array<{ lineId: number; endpoint: 'p1' | 'p2' }> {
+    const eps = 0.01;
+    const result: Array<{ lineId: number; endpoint: 'p1' | 'p2' }> = [];
+    for (const line of this.store.lines) {
+      if (line.id === excludeLineId) continue;
+      if (line.layer !== this.store.activeLayerId) continue;
+      if (line.p1.distanceTo(pos) < eps) {
+        result.push({ lineId: line.id, endpoint: 'p1' });
+      } else if (line.p2.distanceTo(pos) < eps) {
+        result.push({ lineId: line.id, endpoint: 'p2' });
+      }
+    }
+    return result;
   }
 
   private tryConvertToCurve() {
