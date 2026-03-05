@@ -1,7 +1,7 @@
 import { Point } from './Point';
 import { GRAVITY } from '../../constants';
 
-const AIR_FRICTION = 0.2;
+const AIR_FRICTION = 0.45;
 
 export class FlutterPoint extends Point {
   constructor(x: number, y: number) {
@@ -16,9 +16,9 @@ export class FlutterPoint extends Point {
     this.momentum.set(mx, my);
     this.prevPos.copyFrom(this.pos);
 
-    // Flutter: random horizontal wobble proportional to speed
+    // Gentle flutter: small random wobble proportional to speed
     const speed = Math.sqrt(mx * mx + my * my);
-    const flutter = (Math.random() - 0.5) * AIR_FRICTION * speed * 40;
+    const flutter = (Math.random() - 0.5) * speed * 3;
 
     this.pos.x += mx + flutter;
     this.pos.y += my;

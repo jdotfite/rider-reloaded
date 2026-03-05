@@ -21,8 +21,10 @@ const SVG_W = 1874.68;
 const SVG_H = 1383.15;
 
 // Body reference points in SVG space (butt seat, shoulder/neck)
+// Shoulder x aligned with butt x so the body axis is vertical in SVG space,
+// matching the physics rest state — prevents the sled from tilting on flat ground.
 const SVG_BUTT = { x: 1050, y: 1000 };
-const SVG_SHOULDER = { x: 1020, y: 570 };
+const SVG_SHOULDER = { x: 1050, y: 570 };
 
 // Sled reference points in SVG space (left-bottom, right-bottom of sled deck)
 const SVG_SLED_TAIL = { x: 200, y: 1140 };
@@ -103,8 +105,12 @@ export class RiderRenderer {
       this.drawScarf(ctx, p, rider.points.length);
     }
 
-    if (this.bodyReady) {
-      // Always render body and sled separately so each follows its own physics
+    if (rider.mounted && rider.sledIntact && this.combinedReady) {
+      // Mounted: combined image keeps body-sled alignment; body transform with
+      // vertical SVG axis so the sled sits flat on flat ground.
+      this.drawSvgTransformed(ctx, this.combinedImage, p[BUTT], p[SHOULDER], SVG_BUTT, SVG_SHOULDER);
+    } else if (this.bodyReady) {
+      // Dismounted: body and sled rendered independently
       if (rider.sledIntact && this.sledReady) {
         this.drawSvgTransformed(ctx, this.sledImage, p[TAIL], p[NOSE], SVG_SLED_TAIL, SVG_SLED_NOSE);
       }
@@ -246,44 +252,64 @@ export class RiderRenderer {
     const scarfCount = totalPoints - SCARF_START;
     if (scarfCount < 2) return;
 
-    ctx.strokeStyle = FILL_SCARF;
-    ctx.lineCap = 'round';
-    ctx.lineJoin = 'round';
-
-    // Thin ribbon: starts narrow at neck, tapers further toward tip
-    const neckWidth = 1.0;
-    const tipWidth = 0.4;
+    // Build a list of scarf centerline points: shoulder → scarf chain
+    const pts: Array<{ x: number; y: number }> = [p[SHOULDER]];
     for (let i = 0; i < scarfCount; i++) {
-      const fromIdx = i === 0 ? SHOULDER : SCARF_START + i - 1;
-      const toIdx = SCARF_START + i;
-      if (toIdx >= totalPoints) break;
+      const idx = SCARF_START + i;
+      if (idx >= totalPoints) break;
+      pts.push(p[idx]);
+    }
+    if (pts.length < 2) return;
 
-      const t = i / scarfCount;
-      ctx.lineWidth = neckWidth + (tipWidth - neckWidth) * t;
-      ctx.beginPath();
-      ctx.moveTo(p[fromIdx].x, p[fromIdx].y);
-      ctx.lineTo(p[toIdx].x, p[toIdx].y);
-      ctx.stroke();
+    // Compute perpendicular offsets at each point to form a ribbon
+    const neckHalf = 0.5;   // half-width at neck
+    const tipHalf = 0.15;   // half-width at tip
+    const leftEdge: Array<{ x: number; y: number }> = [];
+    const rightEdge: Array<{ x: number; y: number }> = [];
+
+    for (let i = 0; i < pts.length; i++) {
+      // Tangent direction at this point
+      let tx: number, ty: number;
+      if (i === 0) {
+        tx = pts[1].x - pts[0].x;
+        ty = pts[1].y - pts[0].y;
+      } else if (i === pts.length - 1) {
+        tx = pts[i].x - pts[i - 1].x;
+        ty = pts[i].y - pts[i - 1].y;
+      } else {
+        tx = pts[i + 1].x - pts[i - 1].x;
+        ty = pts[i + 1].y - pts[i - 1].y;
+      }
+      const len = Math.sqrt(tx * tx + ty * ty) || 1;
+      // Perpendicular (rotated 90°)
+      const nx = -ty / len;
+      const ny = tx / len;
+
+      const t = i / (pts.length - 1);
+      const halfW = neckHalf + (tipHalf - neckHalf) * t;
+      leftEdge.push({ x: pts[i].x + nx * halfW, y: pts[i].y + ny * halfW });
+      rightEdge.push({ x: pts[i].x - nx * halfW, y: pts[i].y - ny * halfW });
     }
 
-    // Small forked tail at the end
-    const lastIdx = Math.min(SCARF_START + scarfCount - 1, totalPoints - 1);
-    const prevIdx = lastIdx - 1;
-    if (prevIdx >= SCARF_START) {
-      const edx = p[lastIdx].x - p[prevIdx].x;
-      const edy = p[lastIdx].y - p[prevIdx].y;
-      const elen = Math.sqrt(edx * edx + edy * edy) || 1;
-      const epx = -edy / elen, epy = edx / elen;
-      const fs = 0.8;
-
-      ctx.fillStyle = FILL_SCARF;
-      ctx.beginPath();
-      ctx.moveTo(p[lastIdx].x, p[lastIdx].y);
-      ctx.lineTo(p[lastIdx].x + epx * fs + edx / elen * fs, p[lastIdx].y + epy * fs + edy / elen * fs);
-      ctx.lineTo(p[lastIdx].x - epx * fs + edx / elen * fs, p[lastIdx].y - epy * fs + edy / elen * fs);
-      ctx.closePath();
-      ctx.fill();
+    // Draw filled ribbon
+    ctx.fillStyle = FILL_SCARF;
+    ctx.beginPath();
+    ctx.moveTo(leftEdge[0].x, leftEdge[0].y);
+    for (let i = 1; i < leftEdge.length; i++) {
+      ctx.lineTo(leftEdge[i].x, leftEdge[i].y);
     }
+    // Continue along the right edge in reverse
+    for (let i = rightEdge.length - 1; i >= 0; i--) {
+      ctx.lineTo(rightEdge[i].x, rightEdge[i].y);
+    }
+    ctx.closePath();
+    ctx.fill();
+
+    // Subtle outline for definition
+    ctx.strokeStyle = FILL_SCARF;
+    ctx.lineWidth = 0.15;
+    ctx.lineJoin = 'round';
+    ctx.stroke();
   }
 
   private drawJoint(ctx: CanvasRenderingContext2D, x: number, y: number, r: number) {
