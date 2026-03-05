@@ -31,6 +31,10 @@ export class PhysicsEngine {
     }
 
     // 3. Resolve non-iterating constraints after the solver loop.
+    for (const rs of this.rider.repelSticks) {
+      rs.resolve();
+    }
+
     for (const joint of this.rider.bindJoints) {
       joint.resolve();
     }
@@ -41,23 +45,9 @@ export class PhysicsEngine {
   }
 
   private resolveConstraints() {
-    const rider = this.rider;
-
-    // All sticks (sled frame + body skeleton) in order
-    for (const stick of rider.sticks) {
-      stick.resolve();
+    for (const c of this.rider.iteratingConstraints) {
+      c.resolve();
     }
-
-    // Breakable bind sticks (sled-to-body + body-to-sled)
-    for (const bs of rider.bindSticks) {
-      bs.resolve();
-    }
-
-    // Repel sticks (shoulder-foot)
-    for (const rs of rider.repelSticks) {
-      rs.resolve();
-    }
-
   }
 
   private collidePoint(cp: CollisionPoint) {

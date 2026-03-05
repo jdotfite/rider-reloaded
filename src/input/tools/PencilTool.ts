@@ -3,9 +3,6 @@ import { Tool } from './Tool';
 import { TrackStore } from '../../store/TrackStore';
 import { LineType } from '../../physics/lines/LineTypes';
 import { MIN_LINE_LENGTH, SNAP_RADIUS } from '../../constants';
-import { rdpSimplify, pointsToSegments } from '../../math/smooth';
-
-const SMOOTH_EPSILON = 3; // higher = more simplification
 
 export class PencilTool implements Tool {
   name = 'pencil';
@@ -13,11 +10,9 @@ export class PencilTool implements Tool {
   private drawing = false;
   private lastPoint: Vec2 = new Vec2();
   private segments: Array<{ p1: Vec2; p2: Vec2 }> = [];
-  private allPoints: Vec2[] = []; // raw points for smoothing
   private snapPoint: Vec2 | null = null;
   private shiftHeld = false;
   getLineType: () => LineType;
-  smoothing = false;
 
   constructor(store: TrackStore, getLineType: () => LineType) {
     this.store = store;
@@ -38,7 +33,6 @@ export class PencilTool implements Tool {
     const snapped = this.trySnap(worldPos);
     this.lastPoint = snapped;
     this.segments = [];
-    this.allPoints = [snapped.clone()];
   }
 
   onMouseMove(worldPos: Vec2) {
@@ -47,7 +41,6 @@ export class PencilTool implements Tool {
     const dist = worldPos.distanceTo(this.lastPoint);
     if (dist >= MIN_LINE_LENGTH) {
       this.segments.push({ p1: this.lastPoint.clone(), p2: worldPos.clone() });
-      this.allPoints.push(worldPos.clone());
       this.lastPoint = worldPos.clone();
     }
   }
@@ -61,30 +54,12 @@ export class PencilTool implements Tool {
     const finalDist = snappedEnd.distanceTo(this.lastPoint);
     if (finalDist >= 1) {
       this.segments.push({ p1: this.lastPoint.clone(), p2: snappedEnd.clone() });
-      this.allPoints.push(snappedEnd.clone());
     }
 
-    if (this.allPoints.length < 2) {
-      this.segments = [];
-      this.allPoints = [];
-      this.snapPoint = null;
-      return;
-    }
-
-    let finalSegments: Array<{ p1: Vec2; p2: Vec2 }>;
-
-    if (this.smoothing && this.allPoints.length > 2) {
-      const simplified = rdpSimplify(this.allPoints, SMOOTH_EPSILON);
-      finalSegments = pointsToSegments(simplified);
-    } else {
-      finalSegments = this.segments;
-    }
-
-    if (finalSegments.length > 0) {
-      this.store.addLines(finalSegments, this.getLineType());
+    if (this.segments.length > 0) {
+      this.store.addLines(this.segments, this.getLineType());
     }
     this.segments = [];
-    this.allPoints = [];
     this.snapPoint = null;
   }
 

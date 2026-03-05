@@ -163,6 +163,9 @@ export class InputManager {
     if (e.code === 'KeyW') this.onLineTypeSwitch?.('acc');
     if (e.code === 'KeyE') this.onLineTypeSwitch?.('scenery');
 
+    // Forward to active tool
+    this.tool?.onKeyDown?.(e);
+
     // Arrow key panning
     const panAmount = e.shiftKey ? 200 : 80;
     if (e.code === 'ArrowLeft') { e.preventDefault(); this.camera.pan(panAmount, 0); }

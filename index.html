@@ -473,20 +473,7 @@
     #tool-options {
       padding: 4px 10px;
     }
-    #smooth-toggle {
-      display: flex;
-      align-items: center;
-      gap: 6px;
-      font: 600 11px/1 var(--font);
-      color: var(--ink-secondary);
-      cursor: pointer;
-      padding: 6px 8px;
-      border-radius: var(--radius-sm);
-    }
-    #smooth-toggle:hover {
-      background: var(--bg-alt);
-    }
-    #smooth-checkbox, #snap-checkbox {
+    #onion-checkbox, #snap-checkbox {
       width: 14px;
       height: 14px;
       accent-color: var(--black);
@@ -952,10 +939,6 @@
         <div id="tool-grid"></div>
 
         <div id="tool-options">
-          <label id="smooth-toggle">
-            <input type="checkbox" id="smooth-checkbox" />
-            <span>Smooth lines</span>
-          </label>
           <label id="onion-toggle">
             <input type="checkbox" id="onion-checkbox" />
             <span>Onion skin</span>
@@ -1031,6 +1014,7 @@
         <div class="hk-row"><kbd>5</kbd><span>Flag tool</span></div>
         <div class="hk-row"><kbd>6</kbd><span>Select tool</span></div>
         <div class="hk-row"><kbd>7</kbd><span>Edit tool</span></div>
+        <div class="hk-row"><kbd>S</kbd><span>Smooth selected lines (Select tool)</span></div>
         <div class="hk-row"><kbd>C</kbd><span>Convert to curve (Edit tool)</span></div>
         <div class="hk-row"><kbd>F</kbd><span>Flip line direction (Edit tool)</span></div>
         <div class="hk-row"><kbd>Q</kbd><span>Solid line type</span></div>

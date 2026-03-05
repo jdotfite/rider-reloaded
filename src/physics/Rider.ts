@@ -24,9 +24,8 @@ export interface RiderSnapshot {
 export class Rider {
   points: Point[] = [];
   collisionPoints: CollisionPoint[] = [];
-  sticks: Stick[] = [];
+  iteratingConstraints: Array<Stick | BindStick> = [];
   repelSticks: RepelStick[] = [];
-  bindSticks: BindStick[] = [];
   bindJoints: BindJoint[] = [];
   chains: DirectedChain[] = [];
   binding: Binding = new Binding();
@@ -41,9 +40,8 @@ export class Rider {
   init() {
     this.points = [];
     this.collisionPoints = [];
-    this.sticks = [];
+    this.iteratingConstraints = [];
     this.repelSticks = [];
-    this.bindSticks = [];
     this.bindJoints = [];
     this.chains = [];
     this.binding.reset();
@@ -87,13 +85,13 @@ export class Rider {
     const p = this.points;
     switch (def.type) {
       case 'stick':
-        this.sticks.push(new Stick(p[def.p1], p[def.p2]));
+        this.iteratingConstraints.push(new Stick(p[def.p1], p[def.p2]));
         break;
       case 'repel':
         this.repelSticks.push(new RepelStick(p[def.p1], p[def.p2], def.lengthFactor));
         break;
       case 'bind_stick':
-        this.bindSticks.push(new BindStick(p[def.p1], p[def.p2], this.binding));
+        this.iteratingConstraints.push(new BindStick(p[def.p1], p[def.p2], this.binding));
         break;
       case 'chain':
         this.chains.push(new DirectedChain(p[def.p1], p[def.p2]));

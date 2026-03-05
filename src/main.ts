@@ -176,9 +176,6 @@ gameLoop.setSnapshotCallbacks(
 );
 
 toolbar.onToolSelect = (name) => switchTool(name);
-toolbar.onSmoothToggle = (enabled) => {
-  pencilTool.smoothing = enabled;
-};
 toolbar.onOnionSkinToggle = (enabled) => {
   onionSkinning = enabled;
 };
