@@ -9,6 +9,7 @@ import { Tool } from './Tool';
 import { TrackStore } from '../../store/TrackStore';
 import { LineType } from '../../physics/lines/LineTypes';
 import { sampleCubicBezier } from '../../math/bezier';
+import { BezierAnchor } from '../../store/BezierPath';
 
 type CurveStage = 'idle' | 'setting-end' | 'setting-cp1' | 'setting-cp2';
 
@@ -156,17 +157,23 @@ export class CurveTool implements Tool {
       return;
     }
 
-    const added = this.store.addLines(segments, this.getLineType());
-    if (added.length > 0) {
-      this.store.curveGroups.push({
-        id: this.store.nextCurveGroupId++,
-        lineIds: added.map(l => l.id),
-        startPoint: this.startPoint.clone(),
-        endPoint: this.endPoint.clone(),
-        cp1: this.cp1.clone(),
-        cp2: this.cp2.clone(),
-      });
-    }
+    // Create a BezierPath instead of old CurveGroup
+    const anchors: BezierAnchor[] = [
+      {
+        position: this.startPoint.clone(),
+        handleIn: new Vec2(0, 0),
+        handleOut: this.cp1.sub(this.startPoint),
+        smooth: true,
+      },
+      {
+        position: this.endPoint.clone(),
+        handleIn: this.cp2.sub(this.endPoint),
+        handleOut: new Vec2(0, 0),
+        smooth: true,
+      },
+    ];
+
+    this.store.addBezierPath(anchors, this.getLineType(), this.store.activeLayerId);
     this.reset();
   }
 

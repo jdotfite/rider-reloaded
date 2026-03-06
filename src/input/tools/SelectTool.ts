@@ -113,6 +113,30 @@ export class SelectTool implements Tool {
       const dx = worldPos.x - this.dragCurrent.x;
       const dy = worldPos.y - this.dragCurrent.y;
       if (dx !== 0 || dy !== 0) {
+        // Move bezier path anchors if all lines in the path are selected
+        const offset = new Vec2(dx, dy);
+        const movedPaths = new Set<number>();
+        for (const path of this.store.bezierPaths) {
+          const allSelected = path.lineIds.every(id => this.selectedIds.has(id));
+          if (allSelected && path.lineIds.length > 0) {
+            for (const anchor of path.anchors) {
+              anchor.position = anchor.position.add(offset);
+            }
+            movedPaths.add(path.id);
+          }
+        }
+        // Invalidate paths where only some lines are selected
+        const partialPaths: number[] = [];
+        for (const path of this.store.bezierPaths) {
+          if (movedPaths.has(path.id)) continue;
+          if (path.lineIds.some(id => this.selectedIds.has(id))) {
+            partialPaths.push(path.id);
+          }
+        }
+        for (const pathId of partialPaths) {
+          this.store.bezierPaths = this.store.bezierPaths.filter(p => p.id !== pathId);
+        }
+
         this.store.moveLines(this.selectedIds, dx, dy);
         this.dragCurrent = worldPos.clone();
         this.dragCommitted = true;

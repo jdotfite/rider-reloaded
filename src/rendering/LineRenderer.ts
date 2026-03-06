@@ -15,6 +15,13 @@ const INDICATOR_COLORS: Partial<Record<LineType, string>> = {
   [LineType.ACC]: '#cc6644',   // orange-red for acceleration lines
 };
 
+// Threshold for treating two floats as equal (covers cloned Vec2 coordinates)
+const COORD_EPS = 0.001;
+
+function coordsMatch(ax: number, ay: number, bx: number, by: number): boolean {
+  return Math.abs(ax - bx) < COORD_EPS && Math.abs(ay - by) < COORD_EPS;
+}
+
 export class LineRenderer {
   render(ctx: CanvasRenderingContext2D, lines: Line[], layers: TrackLayer[], showIndicators = false) {
     for (const layer of layers) {
@@ -38,12 +45,24 @@ export class LineRenderer {
           ctx.lineJoin = 'round';
           ctx.beginPath();
 
+          let prevEndX = NaN;
+          let prevEndY = NaN;
           for (const line of batch) {
             // Offset by 2px in normal direction (toward the solid side)
             const ox = line.normal.x * 2;
             const oy = line.normal.y * 2;
-            ctx.moveTo(line.p1.x + ox, line.p1.y + oy);
-            ctx.lineTo(line.p2.x + ox, line.p2.y + oy);
+            const x1 = line.p1.x + ox;
+            const y1 = line.p1.y + oy;
+            const x2 = line.p2.x + ox;
+            const y2 = line.p2.y + oy;
+
+            // Use connected path when endpoints match to avoid round-cap dots
+            if (!coordsMatch(prevEndX, prevEndY, x1, y1)) {
+              ctx.moveTo(x1, y1);
+            }
+            ctx.lineTo(x2, y2);
+            prevEndX = x2;
+            prevEndY = y2;
           }
           ctx.stroke();
         }
@@ -60,19 +79,17 @@ export class LineRenderer {
         ctx.lineCap = 'round';
         ctx.lineJoin = 'round';
         ctx.beginPath();
-        let previousEnd: Line | null = null;
+        let prevEndX = NaN;
+        let prevEndY = NaN;
 
         for (const line of batch) {
-          const connected = previousEnd &&
-            previousEnd.p2.x === line.p1.x &&
-            previousEnd.p2.y === line.p1.y;
-
-          if (!connected) {
+          if (!coordsMatch(prevEndX, prevEndY, line.p1.x, line.p1.y)) {
             ctx.moveTo(line.p1.x, line.p1.y);
           }
 
           ctx.lineTo(line.p2.x, line.p2.y);
-          previousEnd = line;
+          prevEndX = line.p2.x;
+          prevEndY = line.p2.y;
         }
         ctx.stroke();
       }

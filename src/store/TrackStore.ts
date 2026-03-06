@@ -5,6 +5,12 @@ import { LineType } from '../physics/lines/LineTypes';
 import { SolidLine } from '../physics/lines/SolidLine';
 import { AccLine } from '../physics/lines/AccLine';
 import { SceneryLine } from '../physics/lines/SceneryLine';
+import {
+  BezierPath, BezierAnchor,
+  SerializedBezierPath, serializeAnchor, deserializeAnchor,
+  cloneBezierPath,
+} from './BezierPath';
+import { generateSegmentsFromPath } from '../math/bezier-path';
 
 export interface SerializedTrackLine {
   id: number;
@@ -35,7 +41,8 @@ export interface TrackLayer {
   editable: boolean;
 }
 
-export interface SerializedCurveGroup {
+// Legacy format for migration
+interface SerializedCurveGroup {
   id: number;
   lineIds: number[];
   startPoint: { x: number; y: number };
@@ -53,15 +60,7 @@ export interface SerializedTrack {
   layers: SerializedTrackLayer[];
   lines: SerializedTrackLine[];
   curveGroups?: SerializedCurveGroup[];
-}
-
-export interface CurveGroup {
-  id: number;
-  lineIds: number[];
-  startPoint: Vec2;
-  endPoint: Vec2;
-  cp1: Vec2;
-  cp2: Vec2;
+  bezierPaths?: SerializedBezierPath[];
 }
 
 interface TrackSnapshot {
@@ -69,7 +68,7 @@ interface TrackSnapshot {
   startPosition: Vec2;
   layers: TrackLayer[];
   activeLayerId: number;
-  curveGroups: CurveGroup[];
+  bezierPaths: BezierPath[];
 }
 
 interface NormalizedTrackLine {
@@ -96,8 +95,8 @@ export class TrackStore {
   startPosition: Vec2 = new Vec2(0, 0);
   layers: TrackLayer[] = [this.createDefaultLayer()];
   activeLayerId = 0;
-  curveGroups: CurveGroup[] = [];
-  nextCurveGroupId = 0;
+  bezierPaths: BezierPath[] = [];
+  nextBezierPathId = 0;
 
   /** Fires on every mutation (addLine, removeLines, replaceLine, etc.) */
   onMutation: (() => void) | null = null;
@@ -184,7 +183,7 @@ export class TrackStore {
 
     this.beginMutation();
     this.lines = nextLines;
-    this.invalidateCurveGroups(removedIds);
+    this.invalidateBezierPaths(removedIds);
     return removed;
   }
 
@@ -204,8 +203,8 @@ export class TrackStore {
     this.lines = [];
     this.layers = [this.createDefaultLayer()];
     this.activeLayerId = 0;
-    this.curveGroups = [];
-    this.nextCurveGroupId = 0;
+    this.bezierPaths = [];
+    this.nextBezierPathId = 0;
     return true;
   }
 
@@ -330,13 +329,12 @@ export class TrackStore {
         layer: line.layer,
         multiplier: line instanceof AccLine && line.multiplier !== 1 ? line.multiplier : undefined,
       })),
-      curveGroups: this.curveGroups.map(g => ({
-        id: g.id,
-        lineIds: [...g.lineIds],
-        startPoint: { x: g.startPoint.x, y: g.startPoint.y },
-        endPoint: { x: g.endPoint.x, y: g.endPoint.y },
-        cp1: { x: g.cp1.x, y: g.cp1.y },
-        cp2: { x: g.cp2.x, y: g.cp2.y },
+      bezierPaths: this.bezierPaths.map(p => ({
+        id: p.id,
+        anchors: p.anchors.map(serializeAnchor),
+        lineType: this.encodeLineType(p.lineType),
+        layer: p.layer,
+        lineIds: [...p.lineIds],
       })),
     };
   }
@@ -358,22 +356,64 @@ export class TrackStore {
       }
     ));
 
-    // Load curve groups if present
     const candidate = track as Record<string, unknown>;
-    const loadedCurveGroups: CurveGroup[] = [];
-    if (Array.isArray(candidate.curveGroups)) {
-      for (const g of candidate.curveGroups) {
+
+    // Load new bezierPaths format
+    let loadedPaths: BezierPath[] = [];
+    if (Array.isArray(candidate.bezierPaths)) {
+      for (const sp of candidate.bezierPaths) {
+        if (sp && typeof sp === 'object' &&
+          typeof sp.id === 'number' &&
+          Array.isArray(sp.anchors) &&
+          Array.isArray(sp.lineIds)) {
+          const lineType = this.decodeLineType(sp.lineType);
+          if (!lineType) continue;
+          loadedPaths.push({
+            id: sp.id,
+            anchors: sp.anchors.map((a: any) => deserializeAnchor(a)),
+            lineType,
+            layer: typeof sp.layer === 'number' ? sp.layer : 0,
+            lineIds: sp.lineIds,
+          });
+        }
+      }
+    }
+    // Migrate legacy curveGroups if no bezierPaths present
+    else if (Array.isArray(candidate.curveGroups)) {
+      for (const g of candidate.curveGroups as any[]) {
         if (g && typeof g === 'object' &&
           typeof g.id === 'number' &&
           Array.isArray(g.lineIds) &&
           g.startPoint && g.endPoint && g.cp1 && g.cp2) {
-          loadedCurveGroups.push({
+          // Find the line type from existing lines
+          const firstLine = loadedLines.find(l => g.lineIds.includes(l.id));
+          const lineType = firstLine?.type ?? LineType.SOLID;
+          const layer = firstLine?.layer ?? 0;
+
+          const start = new Vec2(g.startPoint.x, g.startPoint.y);
+          const end = new Vec2(g.endPoint.x, g.endPoint.y);
+          const cp1 = new Vec2(g.cp1.x, g.cp1.y);
+          const cp2 = new Vec2(g.cp2.x, g.cp2.y);
+
+          loadedPaths.push({
             id: g.id,
-            lineIds: g.lineIds,
-            startPoint: new Vec2(g.startPoint.x, g.startPoint.y),
-            endPoint: new Vec2(g.endPoint.x, g.endPoint.y),
-            cp1: new Vec2(g.cp1.x, g.cp1.y),
-            cp2: new Vec2(g.cp2.x, g.cp2.y),
+            anchors: [
+              {
+                position: start,
+                handleIn: new Vec2(0, 0),
+                handleOut: cp1.sub(start),
+                smooth: true,
+              },
+              {
+                position: end,
+                handleIn: cp2.sub(end),
+                handleOut: new Vec2(0, 0),
+                smooth: true,
+              },
+            ],
+            lineType,
+            layer,
+            lineIds: [...g.lineIds],
           });
         }
       }
@@ -384,10 +424,82 @@ export class TrackStore {
     this.layers = normalizedTrack.layers;
     this.activeLayerId = this.getPreferredActiveLayerId(normalizedTrack.layers);
     this.lines = loadedLines;
-    this.curveGroups = loadedCurveGroups;
-    this.nextCurveGroupId = loadedCurveGroups.reduce((max, g) => Math.max(max, g.id + 1), 0);
+    this.bezierPaths = loadedPaths;
+    this.nextBezierPathId = loadedPaths.reduce((max, p) => Math.max(max, p.id + 1), 0);
     return true;
   }
+
+  // ── BezierPath methods ──
+
+  addBezierPath(anchors: BezierAnchor[], lineType: LineType, layer: number): BezierPath {
+    const path: BezierPath = {
+      id: this.nextBezierPathId++,
+      anchors,
+      lineType,
+      layer,
+      lineIds: [],
+    };
+
+    // Generate segments
+    const segments = generateSegmentsFromPath(path);
+    this.beginMutation();
+    const added: number[] = [];
+    for (let i = 0; i < segments.length; i++) {
+      const seg = segments[i];
+      const line = this.createLine(seg.p1, seg.p2, lineType, {
+        leftExtended: i > 0,
+        rightExtended: i < segments.length - 1,
+        layer,
+      });
+      this.lines.push(line);
+      added.push(line.id);
+    }
+    path.lineIds = added;
+    this.bezierPaths.push(path);
+    return path;
+  }
+
+  regenerateBezierPathLines(pathId: number) {
+    const pathIndex = this.bezierPaths.findIndex(p => p.id === pathId);
+    if (pathIndex === -1) return;
+    const path = this.bezierPaths[pathIndex];
+
+    const segments = generateSegmentsFromPath(path);
+
+    // Find the line type and layer from existing segments (in case they changed)
+    const lineType = path.lineType;
+    const layer = path.layer;
+
+    // Detach path before removing to prevent invalidation from destroying it
+    this.bezierPaths.splice(pathIndex, 1);
+
+    // Remove old segments
+    const oldIds = new Set(path.lineIds);
+    this.lines = this.lines.filter(l => !oldIds.has(l.id));
+
+    // Add new segments
+    const added: number[] = [];
+    for (let i = 0; i < segments.length; i++) {
+      const seg = segments[i];
+      const line = this.createLine(seg.p1, seg.p2, lineType, {
+        leftExtended: i > 0,
+        rightExtended: i < segments.length - 1,
+        layer,
+      });
+      this.lines.push(line);
+      added.push(line.id);
+    }
+
+    path.lineIds = added;
+    this.bezierPaths.push(path);
+    this.onMutation?.();
+  }
+
+  findBezierPathForLine(lineId: number): BezierPath | null {
+    return this.bezierPaths.find(p => p.lineIds.includes(lineId)) ?? null;
+  }
+
+  // ── Transactions & Undo ──
 
   beginTransaction() {
     if (this.transactionSnapshot) return;
@@ -448,14 +560,7 @@ export class TrackStore {
       startPosition: this.startPosition.clone(),
       layers: this.layers.map(layer => ({ ...layer })),
       activeLayerId: this.activeLayerId,
-      curveGroups: this.curveGroups.map(g => ({
-        ...g,
-        lineIds: [...g.lineIds],
-        startPoint: g.startPoint.clone(),
-        endPoint: g.endPoint.clone(),
-        cp1: g.cp1.clone(),
-        cp2: g.cp2.clone(),
-      })),
+      bezierPaths: this.bezierPaths.map(cloneBezierPath),
     };
   }
 
@@ -464,14 +569,7 @@ export class TrackStore {
     this.startPosition = snapshot.startPosition.clone();
     this.layers = snapshot.layers.map(layer => ({ ...layer }));
     this.activeLayerId = snapshot.activeLayerId;
-    this.curveGroups = snapshot.curveGroups.map(g => ({
-      ...g,
-      lineIds: [...g.lineIds],
-      startPoint: g.startPoint.clone(),
-      endPoint: g.endPoint.clone(),
-      cp1: g.cp1.clone(),
-      cp2: g.cp2.clone(),
-    }));
+    this.bezierPaths = snapshot.bezierPaths.map(cloneBezierPath);
   }
 
   createLinePublic(p1: Vec2, p2: Vec2, type: LineType, options: LineOptions = {}): Line {
@@ -735,12 +833,12 @@ export class TrackStore {
     if (lineIds.size === 0) return;
     this.beginMutation();
     this.lines = this.lines.filter(line => !lineIds.has(line.id));
-    this.invalidateCurveGroups(lineIds);
+    this.invalidateBezierPaths(lineIds);
   }
 
-  private invalidateCurveGroups(removedIds: Set<number>) {
-    this.curveGroups = this.curveGroups.filter(g =>
-      !g.lineIds.some(id => removedIds.has(id))
+  private invalidateBezierPaths(removedIds: Set<number>) {
+    this.bezierPaths = this.bezierPaths.filter(p =>
+      !p.lineIds.some(id => removedIds.has(id))
     );
   }
 

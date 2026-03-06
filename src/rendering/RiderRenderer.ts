@@ -106,9 +106,24 @@ export class RiderRenderer {
     }
 
     if (rider.mounted && rider.sledIntact && this.combinedReady) {
-      // Mounted: combined image keeps body-sled alignment; body transform with
-      // vertical SVG axis so the sled sits flat on flat ground.
-      this.drawSvgTransformed(ctx, this.combinedImage, p[BUTT], p[SHOULDER], SVG_BUTT, SVG_SHOULDER);
+      // Mounted: derive rotation from sled angle (TAIL→NOSE follows the track surface)
+      // so the sled visually matches the line angle. Use a virtual shoulder point
+      // perpendicular to the sled at the actual body length for correct scale.
+      const sledDx = p[NOSE].x - p[TAIL].x;
+      const sledDy = p[NOSE].y - p[TAIL].y;
+      const sledAngle = Math.atan2(sledDy, sledDx);
+
+      const bodyDx = p[SHOULDER].x - p[BUTT].x;
+      const bodyDy = p[SHOULDER].y - p[BUTT].y;
+      const bodyLen = Math.sqrt(bodyDx * bodyDx + bodyDy * bodyDy) || 5.5;
+
+      // Perpendicular to sled surface, pointing "up" from the track
+      const bodyAngle = sledAngle - Math.PI / 2;
+      const virtualShoulder = {
+        x: p[BUTT].x + Math.cos(bodyAngle) * bodyLen,
+        y: p[BUTT].y + Math.sin(bodyAngle) * bodyLen,
+      };
+      this.drawSvgTransformed(ctx, this.combinedImage, p[BUTT], virtualShoulder, SVG_BUTT, SVG_SHOULDER);
     } else if (this.bodyReady) {
       // Dismounted: body and sled rendered independently
       if (rider.sledIntact && this.sledReady) {

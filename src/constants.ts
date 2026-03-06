@@ -12,6 +12,7 @@ export const SNAP_RADIUS = 8; // world units for endpoint snapping
 export const SELECT_RADIUS = 6; // world units for line selection
 export const HANDLE_SIZE = 6; // pixels for edit tool handles
 export const HANDLE_HIT_SIZE = 8; // pixels for handle hit detection
+export const CURVE_FIT_ERROR = 4.0; // squared error tolerance for Schneider curve fitting
 
 // Colors — monochrome palette
 export const COLOR_SOLID = '#111111';
