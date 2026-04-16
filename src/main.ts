@@ -104,7 +104,7 @@ input.onLineTypeSwitch = (type: string) => {
   currentLineType = lt;
   toolbar.setActiveLineType(lt);
 };
-input.onClearTrack = () => clearTrack();
+input.onClearTrack = () => confirmNewTrack();
 input.onQuickEraseStart = (worldPos) => beginQuickErase(worldPos);
 input.onQuickEraseMove = (worldPos) => continueQuickErase(worldPos);
 input.onQuickEraseEnd = () => endQuickErase();
@@ -187,7 +187,7 @@ toolbar.onLineTypeSelect = (type) => {
   currentLineType = type;
   toolbar.setActiveLineType(type);
 };
-toolbar.onClear = () => clearTrack();
+toolbar.onClear = () => confirmNewTrack();
 toolbar.onUndo = () => {
   if (canEdit()) store.undo();
 };
@@ -365,6 +365,51 @@ function clearTrack() {
   fitView();
   autosaveNow();
 }
+
+// --- Confirm new track modal ---
+const confirmOverlay = document.getElementById('confirm-new-overlay')!;
+const confirmCancel = document.getElementById('confirm-new-cancel')!;
+const confirmDiscard = document.getElementById('confirm-new-discard')!;
+const confirmSaveNew = document.getElementById('confirm-new-save')!;
+
+function confirmNewTrack() {
+  if (gameLoop.state !== GameState.EDITING) return;
+  // If the track is empty, just clear without prompting
+  if (store.lines.length === 0) {
+    clearTrack();
+    return;
+  }
+  confirmOverlay.classList.add('open');
+}
+
+function closeConfirmModal() {
+  confirmOverlay.classList.remove('open');
+}
+
+confirmCancel.addEventListener('click', closeConfirmModal);
+
+confirmDiscard.addEventListener('click', () => {
+  closeConfirmModal();
+  clearTrack();
+});
+
+confirmSaveNew.addEventListener('click', () => {
+  closeConfirmModal();
+  saveTrack();
+  clearTrack();
+});
+
+// Close on overlay background click
+confirmOverlay.addEventListener('click', (e) => {
+  if (e.target === confirmOverlay) closeConfirmModal();
+});
+
+// Close on Escape
+window.addEventListener('keydown', (e) => {
+  if (e.code === 'Escape' && confirmOverlay.classList.contains('open')) {
+    closeConfirmModal();
+  }
+});
 
 // --- Autosave to localStorage ---
 const AUTOSAVE_KEY = 'line-rider-autosave';

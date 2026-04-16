@@ -243,7 +243,17 @@ export class EditTool implements Tool {
       const dx = worldPos.x - this.dragCurrent.x;
       const dy = worldPos.y - this.dragCurrent.y;
       if (dx !== 0 || dy !== 0) {
-        this.store.moveLines(new Set([this.dragLineId]), dx, dy);
+        // If the line belongs to a bezier path, move all anchors and regenerate
+        const path = this.store.findBezierPathForLine(this.dragLineId);
+        if (path) {
+          const offset = new Vec2(dx, dy);
+          for (const anchor of path.anchors) {
+            anchor.position = anchor.position.add(offset);
+          }
+          this.store.regenerateBezierPathLines(path.id);
+        } else {
+          this.store.moveLines(new Set([this.dragLineId]), dx, dy);
+        }
         this.dragCurrent = worldPos.clone();
       }
       return;
@@ -641,29 +651,28 @@ export class EditTool implements Tool {
 
   // ── C key: convert line to BezierPath ──
 
+  /** Build anchors for a straight line with handles along the line direction.
+   *  Handles at 1/3 length preserve the straight shape but are visible and draggable. */
+  private buildLineAnchors(start: Vec2, end: Vec2): BezierAnchor[] {
+    const dir = end.sub(start);
+    const third = dir.scale(1 / 3);
+    return [
+      { position: start, handleIn: new Vec2(0, 0), handleOut: third, smooth: true },
+      { position: end, handleIn: third.scale(-1), handleOut: new Vec2(0, 0), smooth: true },
+    ];
+  }
+
   private tryConvertToBezierPath() {
     if (this.hoveredLineId === null) return;
-
-    // Don't convert if already in a bezier path
     if (this.store.findBezierPathForLine(this.hoveredLineId)) return;
 
     const line = this.store.lines.find(l => l.id === this.hoveredLineId);
     if (!line) return;
 
-    const start = line.p1.clone();
-    const end = line.p2.clone();
-
     this.store.beginTransaction();
-
-    // Remove the original line
     this.store.removeLines(new Set([line.id]));
 
-    // Create a BezierPath with 2 anchors (zero handles = straight, user can drag to curve)
-    const anchors: BezierAnchor[] = [
-      { position: start, handleIn: new Vec2(0, 0), handleOut: new Vec2(0, 0), smooth: true },
-      { position: end, handleIn: new Vec2(0, 0), handleOut: new Vec2(0, 0), smooth: true },
-    ];
-
+    const anchors = this.buildLineAnchors(line.p1.clone(), line.p2.clone());
     const newPath = this.store.addBezierPath(anchors, line.type, line.layer);
     this.activePathId = newPath.id;
 
@@ -678,17 +687,10 @@ export class EditTool implements Tool {
     const line = this.store.lines.find(l => l.id === lineId);
     if (!line) return null;
 
-    const start = line.p1.clone();
-    const end = line.p2.clone();
-
     this.store.beginTransaction();
     this.store.removeLines(new Set([lineId]));
 
-    const anchors: BezierAnchor[] = [
-      { position: start, handleIn: new Vec2(0, 0), handleOut: new Vec2(0, 0), smooth: true },
-      { position: end, handleIn: new Vec2(0, 0), handleOut: new Vec2(0, 0), smooth: true },
-    ];
-
+    const anchors = this.buildLineAnchors(line.p1.clone(), line.p2.clone());
     const newPath = this.store.addBezierPath(anchors, line.type, line.layer);
     this.activePathId = newPath.id;
     this.hoveredLineId = null;
