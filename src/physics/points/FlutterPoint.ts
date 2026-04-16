@@ -8,11 +8,11 @@ export class FlutterPoint extends Point {
     super(x, y, 0);
   }
 
-  step() {
+  step(gravityScale: number = 1) {
     const vx = (this.pos.x - this.prevPos.x) * (1 - AIR_FRICTION);
     const vy = (this.pos.y - this.prevPos.y) * (1 - AIR_FRICTION);
-    const mx = vx + GRAVITY.x;
-    const my = vy + GRAVITY.y;
+    const mx = vx + GRAVITY.x * gravityScale;
+    const my = vy + GRAVITY.y * gravityScale;
     this.momentum.set(mx, my);
     this.prevPos.copyFrom(this.pos);
 

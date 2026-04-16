@@ -18,11 +18,11 @@ export class Point {
     return this.pos.sub(this.prevPos);
   }
 
-  step() {
+  step(gravityScale: number = 1) {
     const vx = this.pos.x - this.prevPos.x;
     const vy = this.pos.y - this.prevPos.y;
-    const mx = vx + GRAVITY.x;
-    const my = vy + GRAVITY.y;
+    const mx = vx + GRAVITY.x * gravityScale;
+    const my = vy + GRAVITY.y * gravityScale;
     this.momentum.set(mx, my);
     this.prevPos.copyFrom(this.pos);
     this.pos.x += mx;

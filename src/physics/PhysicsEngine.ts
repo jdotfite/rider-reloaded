@@ -17,8 +17,9 @@ export class PhysicsEngine {
 
   step() {
     // 1. Verlet integration (stores momentum for collision checks)
+    const gs = this.rider.gravityScale;
     for (const point of this.rider.points) {
-      point.step();
+      point.step(gs);
     }
 
     // 2. Iterate the constraints that belong in the main solver loop.

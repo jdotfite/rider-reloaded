@@ -14,6 +14,7 @@ import {
 } from './rider-data';
 import { INITIAL_RIDER_VELOCITY } from '../constants';
 import { RiderRenderData } from '../rendering/RiderRenderer';
+import { VehicleDef } from './vehicles/VehicleDef';
 
 export interface RiderSnapshot {
   positions: Array<{ px: number; py: number; ppx: number; ppy: number }>;
@@ -30,11 +31,33 @@ export class Rider {
   chains: DirectedChain[] = [];
   binding: Binding = new Binding();
 
+  gravityScale = 1;
+  private velocityScale = 1;
   private startPos: Vec2;
+  private vehicle: VehicleDef | null = null;
+
+  /** Indices used for camera center — default to BUTT/SHOULDER */
+  private centerIdx1 = BUTT;
+  private centerIdx2 = SHOULDER;
 
   constructor(startPos: Vec2) {
     this.startPos = startPos.clone();
     this.init();
+  }
+
+  setVehicle(vehicle: VehicleDef) {
+    this.vehicle = vehicle;
+    this.gravityScale = vehicle.gravityScale;
+    this.velocityScale = vehicle.velocityScale;
+    // Determine center indices from vehicle render points
+    if (vehicle.renderPoints.driverSeat !== undefined && vehicle.renderPoints.driverHead !== undefined) {
+      this.centerIdx1 = vehicle.renderPoints.driverSeat;
+      this.centerIdx2 = vehicle.renderPoints.driverHead;
+    } else {
+      this.centerIdx1 = vehicle.renderPoints.butt ?? BUTT;
+      this.centerIdx2 = vehicle.renderPoints.shoulder ?? SHOULDER;
+    }
+    this.reset();
   }
 
   init() {
@@ -46,8 +69,13 @@ export class Rider {
     this.chains = [];
     this.binding.reset();
 
+    const pointDefs = this.vehicle?.points ?? RIDER_POINTS;
+    const constraintDefs = this.vehicle?.constraints ?? RIDER_CONSTRAINTS;
+    const jointDefs = this.vehicle?.joints ?? RIDER_JOINTS;
+    const velScale = this.vehicle?.velocityScale ?? 1;
+
     // Create points
-    for (const def of RIDER_POINTS) {
+    for (const def of pointDefs) {
       const x = this.startPos.x + def.x;
       const y = this.startPos.y + def.y;
 
@@ -59,20 +87,20 @@ export class Rider {
         point = new FlutterPoint(x, y);
       }
 
-      // Set initial velocity via prevPos offset
-      point.prevPos.x = point.pos.x - INITIAL_RIDER_VELOCITY.x;
-      point.prevPos.y = point.pos.y - INITIAL_RIDER_VELOCITY.y;
+      // Set initial velocity via prevPos offset, scaled by vehicle
+      point.prevPos.x = point.pos.x - INITIAL_RIDER_VELOCITY.x * velScale;
+      point.prevPos.y = point.pos.y - INITIAL_RIDER_VELOCITY.y * velScale;
 
       this.points.push(point);
     }
 
     // Create bone constraints
-    for (const def of RIDER_CONSTRAINTS) {
+    for (const def of constraintDefs) {
       this.createConstraint(def);
     }
 
     // Create bind joints (checked after iterations, not during)
-    for (const jdef of RIDER_JOINTS) {
+    for (const jdef of jointDefs) {
       this.bindJoints.push(new BindJoint(
         this.points[jdef.p1], this.points[jdef.p2],
         this.points[jdef.q1], this.points[jdef.q2],
@@ -148,16 +176,13 @@ export class Rider {
   /** Approximate center of the rider body (for camera tracking) */
   getCenter(alpha: number = 1): Vec2 {
     const t = Math.max(0, Math.min(1, alpha));
-    const butt = this.points[BUTT];
-    const shoulder = this.points[SHOULDER];
-    const buttX = butt.prevPos.x + (butt.pos.x - butt.prevPos.x) * t;
-    const buttY = butt.prevPos.y + (butt.pos.y - butt.prevPos.y) * t;
-    const shoulderX = shoulder.prevPos.x + (shoulder.pos.x - shoulder.prevPos.x) * t;
-    const shoulderY = shoulder.prevPos.y + (shoulder.pos.y - shoulder.prevPos.y) * t;
-    return new Vec2(
-      (buttX + shoulderX) / 2,
-      (buttY + shoulderY) / 2
-    );
+    const p1 = this.points[this.centerIdx1];
+    const p2 = this.points[this.centerIdx2];
+    const x1 = p1.prevPos.x + (p1.pos.x - p1.prevPos.x) * t;
+    const y1 = p1.prevPos.y + (p1.pos.y - p1.prevPos.y) * t;
+    const x2 = p2.prevPos.x + (p2.pos.x - p2.prevPos.x) * t;
+    const y2 = p2.prevPos.y + (p2.pos.y - p2.prevPos.y) * t;
+    return new Vec2((x1 + x2) / 2, (y1 + y2) / 2);
   }
 
   static renderDataFromSnapshot(snap: RiderSnapshot): RiderRenderData {
@@ -169,10 +194,10 @@ export class Rider {
   }
 
   getCenterSpeed(): number {
-    const buttVelocity = this.points[BUTT].vel;
-    const shoulderVelocity = this.points[SHOULDER].vel;
-    const averageX = (buttVelocity.x + shoulderVelocity.x) / 2;
-    const averageY = (buttVelocity.y + shoulderVelocity.y) / 2;
+    const v1 = this.points[this.centerIdx1].vel;
+    const v2 = this.points[this.centerIdx2].vel;
+    const averageX = (v1.x + v2.x) / 2;
+    const averageY = (v1.y + v2.y) / 2;
     return Math.sqrt(averageX * averageX + averageY * averageY);
   }
 }

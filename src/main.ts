@@ -25,6 +25,8 @@ import { ERASER_RADIUS, TIMESTEP } from './constants';
 import { exportTrackAsSvg } from './export/svgExport';
 import { TriggerStore } from './store/TriggerStore';
 import { TriggerRenderer } from './rendering/TriggerRenderer';
+import { TruckRenderer } from './rendering/TruckRenderer';
+import { VEHICLES, getVehicle } from './physics/vehicles';
 
 // Core
 const canvas = document.getElementById('canvas') as HTMLCanvasElement;
@@ -49,8 +51,33 @@ let physics = new PhysicsEngine(rider, grid);
 // Sub-renderers
 const lineRenderer = new LineRenderer();
 const riderRenderer = new RiderRenderer();
+const truckRenderer = new TruckRenderer();
 const flagRenderer = new FlagRenderer();
 const uiRenderer = new UIRenderer();
+
+// Vehicle state
+let activeVehicleId = 'sled';
+
+function setVehicle(id: string) {
+  const vehicle = getVehicle(id);
+  activeVehicleId = vehicle.id;
+  rider.setVehicle(vehicle);
+  // Update topbar sled info
+  const sledInfo = document.querySelector('#sled-info span');
+  if (sledInfo) sledInfo.textContent = vehicle.name;
+  // Update vehicle slot active states
+  document.querySelectorAll('.rider-slot').forEach(slot => {
+    slot.classList.toggle('active', (slot as HTMLElement).dataset.vehicle === id);
+  });
+}
+
+function renderVehicle(ctx: CanvasRenderingContext2D, data: import('./rendering/RiderRenderer').RiderRenderData) {
+  if (activeVehicleId === 'truck') {
+    truckRenderer.render(ctx, data);
+  } else {
+    riderRenderer.render(ctx, data);
+  }
+}
 
 // Current state
 let currentLineType: LineType = LineType.SOLID;
@@ -303,6 +330,18 @@ toolbar.onSvgExport = () => {
   anchor.click();
   setTimeout(() => URL.revokeObjectURL(url), 0);
 };
+
+// Vehicle selection
+document.querySelectorAll('.rider-slot[data-vehicle]').forEach(slot => {
+  slot.addEventListener('click', () => {
+    const el = slot as HTMLElement;
+    if (el.classList.contains('locked')) return;
+    const vehicleId = el.dataset.vehicle;
+    if (vehicleId && gameLoop.state === GameState.EDITING) {
+      setVehicle(vehicleId);
+    }
+  });
+});
 
 // Layer rename modal
 if (layerRenameSave && layerRenameCancel && layerRenameInput) {
@@ -618,14 +657,14 @@ renderer.addRenderCallback((ctx) => {
       const opacity = 0.1 + (ghosts.length - 1 - i) * 0.05;
       ctx.globalAlpha = opacity;
       const ghostData = Rider.renderDataFromSnapshot(ghosts[i].snapshot);
-      riderRenderer.render(ctx, ghostData);
+      renderVehicle(ctx, ghostData);
     }
     ctx.globalAlpha = 1;
   }
 
   // Draw rider
   const renderData = rider.getRenderData(renderAlpha);
-  riderRenderer.render(ctx, renderData);
+  renderVehicle(ctx, renderData);
 
   // Camera follow during playback + trigger evaluation
   if (cameraFollowing && gameLoop.state === GameState.PLAYING) {
