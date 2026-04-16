@@ -1,5 +1,6 @@
 import { LineType } from '../physics/lines/LineTypes';
 import { GameState } from '../game/GameState';
+import { ICONS } from './icons';
 
 export class Toolbar {
   // Left sidebar
@@ -105,29 +106,36 @@ export class Toolbar {
     this.drawBtn.addEventListener('click', () => this.onDrawClick?.());
     this.rideBtn.addEventListener('click', () => this.onRideClick?.());
 
-    // File actions (left sidebar)
-    this.addBtn(this.fileActions, 'Clear', () => this.onClear?.());
-    this.addBtn(this.fileActions, 'Undo', () => this.onUndo?.());
-    this.addBtn(this.fileActions, 'Redo', () => this.onRedo?.());
+    // File actions bar: New | Open | Save | separator | Undo | Redo
+    this.addIconBtn(this.fileActions, ICONS.newFile, 'New track', () => this.onClear?.());
+    this.addIconBtn(this.fileActions, ICONS.open, 'Open track', () => this.onLoad?.());
+    this.addIconBtn(this.fileActions, ICONS.save, 'Save track', () => this.onSave?.());
+
+    // Separator
+    const sep = document.createElement('div');
+    sep.className = 'separator';
+    this.fileActions.appendChild(sep);
+
+    this.addIconBtn(this.fileActions, ICONS.undo, 'Undo', () => this.onUndo?.());
+    this.addIconBtn(this.fileActions, ICONS.redo, 'Redo', () => this.onRedo?.());
 
     // Layer controls
     this.addBtn(this.layerControls, 'Edit', () => this.onLayerRename?.());
-    this.addBtn(this.layerControls, '‹', () => this.onLayerPrev?.());
+    this.addBtn(this.layerControls, '\u2039', () => this.onLayerPrev?.());
     this.addBtn(this.layerControls, '+ Layer', () => this.onLayerNew?.());
 
-    // Line type buttons (left sidebar)
+    // Line type buttons (right sidebar)
     this.addLineTypeBtn(LineType.SOLID, 'Solid (Q)', 'Solid');
     this.addLineTypeBtn(LineType.ACC, 'Speed (W)', 'Accel');
     this.addLineTypeBtn(LineType.SCENERY, 'Scenery (E)', 'Scene');
 
-    // Tool grid (right sidebar, 2-column)
-    this.addToolGridBtn('pencil', '✏️', 'Pen');
-    this.addToolGridBtn('line', '📏', 'Line');
-    this.addToolGridBtn('eraser', '✕', 'Erase');
-    this.addToolGridBtn('curve', '↩', 'Curve');
-    this.addToolGridBtn('select', '⊡', 'Select');
-    this.addToolGridBtn('edit', '✎', 'Edit');
-    this.addToolGridBtn('flag', '⚑', 'Flag');
+    // Tool grid (right sidebar, 2-column) — SVG icons
+    this.addToolGridBtn('pencil', ICONS.pen, 'Pen');
+    this.addToolGridBtn('line', ICONS.line, 'Line');
+    this.addToolGridBtn('eraser', ICONS.eraser, 'Erase');
+    this.addToolGridBtn('select', ICONS.select, 'Select');
+    this.addToolGridBtn('edit', ICONS.edit, 'Edit');
+    this.addToolGridBtn('flag', ICONS.flag, 'Flag');
 
     // Onion skin toggle
     const onionCheckbox = document.getElementById('onion-checkbox') as HTMLInputElement;
@@ -145,14 +153,7 @@ export class Toolbar {
       });
     }
 
-    // Edit actions (undo/redo in right sidebar)
-    const editActions = document.getElementById('edit-actions');
-    if (editActions) {
-      this.addBtn(editActions, 'Undo', () => this.onUndo?.());
-      this.addBtn(editActions, 'Redo', () => this.onRedo?.());
-    }
-
-    // Transport buttons (bottom bar) — play/pause/stop already in HTML
+    // Transport buttons
     this.pauseBtn = this.requireElement('pause-btn') as HTMLButtonElement;
     this.playBtn = this.requireElement('play-btn') as HTMLButtonElement;
     this.stopBtn = this.requireElement('stop-btn') as HTMLButtonElement;
@@ -164,18 +165,17 @@ export class Toolbar {
     fitBtn.addEventListener('click', () => this.onFit?.());
 
     // Sidebar footer icons
-    this.addFooterBtn('💾', 'Save', () => this.onSave?.());
-    this.addFooterBtn('📂', 'Load', () => this.onLoad?.());
-    this.addFooterBtn('📦', 'Export', () => alert('Export coming soon'));
-    this.addFooterBtn('☁', 'Cloud', () => alert('Cloud save coming soon'));
-    this.addFooterBtn('📷', 'Screenshot', () => this.onScreenshot?.());
-    this.addFooterBtn('🔧', 'Settings', () => alert('Settings coming soon'));
+    this.addFooterIconBtn(ICONS.screenshot, 'Screenshot', () => this.onScreenshot?.());
+    this.addFooterIconBtn(ICONS.download, 'Export', () => alert('Export coming soon'));
+    this.addFooterIconBtn(ICONS.cloud, 'Cloud', () => alert('Cloud save coming soon'));
+    this.addFooterIconBtn(ICONS.settings, 'Settings', () => alert('Settings coming soon'));
   }
 
-  private addToolGridBtn(name: string, icon: string, label: string) {
+  private addToolGridBtn(name: string, iconSvg: string, label: string) {
     const btn = document.createElement('button');
     btn.dataset.tool = name;
-    btn.innerHTML = `<span class="tool-icon">${icon}</span><span class="tool-label">${label}</span>`;
+    btn.innerHTML = `<span class="tool-icon">${iconSvg}</span><span class="tool-label">${label}</span>`;
+    btn.setAttribute('aria-label', label);
     btn.addEventListener('click', () => this.onToolSelect?.(name));
     this.toolGrid.appendChild(btn);
     this.toolButtons.set(name, btn);
@@ -199,10 +199,23 @@ export class Toolbar {
     return btn;
   }
 
-  private addFooterBtn(icon: string, title: string, onClick: () => void) {
+  private addIconBtn(container: HTMLElement, iconSvg: string, title: string, onClick: () => void): HTMLButtonElement {
     const btn = document.createElement('button');
-    btn.textContent = icon;
+    btn.className = 'btn-icon';
+    btn.innerHTML = iconSvg;
     btn.title = title;
+    btn.setAttribute('aria-label', title);
+    btn.addEventListener('click', onClick);
+    container.appendChild(btn);
+    return btn;
+  }
+
+  private addFooterIconBtn(iconSvg: string, title: string, onClick: () => void) {
+    const btn = document.createElement('button');
+    btn.className = 'btn-icon';
+    btn.innerHTML = iconSvg;
+    btn.title = title;
+    btn.setAttribute('aria-label', title);
     btn.addEventListener('click', onClick);
     this.sidebarLeftFooter.appendChild(btn);
   }
@@ -217,13 +230,11 @@ export class Toolbar {
   private pendingSeekFrame: number | null = null;
 
   private setupTimelineScrubber() {
-    // 'input' fires continuously during drag
     this.timelineScrubber.addEventListener('input', () => {
       this.isSeeking = true;
       const frame = parseInt(this.timelineScrubber.value, 10);
       this.pendingSeekFrame = frame;
 
-      // Update time display immediately (cheap)
       const fps = 40;
       const seconds = frame / fps;
       const mins = Math.floor(seconds / 60);
@@ -231,7 +242,6 @@ export class Toolbar {
       this.timelineStart.textContent = `${mins}:${secs.padStart(6, '0')}`;
       this.frameDisplay.textContent = `F${frame}`;
 
-      // Throttle the actual physics seek to ~80ms intervals
       if (!this.seekThrottleTimer) {
         this.seekThrottleTimer = setTimeout(() => {
           this.seekThrottleTimer = null;
@@ -242,7 +252,6 @@ export class Toolbar {
       }
     });
 
-    // 'change' fires on release — do final seek
     this.timelineScrubber.addEventListener('change', () => {
       if (this.seekThrottleTimer) {
         clearTimeout(this.seekThrottleTimer);
@@ -270,7 +279,6 @@ export class Toolbar {
   }
 
   private setupPlaceholders() {
-    // Top bar buttons
     const btnSound = document.getElementById('btn-sound');
     const btnEffects = document.getElementById('btn-effects');
     const btnSettings = document.getElementById('btn-settings');
@@ -289,7 +297,6 @@ export class Toolbar {
       }
     });
 
-    // SVG import/export
     const svgImport = document.getElementById('svg-import-btn');
     const svgExport = document.getElementById('svg-export-btn');
     svgImport?.addEventListener('click', () => {
@@ -298,7 +305,6 @@ export class Toolbar {
     });
     svgExport?.addEventListener('click', () => this.onSvgExport?.());
 
-    // Step forward / backward
     const stepFwd = document.getElementById('step-fwd-btn');
     const stepBack = document.getElementById('step-back-btn');
     stepFwd?.addEventListener('click', () => this.onStepForward?.());
@@ -330,22 +336,17 @@ export class Toolbar {
     this.stopBtn.disabled = state === GameState.EDITING;
     this.pauseBtn.classList.toggle('active', state === GameState.PAUSED);
 
-    // Draw/Ride toggle — DRAW active when editing or paused (can draw), RIDE active when playing
     this.drawBtn.classList.toggle('active', state !== GameState.PLAYING);
     this.rideBtn.classList.toggle('active', state === GameState.PLAYING);
-
-    // Timeline — always enabled so user can scrub anytime
   }
 
   setLayerState(layers: Array<{ id: number; name: string; visible: boolean; editable: boolean }>, activeIndex: number) {
-    // Build fingerprint to skip unnecessary rebuilds
     const fingerprint = layers.map((l, i) =>
       `${l.id}:${l.name}:${l.visible}:${l.editable}:${i === activeIndex}`
     ).join('|');
     if (fingerprint === this.lastLayerFingerprint) return;
     this.lastLayerFingerprint = fingerprint;
 
-    // Rebuild layer list
     this.layerList.innerHTML = '';
     this.layerRows = [];
 
@@ -356,34 +357,44 @@ export class Toolbar {
       const row = document.createElement('div');
       row.className = 'layer-row' + (isActive ? ' active' : '');
 
+      // Visibility icon
+      const visIcon = document.createElement('span');
+      visIcon.className = 'layer-icon' + (layer.visible ? '' : ' off');
+      visIcon.innerHTML = layer.visible ? ICONS.eyeOpen : ICONS.eyeClosed;
+      visIcon.title = 'Toggle visibility';
+      visIcon.setAttribute('role', 'button');
+      visIcon.setAttribute('aria-label', layer.visible ? 'Hide layer' : 'Show layer');
+      visIcon.tabIndex = 0;
+      if (isActive) {
+        visIcon.addEventListener('click', (e) => { e.stopPropagation(); this.onLayerToggleVisibility?.(); });
+        visIcon.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); this.onLayerToggleVisibility?.(); }});
+      }
+
+      // Lock icon
+      const lockIcon = document.createElement('span');
+      lockIcon.className = 'layer-icon' + (layer.editable ? '' : ' off');
+      lockIcon.innerHTML = layer.editable ? ICONS.unlock : ICONS.lock;
+      lockIcon.title = 'Toggle editability';
+      lockIcon.setAttribute('role', 'button');
+      lockIcon.setAttribute('aria-label', layer.editable ? 'Lock layer' : 'Unlock layer');
+      lockIcon.tabIndex = 0;
+      if (isActive) {
+        lockIcon.addEventListener('click', (e) => { e.stopPropagation(); this.onLayerToggleEditability?.(); });
+        lockIcon.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); this.onLayerToggleEditability?.(); }});
+      }
+
+      // Name
       const nameSpan = document.createElement('span');
       nameSpan.className = 'layer-name';
       nameSpan.textContent = layer.name;
 
-      const visBtn = document.createElement('button');
-      visBtn.className = 'layer-btn';
-      visBtn.textContent = layer.visible ? '👁' : '🔇';
-      visBtn.title = 'Toggle visibility';
-      if (isActive) {
-        visBtn.addEventListener('click', () => this.onLayerToggleVisibility?.());
-      }
-
-      const editBtn = document.createElement('button');
-      editBtn.className = 'layer-btn';
-      editBtn.textContent = layer.editable ? '✏' : '🔒';
-      editBtn.title = 'Toggle editability';
-      if (isActive) {
-        editBtn.addEventListener('click', () => this.onLayerToggleEditability?.());
-      }
-
-      row.appendChild(visBtn);
-      row.appendChild(editBtn);
+      row.appendChild(visIcon);
+      row.appendChild(lockIcon);
       row.appendChild(nameSpan);
 
-      // Click row to select layer
       const layerIdx = i;
       row.addEventListener('click', (e) => {
-        if ((e.target as HTMLElement).tagName === 'BUTTON') return;
+        if ((e.target as HTMLElement).closest('.layer-icon')) return;
         const diff = layerIdx - activeIndex;
         if (diff < 0) {
           for (let j = 0; j < Math.abs(diff); j++) this.onLayerPrev?.();
@@ -407,7 +418,6 @@ export class Toolbar {
     this.timelineScrubber.max = String(maxFrame);
     this.timelineScrubber.value = String(frame);
 
-    // Format as time
     const fps = 40;
     const seconds = frame / fps;
     const mins = Math.floor(seconds / 60);

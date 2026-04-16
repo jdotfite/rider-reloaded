@@ -1,6 +1,19 @@
 import { Vec2 } from './Vec2';
 import { MIN_LINE_LENGTH } from '../constants';
 
+/** Evaluate cubic bezier at parameter t in [0,1] */
+export function cubicBezierPoint(p0: Vec2, p1: Vec2, p2: Vec2, p3: Vec2, t: number): Vec2 {
+  const mt = 1 - t;
+  const mt2 = mt * mt;
+  const mt3 = mt2 * mt;
+  const t2 = t * t;
+  const t3 = t2 * t;
+  return new Vec2(
+    mt3 * p0.x + 3 * mt2 * t * p1.x + 3 * mt * t2 * p2.x + t3 * p3.x,
+    mt3 * p0.y + 3 * mt2 * t * p1.y + 3 * mt * t2 * p2.y + t3 * p3.y,
+  );
+}
+
 export function sampleCubicBezier(
   start: Vec2,
   cp1: Vec2,

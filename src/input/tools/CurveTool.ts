@@ -25,6 +25,9 @@ export class CurveTool implements Tool {
   private shiftHeld = false;
   getLineType: () => LineType;
 
+  /** Called after a curve is committed; receives the new BezierPath id */
+  onCommit: ((pathId: number) => void) | null = null;
+
   constructor(store: TrackStore, getLineType: () => LineType) {
     this.store = store;
     this.getLineType = getLineType;
@@ -173,8 +176,9 @@ export class CurveTool implements Tool {
       },
     ];
 
-    this.store.addBezierPath(anchors, this.getLineType(), this.store.activeLayerId);
+    const newPath = this.store.addBezierPath(anchors, this.getLineType(), this.store.activeLayerId);
     this.reset();
+    this.onCommit?.(newPath.id);
   }
 
   private getPreviewPoints(): Vec2[] {
