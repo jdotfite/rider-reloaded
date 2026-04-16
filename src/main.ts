@@ -32,7 +32,10 @@ const canvas = document.getElementById('canvas') as HTMLCanvasElement;
 const camera = new Camera();
 const renderer = new Renderer(canvas, camera);
 const store = new TrackStore();
-store.onMutation = () => markGridDirty();
+store.onMutation = () => {
+  markGridDirty();
+  scheduleAutosave();
+};
 const grid = new SpatialGrid();
 const triggerStore = new TriggerStore();
 const triggerRenderer = new TriggerRenderer();
@@ -337,6 +340,7 @@ loadInput.addEventListener('change', async () => {
 
     stopPlayback();
     fitView();
+    autosaveNow();
   } catch {
     window.alert('Could not load track JSON.');
   } finally {
@@ -362,6 +366,43 @@ function clearTrack() {
   triggerStore.clear();
   rider.setStartPosition(store.startPosition);
   fitView();
+  autosaveNow();
+}
+
+// --- Autosave to localStorage ---
+const AUTOSAVE_KEY = 'line-rider-autosave';
+let autosaveTimer: ReturnType<typeof setTimeout> | null = null;
+
+function autosaveNow() {
+  if (autosaveTimer !== null) {
+    clearTimeout(autosaveTimer);
+    autosaveTimer = null;
+  }
+  try {
+    const trackData = store.serialize();
+    (trackData as unknown as Record<string, unknown>).triggers = triggerStore.serialize();
+    localStorage.setItem(AUTOSAVE_KEY, JSON.stringify(trackData));
+  } catch { /* storage full or unavailable — silently skip */ }
+}
+
+function scheduleAutosave() {
+  if (autosaveTimer !== null) clearTimeout(autosaveTimer);
+  autosaveTimer = setTimeout(autosaveNow, 1000);
+}
+
+function loadAutosave(): boolean {
+  try {
+    const raw = localStorage.getItem(AUTOSAVE_KEY);
+    if (!raw) return false;
+    const parsed = JSON.parse(raw);
+    if (!store.load(parsed)) return false;
+    if (parsed.triggers && Array.isArray(parsed.triggers)) {
+      triggerStore.load(parsed.triggers);
+    }
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 function beginQuickErase(worldPos: Vec2) {
@@ -564,6 +605,10 @@ renderer.addRenderCallback((ctx) => {
   }
 });
 
-// Start
+// Flush autosave on page unload so no pending changes are lost
+window.addEventListener('beforeunload', autosaveNow);
+
+// Start — restore autosaved track if available
+loadAutosave();
 gameLoop.start();
 fitView();
