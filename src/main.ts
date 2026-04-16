@@ -123,14 +123,11 @@ function canEdit(): boolean {
 }
 
 function markGridDirty() {
-  if (gameLoop.state === GameState.PAUSED) {
-    gridDirty = true;
-  }
+  gridDirty = true;
 }
 
-/** Rebuild grid + re-simulate to current frame if track was edited while paused */
+/** Rebuild grid + re-simulate to current frame (e.g. after edits while paused) */
 function ensureGridFresh() {
-  if (!gridDirty) return;
   gridDirty = false;
   const currentFrame = gameLoop.frame;
   grid.rebuild(store.lines);
@@ -567,7 +564,8 @@ function startPlayback() {
     savedCameraZoom = camera.zoom;
     cameraFollowing = true;
     gridDirty = false;
-  } else if (gameLoop.state === GameState.PAUSED && gridDirty) {
+  } else if (gameLoop.state === GameState.PAUSED) {
+    // Always rebuild grid when resuming — edits may have moved lines
     ensureGridFresh();
   }
   gameLoop.play();
