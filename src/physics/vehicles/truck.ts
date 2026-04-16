@@ -2,87 +2,82 @@ import { VehicleDef } from './VehicleDef';
 import { PointDef, ConstraintDef, JointDef } from '../rider-data';
 
 /**
- * Monster truck — wider stance, two wheels, slightly heavier.
+ * Monster truck — rigid chassis+wheels frame, breakable driver.
  *
- * Point layout (indices):
- *   0: CHASSIS_FL  (front-left / top-left of cab)
- *   1: CHASSIS_BL  (back-left / top-right of cab — rear)
- *   2: CHASSIS_BR  (back-right / bottom-right — rear low)
- *   3: CHASSIS_FR  (front-right / bottom-left — front low)
- *   4: WHEEL_FRONT (front wheel contact)
- *   5: WHEEL_REAR  (rear wheel contact)
- *   6: DRIVER_SEAT (driver body position)
- *   7: DRIVER_HEAD (driver head/shoulder)
- *   8-14: SCARF/EXHAUST flutter points
+ * The truck is modeled like the sled: a single rigid frame of points
+ * connected by sticks. Only the driver-to-chassis bonds break.
+ *
+ * Point layout:
+ *   0: WHEEL_FRONT   — front wheel (main contact, high friction)
+ *   1: WHEEL_REAR    — rear wheel (main contact, high friction)
+ *   2: CHASSIS_FRONT  — front-top of cab (above front wheel)
+ *   3: CHASSIS_REAR   — rear-top of cab (above rear wheel)
+ *   4: DRIVER_SEAT   — driver body seat
+ *   5: DRIVER_HEAD   — driver head
+ *   6-12: EXHAUST flutter points
+ *
+ * The frame is: WHEEL_FRONT, WHEEL_REAR, CHASSIS_FRONT, CHASSIS_REAR
+ * forming a trapezoid with full diagonal bracing (6 sticks).
  */
 
-const CHASSIS_FL = 0;
-const CHASSIS_BL = 1;
-const CHASSIS_BR = 2;
-const CHASSIS_FR = 3;
-const WHEEL_FRONT = 4;
-const WHEEL_REAR = 5;
-const DRIVER_SEAT = 6;
-const DRIVER_HEAD = 7;
-const EXHAUST_START = 8;
+const WHEEL_FRONT = 0;
+const WHEEL_REAR = 1;
+const CHASSIS_FRONT = 2;
+const CHASSIS_REAR = 3;
+const DRIVER_SEAT = 4;
+const DRIVER_HEAD = 5;
+const EXHAUST_START = 6;
 
 const TRUCK_POINTS: PointDef[] = [
-  // Chassis corners (forms a box)
-  { x: -2,   y: -3,  type: 'collision', friction: 0.4 },   // 0: CHASSIS_FL (front top)
-  { x: 18,   y: -3,  type: 'collision', friction: 0.4 },   // 1: CHASSIS_BL (rear top)
-  { x: 18,   y: 2,   type: 'collision', friction: 0.4 },   // 2: CHASSIS_BR (rear bottom)
-  { x: -2,   y: 2,   type: 'collision', friction: 0.4 },   // 3: CHASSIS_FR (front bottom)
+  // Wheels — main ground contact, high friction
+  { x: 0,    y: 5,   type: 'collision', friction: 0.8 },    // 0: WHEEL_FRONT
+  { x: 15,   y: 5,   type: 'collision', friction: 0.8 },    // 1: WHEEL_REAR
 
-  // Wheels — high friction, main contact
-  { x: 1,    y: 6,   type: 'collision', friction: 0.9 },   // 4: WHEEL_FRONT
-  { x: 15,   y: 6,   type: 'collision', friction: 0.9 },   // 5: WHEEL_REAR
+  // Chassis top corners (cab roof line)
+  { x: 0,    y: -4,  type: 'collision', friction: 0.0 },    // 2: CHASSIS_FRONT
+  { x: 17.5, y: -4,  type: 'collision', friction: 0.0 },    // 3: CHASSIS_REAR
 
-  // Driver (simpler than sled rider — just seat + head)
-  { x: 8,    y: -2,  type: 'collision', friction: 0.8 },   // 6: DRIVER_SEAT
-  { x: 8,    y: -8,  type: 'collision', friction: 0.5 },   // 7: DRIVER_HEAD
+  // Driver
+  { x: 5,    y: -3,  type: 'collision', friction: 0.8 },    // 4: DRIVER_SEAT
+  { x: 5,    y: -9,  type: 'collision', friction: 0.1 },    // 5: DRIVER_HEAD
 
-  // Exhaust flutter points (trail behind)
-  { x: 19,   y: -2,  type: 'flutter', friction: 0 },       // 8
-  { x: 21,   y: -2,  type: 'flutter', friction: 0 },       // 9
-  { x: 23,   y: -2,  type: 'flutter', friction: 0 },       // 10
-  { x: 25,   y: -2,  type: 'flutter', friction: 0 },       // 11
-  { x: 27,   y: -2,  type: 'flutter', friction: 0 },       // 12
-  { x: 29,   y: -2,  type: 'flutter', friction: 0 },       // 13
-  { x: 31,   y: -2,  type: 'flutter', friction: 0 },       // 14
+  // Exhaust flutter points
+  { x: 18,   y: -4,  type: 'flutter', friction: 0 },
+  { x: 20,   y: -4,  type: 'flutter', friction: 0 },
+  { x: 22,   y: -4,  type: 'flutter', friction: 0 },
+  { x: 24,   y: -4,  type: 'flutter', friction: 0 },
+  { x: 26,   y: -4,  type: 'flutter', friction: 0 },
+  { x: 28,   y: -4,  type: 'flutter', friction: 0 },
+  { x: 30,   y: -4,  type: 'flutter', friction: 0 },
 ];
 
 const TRUCK_CONSTRAINTS: ConstraintDef[] = [
-  // Chassis frame — rigid box with diagonals
-  { type: 'stick', p1: CHASSIS_FL, p2: CHASSIS_BL },         // top edge
-  { type: 'stick', p1: CHASSIS_BL, p2: CHASSIS_BR },         // right edge
-  { type: 'stick', p1: CHASSIS_BR, p2: CHASSIS_FR },         // bottom edge
-  { type: 'stick', p1: CHASSIS_FR, p2: CHASSIS_FL },         // left edge
-  { type: 'stick', p1: CHASSIS_FL, p2: CHASSIS_BR },         // diagonal
-  { type: 'stick', p1: CHASSIS_BL, p2: CHASSIS_FR },         // diagonal
+  // Rigid frame — same pattern as sled (4 edges + 2 diagonals = 6 sticks)
+  { type: 'stick', p1: WHEEL_FRONT, p2: WHEEL_REAR },          // bottom (axle line)
+  { type: 'stick', p1: WHEEL_REAR, p2: CHASSIS_REAR },          // rear upright
+  { type: 'stick', p1: CHASSIS_REAR, p2: CHASSIS_FRONT },       // top (roof line)
+  { type: 'stick', p1: CHASSIS_FRONT, p2: WHEEL_FRONT },        // front upright
+  { type: 'stick', p1: WHEEL_FRONT, p2: CHASSIS_REAR },         // diagonal
+  { type: 'stick', p1: CHASSIS_FRONT, p2: WHEEL_REAR },         // diagonal
 
-  // Wheel-to-chassis (suspension) — breakable on hard impact
-  { type: 'bind_stick', p1: CHASSIS_FR, p2: WHEEL_FRONT },   // front suspension left
-  { type: 'bind_stick', p1: CHASSIS_FL, p2: WHEEL_FRONT },   // front suspension right
-  { type: 'bind_stick', p1: CHASSIS_BR, p2: WHEEL_REAR },    // rear suspension left
-  { type: 'bind_stick', p1: CHASSIS_BL, p2: WHEEL_REAR },    // rear suspension right
-
-  // Cross braces wheel-to-wheel through chassis (stability)
-  { type: 'stick', p1: WHEEL_FRONT, p2: WHEEL_REAR },
+  // Driver-to-chassis (breakable — driver ejects on crash)
+  { type: 'bind_stick', p1: CHASSIS_FRONT, p2: DRIVER_SEAT },
+  { type: 'bind_stick', p1: WHEEL_FRONT, p2: DRIVER_SEAT },
+  { type: 'bind_stick', p1: WHEEL_REAR, p2: DRIVER_SEAT },
 
   // Driver skeleton
   { type: 'stick', p1: DRIVER_SEAT, p2: DRIVER_HEAD },
 
-  // Driver-to-chassis (breakable — driver ejects on crash)
-  { type: 'bind_stick', p1: CHASSIS_FL, p2: DRIVER_SEAT },
-  { type: 'bind_stick', p1: CHASSIS_BL, p2: DRIVER_SEAT },
-  { type: 'bind_stick', p1: CHASSIS_FR, p2: DRIVER_SEAT },
+  // Driver body constraints (keep head from going through chassis)
+  { type: 'bind_stick', p1: DRIVER_HEAD, p2: CHASSIS_FRONT },
+  { type: 'bind_stick', p1: DRIVER_HEAD, p2: CHASSIS_REAR },
 
-  // Driver head repel from chassis (keeps head upright)
-  { type: 'repel', p1: DRIVER_HEAD, p2: CHASSIS_FR, lengthFactor: 0.5 },
-  { type: 'repel', p1: DRIVER_HEAD, p2: CHASSIS_BR, lengthFactor: 0.5 },
+  // Repel sticks to keep driver head upright
+  { type: 'repel', p1: DRIVER_HEAD, p2: WHEEL_FRONT, lengthFactor: 0.5 },
+  { type: 'repel', p1: DRIVER_HEAD, p2: WHEEL_REAR, lengthFactor: 0.5 },
 
-  // Exhaust chains (trail from rear top)
-  { type: 'chain', p1: CHASSIS_BL, p2: EXHAUST_START },
+  // Exhaust chains
+  { type: 'chain', p1: CHASSIS_REAR, p2: EXHAUST_START },
   { type: 'chain', p1: EXHAUST_START, p2: EXHAUST_START + 1 },
   { type: 'chain', p1: EXHAUST_START + 1, p2: EXHAUST_START + 2 },
   { type: 'chain', p1: EXHAUST_START + 2, p2: EXHAUST_START + 3 },
@@ -93,11 +88,11 @@ const TRUCK_CONSTRAINTS: ConstraintDef[] = [
 
 const TRUCK_JOINTS: JointDef[] = [
   // Driver inverted relative to chassis → eject
-  { p1: DRIVER_HEAD, p2: DRIVER_SEAT, q1: CHASSIS_FL, q2: CHASSIS_FR, binding: 'RIDER_MOUNTED' },
-  // Chassis flipped → break sled (chassis) integrity
-  { p1: CHASSIS_FL, p2: CHASSIS_FR, q1: CHASSIS_BL, q2: CHASSIS_FL, binding: 'SLED_INTACT' },
+  { p1: DRIVER_HEAD, p2: DRIVER_SEAT, q1: CHASSIS_REAR, q2: CHASSIS_FRONT, binding: 'RIDER_MOUNTED' },
+  // Chassis flipped (wheels above roof) → sled broken
+  { p1: CHASSIS_FRONT, p2: WHEEL_FRONT, q1: CHASSIS_REAR, q2: CHASSIS_FRONT, binding: 'SLED_INTACT' },
   // Chassis flipped → also dismount driver
-  { p1: CHASSIS_FL, p2: CHASSIS_FR, q1: CHASSIS_BL, q2: CHASSIS_FL, binding: 'RIDER_MOUNTED' },
+  { p1: CHASSIS_FRONT, p2: WHEEL_FRONT, q1: CHASSIS_REAR, q2: CHASSIS_FRONT, binding: 'RIDER_MOUNTED' },
 ];
 
 export const TRUCK_VEHICLE: VehicleDef = {
@@ -106,15 +101,13 @@ export const TRUCK_VEHICLE: VehicleDef = {
   points: TRUCK_POINTS,
   constraints: TRUCK_CONSTRAINTS,
   joints: TRUCK_JOINTS,
-  gravityScale: 1.15,      // slightly heavier
-  velocityScale: 0.85,     // slightly slower start
+  gravityScale: 1.12,
+  velocityScale: 0.9,
   renderPoints: {
-    chassisFL: CHASSIS_FL,
-    chassisBL: CHASSIS_BL,
-    chassisBR: CHASSIS_BR,
-    chassisFR: CHASSIS_FR,
     wheelFront: WHEEL_FRONT,
     wheelRear: WHEEL_REAR,
+    chassisFront: CHASSIS_FRONT,
+    chassisRear: CHASSIS_REAR,
     driverSeat: DRIVER_SEAT,
     driverHead: DRIVER_HEAD,
     exhaustStart: EXHAUST_START,
