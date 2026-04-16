@@ -285,6 +285,40 @@ export class TrackStore {
     return this.getActiveLayer();
   }
 
+  deleteActiveLayer(): boolean {
+    if (this.layers.length <= 1) return false; // Must keep at least one layer
+
+    const activeId = this.activeLayerId;
+    const activeIndex = this.getActiveLayerIndex();
+
+    this.beginMutation();
+
+    // Remove lines and bezier paths on this layer
+    this.lines = this.lines.filter(l => l.layer !== activeId);
+    this.bezierPaths = this.bezierPaths.filter(p => p.layer !== activeId);
+
+    // Remove the layer
+    this.layers = this.layers.filter(l => l.id !== activeId);
+
+    // Switch to nearest remaining layer
+    const nextIndex = Math.min(activeIndex, this.layers.length - 1);
+    this.activeLayerId = this.layers[nextIndex].id;
+
+    return true;
+  }
+
+  reorderLayer(fromIndex: number, toIndex: number) {
+    if (fromIndex < 0 || fromIndex >= this.layers.length) return;
+    if (toIndex < 0 || toIndex >= this.layers.length) return;
+    if (fromIndex === toIndex) return;
+
+    this.beginMutation();
+    const nextLayers = [...this.layers];
+    const [moved] = nextLayers.splice(fromIndex, 1);
+    nextLayers.splice(toIndex, 0, moved);
+    this.layers = nextLayers;
+  }
+
   renameActiveLayer(name: string): TrackLayer {
     const nextName = name.trim();
     const activeLayer = this.getActiveLayer();

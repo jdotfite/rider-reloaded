@@ -47,6 +47,8 @@ export class Toolbar {
   onLayerMovePrev: (() => void) | null = null;
   onLayerMoveNext: (() => void) | null = null;
   onLayerRename: (() => void) | null = null;
+  onLayerDelete: (() => void) | null = null;
+  onLayerReorder: ((fromIndex: number, toIndex: number) => void) | null = null;
   onSpeedChange: ((speed: number) => void) | null = null;
   onTimelineSeek: ((frame: number) => void) | null = null;
   onDrawRideToggle: (() => void) | null = null;
@@ -119,10 +121,16 @@ export class Toolbar {
     this.addIconBtn(this.fileActions, ICONS.undo, 'Undo', () => this.onUndo?.());
     this.addIconBtn(this.fileActions, ICONS.redo, 'Redo', () => this.onRedo?.());
 
-    // Layer controls
-    this.addBtn(this.layerControls, 'Edit', () => this.onLayerRename?.());
-    this.addBtn(this.layerControls, '\u2039', () => this.onLayerPrev?.());
-    this.addBtn(this.layerControls, '+ Layer', () => this.onLayerNew?.());
+    // Layer controls: + New | Rename | Delete
+    this.addIconBtn(this.layerControls, ICONS.plus, 'Add layer', () => this.onLayerNew?.());
+    this.addIconBtn(this.layerControls, ICONS.pencilSmall, 'Rename layer', () => this.onLayerRename?.());
+    this.addIconBtn(this.layerControls, ICONS.trash, 'Delete layer', () => this.onLayerDelete?.());
+    // Spacer to push move buttons right
+    const layerSpacer = document.createElement('div');
+    layerSpacer.className = 'spacer';
+    this.layerControls.appendChild(layerSpacer);
+    this.addIconBtn(this.layerControls, ICONS.arrowUp, 'Move layer up', () => this.onLayerMovePrev?.());
+    this.addIconBtn(this.layerControls, ICONS.arrowDown, 'Move layer down', () => this.onLayerMoveNext?.());
 
     // Line type buttons (right sidebar)
     this.addLineTypeBtn(LineType.SOLID, 'Solid (Q)', 'Solid');
@@ -350,61 +358,111 @@ export class Toolbar {
     this.layerList.innerHTML = '';
     this.layerRows = [];
 
+    let dragSrcIndex: number | null = null;
+
     for (let i = 0; i < layers.length; i++) {
       const layer = layers[i];
       const isActive = i === activeIndex;
 
       const row = document.createElement('div');
       row.className = 'layer-row' + (isActive ? ' active' : '');
+      row.draggable = true;
+      row.dataset.layerIndex = String(i);
 
       // Visibility icon
       const visIcon = document.createElement('span');
       visIcon.className = 'layer-icon' + (layer.visible ? '' : ' off');
       visIcon.innerHTML = layer.visible ? ICONS.eyeOpen : ICONS.eyeClosed;
-      visIcon.title = 'Toggle visibility';
+      visIcon.title = layer.visible ? 'Hide layer' : 'Show layer';
       visIcon.setAttribute('role', 'button');
-      visIcon.setAttribute('aria-label', layer.visible ? 'Hide layer' : 'Show layer');
+      visIcon.setAttribute('aria-label', visIcon.title);
       visIcon.tabIndex = 0;
-      if (isActive) {
-        visIcon.addEventListener('click', (e) => { e.stopPropagation(); this.onLayerToggleVisibility?.(); });
-        visIcon.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); this.onLayerToggleVisibility?.(); }});
-      }
+      visIcon.addEventListener('click', (e) => {
+        e.stopPropagation();
+        // Select layer first if not active, then toggle
+        this.selectLayerByIndex(i, activeIndex);
+        this.onLayerToggleVisibility?.();
+      });
 
       // Lock icon
       const lockIcon = document.createElement('span');
       lockIcon.className = 'layer-icon' + (layer.editable ? '' : ' off');
       lockIcon.innerHTML = layer.editable ? ICONS.unlock : ICONS.lock;
-      lockIcon.title = 'Toggle editability';
+      lockIcon.title = layer.editable ? 'Lock layer' : 'Unlock layer';
       lockIcon.setAttribute('role', 'button');
-      lockIcon.setAttribute('aria-label', layer.editable ? 'Lock layer' : 'Unlock layer');
+      lockIcon.setAttribute('aria-label', lockIcon.title);
       lockIcon.tabIndex = 0;
-      if (isActive) {
-        lockIcon.addEventListener('click', (e) => { e.stopPropagation(); this.onLayerToggleEditability?.(); });
-        lockIcon.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); this.onLayerToggleEditability?.(); }});
-      }
+      lockIcon.addEventListener('click', (e) => {
+        e.stopPropagation();
+        this.selectLayerByIndex(i, activeIndex);
+        this.onLayerToggleEditability?.();
+      });
 
-      // Name
+      // Name — double-click to rename
       const nameSpan = document.createElement('span');
       nameSpan.className = 'layer-name';
       nameSpan.textContent = layer.name;
+      nameSpan.addEventListener('dblclick', (e) => {
+        e.stopPropagation();
+        this.selectLayerByIndex(i, activeIndex);
+        this.onLayerRename?.();
+      });
 
       row.appendChild(visIcon);
       row.appendChild(lockIcon);
       row.appendChild(nameSpan);
 
+      // Click row to select
       const layerIdx = i;
       row.addEventListener('click', (e) => {
         if ((e.target as HTMLElement).closest('.layer-icon')) return;
-        const diff = layerIdx - activeIndex;
-        if (diff < 0) {
-          for (let j = 0; j < Math.abs(diff); j++) this.onLayerPrev?.();
-        } else if (diff > 0) {
-          for (let j = 0; j < diff; j++) this.onLayerNext?.();
+        this.selectLayerByIndex(layerIdx, activeIndex);
+      });
+
+      // Drag-to-reorder
+      row.addEventListener('dragstart', (e) => {
+        dragSrcIndex = layerIdx;
+        row.classList.add('dragging');
+        e.dataTransfer!.effectAllowed = 'move';
+      });
+      row.addEventListener('dragend', () => {
+        row.classList.remove('dragging');
+        dragSrcIndex = null;
+        // Clean up all drag-over indicators
+        this.layerRows.forEach(r => r.classList.remove('drag-over'));
+      });
+      row.addEventListener('dragover', (e) => {
+        e.preventDefault();
+        e.dataTransfer!.dropEffect = 'move';
+        // Show drop indicator
+        this.layerRows.forEach(r => r.classList.remove('drag-over'));
+        if (dragSrcIndex !== null && dragSrcIndex !== layerIdx) {
+          row.classList.add('drag-over');
         }
+      });
+      row.addEventListener('dragleave', () => {
+        row.classList.remove('drag-over');
+      });
+      row.addEventListener('drop', (e) => {
+        e.preventDefault();
+        row.classList.remove('drag-over');
+        if (dragSrcIndex !== null && dragSrcIndex !== layerIdx) {
+          this.onLayerReorder?.(dragSrcIndex, layerIdx);
+        }
+        dragSrcIndex = null;
       });
 
       this.layerList.appendChild(row);
       this.layerRows.push(row);
+    }
+  }
+
+  private selectLayerByIndex(targetIndex: number, currentIndex: number) {
+    const diff = targetIndex - currentIndex;
+    if (diff < 0) {
+      for (let j = 0; j < Math.abs(diff); j++) this.onLayerPrev?.();
+    } else if (diff > 0) {
+      for (let j = 0; j < diff; j++) this.onLayerNext?.();
     }
   }
 

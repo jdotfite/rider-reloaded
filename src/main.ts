@@ -205,6 +205,11 @@ toolbar.onLayerToggleEditability = () => toggleLayerEditability();
 toolbar.onLayerMovePrev = () => moveLayer(-1);
 toolbar.onLayerMoveNext = () => moveLayer(1);
 toolbar.onLayerRename = () => renameLayer();
+toolbar.onLayerDelete = () => deleteLayer();
+toolbar.onLayerReorder = (from, to) => {
+  if (gameLoop.state !== GameState.EDITING) return;
+  store.reorderLayer(from, to);
+};
 
 // Speed presets
 toolbar.onSpeedChange = (speed) => {
@@ -504,6 +509,12 @@ function toggleLayerEditability() {
 function moveLayer(direction: 1 | -1) {
   if (gameLoop.state !== GameState.EDITING) return;
   store.moveActiveLayer(direction);
+}
+
+function deleteLayer() {
+  if (gameLoop.state !== GameState.EDITING) return;
+  if (store.layers.length <= 1) return;
+  store.deleteActiveLayer();
 }
 
 function renameLayer() {

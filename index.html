@@ -370,41 +370,23 @@
     #layer-controls {
       display: flex;
       align-items: center;
-      gap: var(--sp-1);
+      gap: 2px;
       padding: var(--sp-1) var(--sp-3);
     }
-    #layer-controls button {
-      flex: 1;
+    #layer-controls .btn-icon {
+      width: var(--control-h-sm);
+      height: var(--control-h-sm);
+      min-width: var(--control-h-sm);
       min-height: var(--control-h-sm);
-      padding: var(--sp-1) var(--sp-1);
-      font-size: var(--text-sm);
     }
+    #layer-controls .spacer { flex: 1; }
 
-    /* — Script panel — */
-    #script-panel {
-      border-bottom: 1px solid var(--border-light);
-      padding-bottom: var(--sp-3);
+    /* — Drag-to-reorder layers — */
+    .layer-row.dragging {
+      opacity: 0.5;
     }
-    #script-editor {
-      margin: var(--sp-1) var(--sp-3);
-      padding: var(--sp-3);
-      border-radius: var(--radius-md);
-      background: var(--bg-alt);
-      border: 1px solid var(--border-light);
-      font-family: var(--font-mono);
-      font-size: var(--text-sm);
-      color: var(--ink-muted);
-      min-height: 48px;
-      overflow: auto;
-    }
-    #script-code { margin: 0; font-family: inherit; }
-    #add-command-btn {
-      margin: var(--sp-1) var(--sp-3);
-      width: calc(100% - var(--sp-6));
-      min-height: var(--control-h-sm);
-      padding: var(--sp-1) var(--sp-2);
-      font-size: var(--text-sm);
-      opacity: 0.4;
+    .layer-row.drag-over {
+      border-top: 2px solid var(--ink);
     }
 
     /* — Left sidebar footer — */
@@ -909,10 +891,8 @@
     @media (max-width: 1199px) {
       #main { grid-template-columns: 48px 1fr 48px; }
       #sidebar-left { overflow: visible; }
-      #sidebar-left-tabs,
       #file-actions,
       #layers-panel,
-      #script-panel,
       .section-label:not(#sidebar-right .section-label) { display: none; }
       #track-type-panel .section-label { display: none; }
       #line-type-strip { padding: 2px var(--sp-1); }
@@ -988,25 +968,12 @@
     <div id="main">
       <!-- LEFT SIDEBAR -->
       <aside id="sidebar-left">
-        <div id="sidebar-left-tabs">
-          <button class="sidebar-tab active">PROJECT</button>
-          <button class="sidebar-tab">LAYERS</button>
-        </div>
-
         <div id="file-actions"></div>
 
         <div id="layers-panel">
           <div class="section-label">LAYERS</div>
           <div id="layer-list"></div>
           <div id="layer-controls"></div>
-        </div>
-
-        <div id="script-panel">
-          <div class="section-label">SCRIPT</div>
-          <div id="script-editor">
-            <pre id="script-code">// Scripts coming soon</pre>
-          </div>
-          <button id="add-command-btn" disabled>Add Command</button>
         </div>
 
         <div id="sidebar-left-footer"></div>
