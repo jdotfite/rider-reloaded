@@ -38,26 +38,36 @@ const SKIN = '#fdca8d';
 const HELMET = '#2a2a2a';
 const VISOR = '#8ec8e8';
 
-// Debris piece types for realistic explosion
+// Debris piece — each represents a recognizable truck part
 interface DebrisPiece {
   x: number; y: number;
   vx: number; vy: number;
   rot: number; rotV: number;
-  type: 'panel' | 'wheel' | 'glass' | 'pipe' | 'bolt';
-  w: number; h: number;
-  color: string;
-  stroke: string;
+  draw: (ctx: CanvasRenderingContext2D) => void;
   life: number;
+  bounce: number; // how many times it can bounce
+}
+
+// Spark particle
+interface Spark {
+  x: number; y: number;
+  vx: number; vy: number;
+  life: number;
+  color: string;
 }
 
 export class TruckRenderer {
   private wheelAngle = 0;
   private prevWFx = 0;
   private debris: DebrisPiece[] = [];
+  private sparks: Spark[] = [];
+  private flashAlpha = 0;
   private wasSledIntact = true;
 
   resetDebris() {
     this.debris = [];
+    this.sparks = [];
+    this.flashAlpha = 0;
     this.wasSledIntact = true;
     this.prevWFx = 0;
   }
@@ -238,9 +248,19 @@ export class TruckRenderer {
       this.drawDriver(ctx, p, len);
     }
 
+    // Impact flash
+    if (this.flashAlpha > 0) {
+      this.drawFlash(ctx, p);
+    }
+
     // Debris
     if (this.debris.length > 0) {
       this.updateAndDrawDebris(ctx);
+    }
+
+    // Sparks
+    if (this.sparks.length > 0) {
+      this.updateAndDrawSparks(ctx);
     }
   }
 
@@ -390,55 +410,248 @@ export class TruckRenderer {
     ctx.globalAlpha = 1;
   }
 
-  // ── EXPLOSION ──
+  // ── CRASH EFFECTS ──
 
   private spawnDebris(p: Array<{x: number; y: number}>) {
     this.debris = [];
-    const cx = (p[0].x + p[1].x + p[2].x + p[3].x) / 4;
-    const cy = (p[0].y + p[1].y + p[2].y + p[3].y) / 4;
-    const vx = (p[WR].x - p[WF].x) * 0.08;
-    const vy = (p[WR].y - p[WF].y) * 0.08;
+    this.sparks = [];
 
-    // Body panels (dark, large)
+    // Frame geometry at crash time
+    const dx = p[WR].x - p[WF].x;
+    const dy = p[WR].y - p[WF].y;
+    const len = Math.sqrt(dx * dx + dy * dy) || 1;
+    const fx = dx / len, fy = dy / len;
+    const ux = fy, uy = -fx;
+    const mx = (p[WF].x + p[WR].x) / 2;
+    const my = (p[WF].y + p[WR].y) / 2;
+    const wheelR = len * 0.23;
+
+    // Crash velocity
+    const cvx = (p[WR].x - p[CF].x) * 0.06;
+    const cvy = (p[WR].y - p[CF].y) * 0.06;
+
+    const pos = (f: number, u: number) => ({
+      x: mx + fx * f * len + ux * u * len,
+      y: my + fy * f * len + uy * u * len,
+    });
+
+    // Impact flash
+    this.flashAlpha = 1;
+
+    // ── HOOD (front panel, flies forward) ──
+    const hood = pos(0.3, 0.5);
+    this.addPart(hood.x, hood.y, cvx + 1.2, cvy - 0.8, 140, (ctx) => {
+      ctx.fillStyle = BODY;
+      ctx.strokeStyle = OUTLINE;
+      ctx.lineWidth = 0.4;
+      ctx.fillRect(-3, -1, 6, 2);
+      ctx.strokeRect(-3, -1, 6, 2);
+      ctx.strokeStyle = BODY_ACCENT;
+      ctx.lineWidth = 0.2;
+      ctx.beginPath(); ctx.moveTo(-2.5, 0); ctx.lineTo(2.5, 0); ctx.stroke();
+    });
+
+    // ── CAB ROOF (large panel, tumbles up) ──
+    const roof = pos(0.02, 0.85);
+    this.addPart(roof.x, roof.y, cvx + 0.3, cvy - 1.8, 130, (ctx) => {
+      ctx.fillStyle = BODY;
+      ctx.strokeStyle = OUTLINE;
+      ctx.lineWidth = 0.4;
+      ctx.fillRect(-3.5, -1.2, 7, 2.4);
+      ctx.strokeRect(-3.5, -1.2, 7, 2.4);
+    });
+
+    // ── TRUCK BED (back panel) ──
+    const bed = pos(-0.28, 0.5);
+    this.addPart(bed.x, bed.y, cvx - 0.6, cvy - 0.5, 120, (ctx) => {
+      ctx.fillStyle = BODY;
+      ctx.strokeStyle = OUTLINE;
+      ctx.lineWidth = 0.4;
+      ctx.fillRect(-4, -1.5, 8, 3);
+      ctx.strokeRect(-4, -1.5, 8, 3);
+      // Bed floor line
+      ctx.strokeStyle = BODY_ACCENT;
+      ctx.lineWidth = 0.2;
+      ctx.beginPath(); ctx.moveTo(-3.5, 0.5); ctx.lineTo(3.5, 0.5); ctx.stroke();
+    });
+
+    // ── WINDSHIELD (glass, shatters into shards) ──
+    const winPos = pos(0.05, 0.7);
     for (let i = 0; i < 8; i++) {
-      this.addDebris(cx, cy, vx, vy, 'panel', 2.5 + Math.random() * 4, BODY, OUTLINE);
+      const sz = 0.6 + Math.random() * 1.2;
+      const pts = this.randomShardPoly(sz);
+      this.addPart(
+        winPos.x + (Math.random() - 0.5) * 4,
+        winPos.y + (Math.random() - 0.5) * 3,
+        cvx + (Math.random() - 0.5) * 2,
+        cvy - 1 - Math.random() * 1.5,
+        60 + Math.floor(Math.random() * 40),
+        (ctx) => {
+          ctx.fillStyle = WINDOW;
+          ctx.globalAlpha *= 0.65;
+          ctx.strokeStyle = '#9acce0';
+          ctx.lineWidth = 0.15;
+          ctx.beginPath();
+          ctx.moveTo(pts[0][0], pts[0][1]);
+          for (let j = 1; j < pts.length; j++) ctx.lineTo(pts[j][0], pts[j][1]);
+          ctx.closePath();
+          ctx.fill();
+          ctx.stroke();
+        }
+      );
     }
-    // Glass shards (blue, small, many)
-    for (let i = 0; i < 10; i++) {
-      this.addDebris(cx, cy - 3, vx, vy - 0.5, 'glass', 0.8 + Math.random() * 1.5, WINDOW, '#5a8aa0');
+
+    // ── WHEELS (two big wheels bounce away) ──
+    const wfVis = { x: p[WF].x + ux * wheelR, y: p[WF].y + uy * wheelR };
+    const wrVis = { x: p[WR].x + ux * wheelR, y: p[WR].y + uy * wheelR };
+
+    for (const wc of [wfVis, wrVis]) {
+      const wvx = cvx + (Math.random() - 0.5) * 1.5;
+      const wvy = cvy - 1.2 - Math.random() * 0.8;
+      const wr = wheelR;
+      this.addPart(wc.x, wc.y, wvx, wvy, 160, (ctx) => {
+        // Full wheel with treads and rim
+        ctx.fillStyle = TIRE;
+        ctx.strokeStyle = TIRE_EDGE;
+        ctx.lineWidth = wr * 0.08;
+        ctx.beginPath(); ctx.arc(0, 0, wr, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+        // Tread marks
+        ctx.strokeStyle = '#2a2a2a';
+        ctx.lineWidth = wr * 0.06;
+        for (let i = 0; i < 12; i++) {
+          const a = i * Math.PI * 2 / 12;
+          ctx.beginPath();
+          ctx.moveTo(Math.cos(a) * wr * 0.82, Math.sin(a) * wr * 0.82);
+          ctx.lineTo(Math.cos(a) * wr * 0.95, Math.sin(a) * wr * 0.95);
+          ctx.stroke();
+        }
+        // Rim
+        ctx.fillStyle = RIM;
+        ctx.beginPath(); ctx.arc(0, 0, wr * 0.48, 0, Math.PI * 2); ctx.fill();
+        ctx.fillStyle = RIM_HUB;
+        ctx.beginPath(); ctx.arc(0, 0, wr * 0.13, 0, Math.PI * 2); ctx.fill();
+      }, 3); // wheels bounce
     }
-    // Wheels (round, large)
-    this.addDebris(p[WF].x, p[WF].y, vx - 0.5, vy - 1, 'wheel', 3, TIRE, '#333');
-    this.addDebris(p[WR].x, p[WR].y, vx + 0.5, vy - 0.8, 'wheel', 3, TIRE, '#333');
-    // Exhaust pipe
-    this.addDebris(cx - 4, cy, vx - 0.8, vy - 1.2, 'pipe', 2, AXLE, '#333');
-    // Bumper
-    this.addDebris(cx + 5, cy, vx + 0.6, vy - 0.5, 'pipe', 2.5, BUMPER, '#333');
-    // Bolts and small parts
-    for (let i = 0; i < 20; i++) {
-      this.addDebris(cx, cy, vx, vy, 'bolt', 0.3 + Math.random() * 0.8, '#555', '#333');
+
+    // ── BUMPER (thick bar) ──
+    const bmpPos = pos(0.49, 0.4);
+    this.addPart(bmpPos.x, bmpPos.y, cvx + 1.5, cvy - 0.3, 100, (ctx) => {
+      ctx.fillStyle = BUMPER;
+      ctx.strokeStyle = '#333';
+      ctx.lineWidth = 0.3;
+      ctx.beginPath();
+      ctx.roundRect(-0.6, -2.5, 1.2, 5, 0.3);
+      ctx.fill(); ctx.stroke();
+    });
+
+    // ── EXHAUST PIPE ──
+    const epPos = pos(-0.40, 0.5);
+    this.addPart(epPos.x, epPos.y, cvx - 1, cvy - 1.5, 110, (ctx) => {
+      ctx.fillStyle = AXLE;
+      ctx.strokeStyle = '#333';
+      ctx.lineWidth = 0.25;
+      ctx.beginPath();
+      ctx.roundRect(-0.4, -3, 0.8, 6, 0.3);
+      ctx.fill(); ctx.stroke();
+    });
+
+    // ── HEADLIGHT ──
+    const hlPos = pos(0.47, 0.46);
+    this.addPart(hlPos.x, hlPos.y, cvx + 1.8, cvy - 0.6, 70, (ctx) => {
+      ctx.fillStyle = HEADLIGHT;
+      ctx.globalAlpha *= 0.8;
+      ctx.strokeStyle = '#c0b040';
+      ctx.lineWidth = 0.2;
+      ctx.beginPath(); ctx.arc(0, 0, 0.8, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+    });
+
+    // ── TAILLIGHT ──
+    const tlPos = pos(-0.43, 0.5);
+    this.addPart(tlPos.x, tlPos.y, cvx - 0.8, cvy - 0.4, 70, (ctx) => {
+      ctx.fillStyle = TAILLIGHT;
+      ctx.globalAlpha *= 0.8;
+      ctx.strokeStyle = '#881818';
+      ctx.lineWidth = 0.2;
+      ctx.beginPath(); ctx.arc(0, 0, 0.6, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+    });
+
+    // ── AXLE BARS ──
+    for (const xf of [-0.38, 0.38]) {
+      const axPos = pos(xf, 0.15);
+      this.addPart(axPos.x, axPos.y, cvx + (Math.random() - 0.5), cvy - 0.8, 90, (ctx) => {
+        ctx.fillStyle = AXLE;
+        ctx.strokeStyle = '#444';
+        ctx.lineWidth = 0.2;
+        ctx.fillRect(-0.35, -1.8, 0.7, 3.6);
+        ctx.strokeRect(-0.35, -1.8, 0.7, 3.6);
+      });
     }
-    // Headlight glass
-    this.addDebris(cx + 6, cy, vx + 1, vy - 0.8, 'glass', 1.2, HEADLIGHT, '#c0b040');
-    // Taillight
-    this.addDebris(cx - 5, cy, vx - 0.5, vy - 0.6, 'glass', 1, TAILLIGHT, '#881818');
+
+    // ── SMALL METAL BITS (bolts, brackets, screws) ──
+    for (let i = 0; i < 25; i++) {
+      const bp = pos((Math.random() - 0.5) * 0.8, Math.random() * 0.6);
+      const bsz = 0.2 + Math.random() * 0.6;
+      const bcolor = ['#555', '#666', '#777', '#444'][Math.floor(Math.random() * 4)];
+      this.addPart(bp.x, bp.y, cvx + (Math.random() - 0.5) * 2.5, cvy - Math.random() * 2,
+        40 + Math.floor(Math.random() * 40), (ctx) => {
+          ctx.fillStyle = bcolor;
+          ctx.fillRect(-bsz / 2, -bsz / 2, bsz, bsz);
+        });
+    }
+
+    // ── SPARKS ──
+    for (let i = 0; i < 40; i++) {
+      const sp = pos((Math.random() - 0.5) * 0.8, Math.random() * 0.3);
+      const a = Math.random() * Math.PI * 2;
+      const spd = 1 + Math.random() * 3;
+      this.sparks.push({
+        x: sp.x, y: sp.y,
+        vx: cvx + Math.cos(a) * spd,
+        vy: cvy + Math.sin(a) * spd - Math.random() * 1.5,
+        life: 15 + Math.floor(Math.random() * 20),
+        color: Math.random() > 0.3 ? '#ffcc44' : '#ff8833',
+      });
+    }
   }
 
-  private addDebris(cx: number, cy: number, baseVx: number, baseVy: number,
-    type: DebrisPiece['type'], size: number, color: string, stroke: string) {
-    const a = Math.random() * Math.PI * 2;
-    const spd = 0.3 + Math.random() * 1.8;
+  private addPart(x: number, y: number, vx: number, vy: number,
+    life: number, draw: (ctx: CanvasRenderingContext2D) => void, bounce = 0) {
     this.debris.push({
-      x: cx + (Math.random() - 0.5) * 8,
-      y: cy + (Math.random() - 0.5) * 6,
-      vx: baseVx + Math.cos(a) * spd,
-      vy: baseVy + Math.sin(a) * spd - Math.random() * 1.2,
+      x, y, vx, vy,
       rot: Math.random() * Math.PI * 2,
-      rotV: (Math.random() - 0.5) * 0.4,
-      type, color, stroke,
-      w: size, h: size * (type === 'pipe' ? 0.25 : type === 'panel' ? 0.6 : 0.8),
-      life: type === 'wheel' ? 120 : 70 + Math.floor(Math.random() * 50),
+      rotV: (Math.random() - 0.5) * 0.35,
+      draw, life, bounce,
     });
+  }
+
+  private randomShardPoly(size: number): [number, number][] {
+    const n = 3 + Math.floor(Math.random() * 3);
+    const pts: [number, number][] = [];
+    for (let i = 0; i < n; i++) {
+      const a = (i / n) * Math.PI * 2 + (Math.random() - 0.5) * 0.8;
+      const r = size * (0.5 + Math.random() * 0.5);
+      pts.push([Math.cos(a) * r, Math.sin(a) * r]);
+    }
+    return pts;
+  }
+
+  private drawFlash(ctx: CanvasRenderingContext2D, p: Array<{x: number; y: number}>) {
+    if (this.flashAlpha <= 0) return;
+    const cx = (p[0].x + p[1].x + p[2].x + p[3].x) / 4;
+    const cy = (p[0].y + p[1].y + p[2].y + p[3].y) / 4;
+
+    const grad = ctx.createRadialGradient(cx, cy, 0, cx, cy, 20);
+    grad.addColorStop(0, `rgba(255, 240, 200, ${this.flashAlpha * 0.6})`);
+    grad.addColorStop(0.4, `rgba(255, 200, 100, ${this.flashAlpha * 0.3})`);
+    grad.addColorStop(1, `rgba(255, 150, 50, 0)`);
+
+    ctx.fillStyle = grad;
+    ctx.beginPath();
+    ctx.arc(cx, cy, 20, 0, Math.PI * 2);
+    ctx.fill();
+
+    this.flashAlpha -= 0.06;
+    if (this.flashAlpha < 0) this.flashAlpha = 0;
   }
 
   private updateAndDrawDebris(ctx: CanvasRenderingContext2D) {
@@ -448,59 +661,51 @@ export class TruckRenderer {
       d.x += d.vx;
       d.y += d.vy;
       d.rot += d.rotV;
+      d.vx *= 0.998; // air friction
       d.life--;
+
       if (d.life <= 0) { this.debris.splice(i, 1); continue; }
 
-      const alpha = d.life < 20 ? d.life / 20 : 1;
+      const alpha = d.life < 25 ? d.life / 25 : 1;
       ctx.save();
       ctx.globalAlpha = alpha;
       ctx.translate(d.x, d.y);
       ctx.rotate(d.rot);
-
-      if (d.type === 'wheel') {
-        // Draw as a circle with rim detail
-        ctx.fillStyle = d.color;
-        ctx.strokeStyle = d.stroke;
-        ctx.lineWidth = 0.4;
-        ctx.beginPath();
-        ctx.arc(0, 0, d.w, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.stroke();
-        // Inner rim
-        ctx.fillStyle = RIM;
-        ctx.beginPath();
-        ctx.arc(0, 0, d.w * 0.45, 0, Math.PI * 2);
-        ctx.fill();
-      } else if (d.type === 'glass') {
-        // Irregular shard
-        ctx.fillStyle = d.color;
-        ctx.globalAlpha = alpha * 0.7;
-        ctx.beginPath();
-        ctx.moveTo(-d.w / 2, -d.h / 3);
-        ctx.lineTo(d.w / 3, -d.h / 2);
-        ctx.lineTo(d.w / 2, d.h / 4);
-        ctx.lineTo(-d.w / 4, d.h / 2);
-        ctx.closePath();
-        ctx.fill();
-      } else if (d.type === 'pipe') {
-        // Long thin rectangle
-        ctx.fillStyle = d.color;
-        ctx.strokeStyle = d.stroke;
-        ctx.lineWidth = 0.3;
-        ctx.beginPath();
-        ctx.roundRect(-d.w, -d.h / 2, d.w * 2, d.h, d.h * 0.3);
-        ctx.fill();
-        ctx.stroke();
-      } else {
-        // Panel or bolt — rectangle
-        ctx.fillStyle = d.color;
-        ctx.strokeStyle = d.stroke;
-        ctx.lineWidth = 0.3;
-        ctx.fillRect(-d.w / 2, -d.h / 2, d.w, d.h);
-        ctx.strokeRect(-d.w / 2, -d.h / 2, d.w, d.h);
-      }
-
+      d.draw(ctx);
       ctx.restore();
+    }
+    ctx.globalAlpha = 1;
+  }
+
+  private updateAndDrawSparks(ctx: CanvasRenderingContext2D) {
+    for (let i = this.sparks.length - 1; i >= 0; i--) {
+      const s = this.sparks[i];
+      s.vy += 0.08;
+      s.x += s.vx;
+      s.y += s.vy;
+      s.vx *= 0.96;
+      s.vy *= 0.96;
+      s.life--;
+
+      if (s.life <= 0) { this.sparks.splice(i, 1); continue; }
+
+      const alpha = s.life < 8 ? s.life / 8 : 1;
+      const r = 0.2 + (s.life / 35) * 0.5;
+
+      ctx.globalAlpha = alpha;
+      ctx.fillStyle = s.color;
+      ctx.beginPath();
+      ctx.arc(s.x, s.y, r, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Spark trail
+      ctx.globalAlpha = alpha * 0.3;
+      ctx.beginPath();
+      ctx.moveTo(s.x, s.y);
+      ctx.lineTo(s.x - s.vx * 2, s.y - s.vy * 2);
+      ctx.strokeStyle = s.color;
+      ctx.lineWidth = r * 0.6;
+      ctx.stroke();
     }
     ctx.globalAlpha = 1;
   }
