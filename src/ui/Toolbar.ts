@@ -473,7 +473,9 @@ export class Toolbar {
 
   updateTimeline(frame: number, maxFrame: number) {
     if (this.isSeeking) return;
-    this.timelineScrubber.max = String(maxFrame);
+    // Minimum 30 seconds (1200 frames at 40fps) so scrubber has range from the start
+    const displayMax = Math.max(maxFrame, 1200);
+    this.timelineScrubber.max = String(displayMax);
     this.timelineScrubber.value = String(frame);
 
     const fps = 40;
@@ -482,7 +484,7 @@ export class Toolbar {
     const secs = Math.floor(seconds % 60);
     this.timelineStart.textContent = `${mins}:${String(secs).padStart(2, '0')}`;
 
-    const maxSeconds = maxFrame / fps;
+    const maxSeconds = displayMax / fps;
     const maxMins = Math.floor(maxSeconds / 60);
     const maxSecs = Math.floor(maxSeconds % 60);
     this.timelineEnd.textContent = `${maxMins}:${String(maxSecs).padStart(2, '0')}`;

@@ -112,6 +112,9 @@ export class InputManager {
       if (!this.isSpaceDown) {
         this.isSpaceDown = true;
         this.spacePanned = false;
+        // Fire play/pause on keyDown for responsive feel
+        // (keyUp handler won't re-fire if spacePanned stays false)
+        this.onPlayPauseToggle?.();
       }
     }
 
@@ -175,15 +178,10 @@ export class InputManager {
 
   private onKeyUp = (e: KeyboardEvent) => {
     if (e.code === 'Space') {
-      const wasPanning = this.spacePanned;
       this.isSpaceDown = false;
       this.spacePanned = false;
       if (!this.isPanning) {
         this.canvas.style.cursor = '';
-      }
-      // Only toggle play/pause if space wasn't used for panning
-      if (!wasPanning) {
-        this.onPlayPauseToggle?.();
       }
     }
   };
