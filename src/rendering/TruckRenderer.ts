@@ -1,27 +1,38 @@
 import { RiderRenderData } from './RiderRenderer';
 
 /**
- * Monster truck renderer — matches the reference: big wheels, lifted body,
- * cab with window, fenders, exhaust pipe, driver helmet.
+ * Monster truck renderer.
+ *
+ * Physics points match the sled layout:
+ *   0: CHASSIS_FRONT (like PEG, top-left)
+ *   1: WHEEL_FRONT   (like TAIL, bottom-left)
+ *   2: WHEEL_REAR    (like NOSE, bottom-right)
+ *   3: CHASSIS_REAR   (like STRING, top-right)
+ *   4: DRIVER_SEAT
+ *   5: DRIVER_HEAD
+ *   6+: exhaust flutter
+ *
+ * The truck body is drawn *around* these points. The bottom edge
+ * (WHEEL_FRONT → WHEEL_REAR) is where the wheels sit. The top edge
+ * (CHASSIS_FRONT → CHASSIS_REAR) is the chassis rail. The cab and
+ * bed are drawn above the chassis rail using the frame orientation.
  */
 
-// Point indices matching truck.ts
-const WF = 0, WR = 1, CF = 2, CR = 3;
+const CF = 0, WF = 1, WR = 2, CR = 3;
 const DS = 4, DH = 5;
 const EXHAUST_START = 6;
 
-// Colors
-const BODY = '#2a2a2a';
-const BODY_LIGHT = '#3a3a3a';
-const OUTLINE = '#111111';
-const TIRE = '#222222';
-const RIM = '#444444';
-const RIM_LIGHT = '#666666';
+const OUTLINE = '#1a1a1a';
+const BODY_DARK = '#2d2d2d';
+const BODY_MID = '#3a3a3a';
+const TIRE_COLOR = '#252525';
+const TIRE_EDGE = '#1a1a1a';
+const RIM_COLOR = '#4a4a4a';
+const RIM_SPOKE = '#5a5a5a';
+const RIM_HUB = '#666666';
 const WINDOW = '#8ec8e8';
-const DRIVER_C = '#111111';
-const EXHAUST_C = '#555555';
-
-const WHEEL_R = 4.2;
+const BUMPER = '#444444';
+const EXHAUST_CLR = '#888888';
 
 export class TruckRenderer {
   private wheelAngle = 0;
@@ -30,269 +41,244 @@ export class TruckRenderer {
     if (!rider || rider.points.length < 6) return;
     const p = rider.points;
 
-    ctx.lineCap = 'round';
-    ctx.lineJoin = 'round';
-
-    // Exhaust smoke (behind everything)
+    // Exhaust behind everything
     if (rider.points.length > EXHAUST_START + 1) {
       this.drawExhaust(ctx, p, rider.points.length);
     }
 
-    // Compute frame vectors
-    const bottomDx = p[WR].x - p[WF].x;
-    const bottomDy = p[WR].y - p[WF].y;
-    const bottomLen = Math.sqrt(bottomDx * bottomDx + bottomDy * bottomDy) || 1;
+    // Frame orientation from bottom edge (wheel line)
+    const dx = p[WR].x - p[WF].x;
+    const dy = p[WR].y - p[WF].y;
+    const len = Math.sqrt(dx * dx + dy * dy) || 1;
+    // forward = along wheel axle line (left to right)
+    const fx = dx / len, fy = dy / len;
+    // up = perpendicular, pointing away from ground (into the frame)
+    const ux = -fy, uy = fx;
 
-    // Wheel rotation from velocity
-    const avgVx = (p[WF].x - p[CF].x + p[WR].x - p[CR].x) * 0.5;
-    this.wheelAngle += avgVx * 0.3;
+    // Update wheel rotation
+    // Use velocity of the wheel midpoint
+    const wheelMidX = (p[WF].x + p[WR].x) / 2;
+    const chassisMidX = (p[CF].x + p[CR].x) / 2;
+    const speed = (wheelMidX - chassisMidX) * 0.08 + len * 0.02;
+    this.wheelAngle += speed;
 
-    if (rider.sledIntact) {
-      this.drawTruck(ctx, p);
-    }
+    // Wheel radius proportional to frame size
+    const wheelR = len * 0.22;
 
-    // Wheels always drawn (even if chassis breaks they roll away)
-    this.drawWheel(ctx, p[WF].x, p[WF].y, this.wheelAngle);
-    this.drawWheel(ctx, p[WR].x, p[WR].y, this.wheelAngle);
+    // Anchor point: midpoint of bottom edge
+    const mx = (p[WF].x + p[WR].x) / 2;
+    const my = (p[WF].y + p[WR].y) / 2;
 
-    // Driver
-    if (rider.mounted || rider.points.length > DH) {
-      this.drawDriver(ctx, p, rider.mounted);
-    }
-  }
-
-  private drawTruck(ctx: CanvasRenderingContext2D, p: Array<{x: number; y: number}>) {
-    // Calculate chassis orientation from the 4 frame points
-    const midBottom = this.mid(p[WF], p[WR]);
-    const midTop = this.mid(p[CF], p[CR]);
-
-    // Frame direction vectors
-    const fwd = this.dir(p[WF], p[WR]);  // forward along bottom
-    const up = this.dir(midBottom, midTop); // up from bottom to top
-    const fwdPerp = { x: -fwd.y, y: fwd.x }; // perpendicular to forward
-
-    // Scale factor from physics space
-    const frameW = this.dist(p[WF], p[WR]);
-    const frameH = this.dist(midBottom, midTop);
-    const scale = frameW / 15; // reference width
-
-    // Helper: offset from a point along frame axes
-    const at = (base: {x:number;y:number}, fwdAmt: number, upAmt: number) => ({
-      x: base.x + fwd.x * fwdAmt + up.x * upAmt,
-      y: base.y + fwd.y * fwdAmt + up.y * upAmt,
+    // Helper: position relative to frame
+    const at = (fwdT: number, upT: number) => ({
+      x: mx + fx * fwdT * len + ux * upT * len,
+      y: my + fy * fwdT * len + uy * upT * len,
     });
 
-    // -- SUSPENSION STRUTS --
-    ctx.strokeStyle = RIM;
-    ctx.lineWidth = 1.8 * scale;
-    // Front strut
-    const fAxleTop = at(p[WF], 0, -2.5 * scale);
+    if (rider.sledIntact) {
+      ctx.lineCap = 'round';
+      ctx.lineJoin = 'round';
+
+      // ── SUSPENSION STRUTS ──
+      const strutW = len * 0.06;
+      ctx.strokeStyle = BUMPER;
+      ctx.lineWidth = strutW;
+      // Front strut
+      const sf1 = at(-0.38, 0);
+      const sf2 = at(-0.38, 0.3);
+      ctx.beginPath(); ctx.moveTo(sf1.x, sf1.y); ctx.lineTo(sf2.x, sf2.y); ctx.stroke();
+      // Rear strut
+      const sr1 = at(0.38, 0);
+      const sr2 = at(0.38, 0.3);
+      ctx.beginPath(); ctx.moveTo(sr1.x, sr1.y); ctx.lineTo(sr2.x, sr2.y); ctx.stroke();
+
+      // ── FRAME RAIL (undercarriage) ──
+      const railL = at(-0.42, 0.25);
+      const railR = at(0.45, 0.25);
+      ctx.strokeStyle = BODY_MID;
+      ctx.lineWidth = len * 0.07;
+      ctx.beginPath(); ctx.moveTo(railL.x, railL.y); ctx.lineTo(railR.x, railR.y); ctx.stroke();
+
+      // ── BODY ──
+      // The body sits above the frame rail
+      const bodyY = 0.32; // bottom of body above wheel centerline
+
+      // Body outline points
+      const bFL = at(-0.42, bodyY);           // front-lower
+      const bFU = at(-0.42, bodyY + 0.22);    // front bumper top
+      const hoodF = at(-0.35, bodyY + 0.35);  // hood front
+      const hoodR = at(-0.08, bodyY + 0.35);  // hood rear / cab front
+      const cabTF = at(-0.08, bodyY + 0.65);  // cab roof front
+      const cabTR = at(0.15, bodyY + 0.65);   // cab roof rear
+      const bedTF = at(0.15, bodyY + 0.35);   // bed front (below cab)
+      const bedTR = at(0.45, bodyY + 0.35);   // bed rear top
+      const bRL = at(0.45, bodyY);            // rear lower
+
+      // Fill body
+      ctx.fillStyle = BODY_DARK;
+      ctx.strokeStyle = OUTLINE;
+      ctx.lineWidth = len * 0.04;
+      ctx.beginPath();
+      ctx.moveTo(bFL.x, bFL.y);
+      ctx.lineTo(bFU.x, bFU.y);
+      ctx.lineTo(hoodF.x, hoodF.y);
+      ctx.lineTo(hoodR.x, hoodR.y);
+      ctx.lineTo(cabTF.x, cabTF.y);
+      ctx.lineTo(cabTR.x, cabTR.y);
+      ctx.lineTo(bedTF.x, bedTF.y);
+      ctx.lineTo(bedTR.x, bedTR.y);
+      ctx.lineTo(bRL.x, bRL.y);
+      ctx.closePath();
+      ctx.fill();
+      ctx.stroke();
+
+      // ── WINDOW ──
+      const wBL = at(-0.05, bodyY + 0.38);
+      const wTL = at(-0.05, bodyY + 0.60);
+      const wTR = at(0.12, bodyY + 0.60);
+      const wBR = at(0.12, bodyY + 0.38);
+      ctx.fillStyle = WINDOW;
+      ctx.globalAlpha = 0.55;
+      ctx.beginPath();
+      ctx.moveTo(wBL.x, wBL.y);
+      ctx.lineTo(wTL.x, wTL.y);
+      ctx.lineTo(wTR.x, wTR.y);
+      ctx.lineTo(wBR.x, wBR.y);
+      ctx.closePath();
+      ctx.fill();
+      ctx.globalAlpha = 1;
+      ctx.strokeStyle = OUTLINE;
+      ctx.lineWidth = len * 0.02;
+      ctx.stroke();
+
+      // ── FRONT BUMPER ──
+      const bmpL = at(-0.48, bodyY - 0.02);
+      const bmpR = at(-0.48, bodyY + 0.15);
+      ctx.strokeStyle = BUMPER;
+      ctx.lineWidth = len * 0.06;
+      ctx.beginPath(); ctx.moveTo(bmpL.x, bmpL.y); ctx.lineTo(bmpR.x, bmpR.y); ctx.stroke();
+
+      // ── EXHAUST PIPE ──
+      const pipeB = at(0.40, bodyY + 0.20);
+      const pipeT = at(0.40, bodyY + 0.70);
+      ctx.strokeStyle = BUMPER;
+      ctx.lineWidth = len * 0.04;
+      ctx.beginPath(); ctx.moveTo(pipeB.x, pipeB.y); ctx.lineTo(pipeT.x, pipeT.y); ctx.stroke();
+      // Pipe cap
+      ctx.lineWidth = len * 0.06;
+      const capL = at(0.38, bodyY + 0.70);
+      const capR = at(0.42, bodyY + 0.70);
+      ctx.beginPath(); ctx.moveTo(capL.x, capL.y); ctx.lineTo(capR.x, capR.y); ctx.stroke();
+
+      // ── WHEEL ARCHES ──
+      ctx.strokeStyle = OUTLINE;
+      ctx.lineWidth = len * 0.04;
+      // Front arch
+      this.drawArch(ctx, p[WF].x, p[WF].y, wheelR + len * 0.04, fx, fy);
+      // Rear arch
+      this.drawArch(ctx, p[WR].x, p[WR].y, wheelR + len * 0.04, fx, fy);
+    }
+
+    // ── WHEELS (always drawn) ──
+    this.drawWheel(ctx, p[WF].x, p[WF].y, wheelR, this.wheelAngle);
+    this.drawWheel(ctx, p[WR].x, p[WR].y, wheelR, this.wheelAngle);
+
+    // ── DRIVER ──
+    if (rider.points.length > DH) {
+      this.drawDriver(ctx, p, len);
+    }
+  }
+
+  private drawArch(ctx: CanvasRenderingContext2D, cx: number, cy: number, r: number, fx: number, fy: number) {
+    const angle = Math.atan2(fy, fx);
     ctx.beginPath();
-    ctx.moveTo(p[WF].x, p[WF].y);
-    ctx.lineTo(fAxleTop.x, fAxleTop.y);
-    ctx.stroke();
-    // Rear strut
-    const rAxleTop = at(p[WR], 0, -2.5 * scale);
-    ctx.beginPath();
-    ctx.moveTo(p[WR].x, p[WR].y);
-    ctx.lineTo(rAxleTop.x, rAxleTop.y);
-    ctx.stroke();
-
-    // -- UNDERCARRIAGE / FRAME RAIL --
-    const railF = at(p[WF], 1 * scale, -2.5 * scale);
-    const railR = at(p[WR], -1 * scale, -2.5 * scale);
-    ctx.strokeStyle = BODY_LIGHT;
-    ctx.lineWidth = 2 * scale;
-    ctx.beginPath();
-    ctx.moveTo(railF.x, railF.y);
-    ctx.lineTo(railR.x, railR.y);
-    ctx.stroke();
-
-    // -- MAIN BODY (filled polygon) --
-    // Body sits above the frame rail
-    const bodyBL = at(p[WF], -1.5 * scale, -3 * scale);   // front-bottom of body
-    const bodyBR = at(p[WR], 1.5 * scale, -3 * scale);    // rear-bottom (bed end)
-    const bodyTR = at(p[WR], 1.5 * scale, -6 * scale);    // rear-top (bed rail)
-    const cabTop = at(p[WF], 3 * scale, -8 * scale);      // cab roof front
-    const cabTopR = at(p[WF], 8 * scale, -8 * scale);     // cab roof rear
-    const bedStart = at(p[WF], 8 * scale, -6 * scale);    // where bed starts (below cab rear)
-    const hoodFront = at(p[WF], -1.5 * scale, -5 * scale);// hood front edge
-    const hoodCorner = at(p[WF], 3 * scale, -5 * scale);  // hood to cab transition
-
-    // Front bumper
-    const bumperF = at(p[WF], -2.5 * scale, -3.5 * scale);
-    const bumperFT = at(p[WF], -2.5 * scale, -5 * scale);
-
-    ctx.fillStyle = BODY;
-    ctx.strokeStyle = OUTLINE;
-    ctx.lineWidth = 1.2 * scale;
-    ctx.beginPath();
-    // Bottom edge (front to rear)
-    ctx.moveTo(bumperF.x, bumperF.y);
-    ctx.lineTo(bodyBL.x, bodyBL.y);
-    ctx.lineTo(bodyBR.x, bodyBR.y);
-    // Up rear side
-    ctx.lineTo(bodyTR.x, bodyTR.y);
-    // Bed rail to cab transition
-    ctx.lineTo(bedStart.x, bedStart.y);
-    // Cab roof
-    ctx.lineTo(cabTopR.x, cabTopR.y);
-    ctx.lineTo(cabTop.x, cabTop.y);
-    // Hood slope down
-    ctx.lineTo(hoodCorner.x, hoodCorner.y);
-    ctx.lineTo(hoodFront.x, hoodFront.y);
-    // Front face
-    ctx.lineTo(bumperFT.x, bumperFT.y);
-    ctx.closePath();
-    ctx.fill();
-    ctx.stroke();
-
-    // -- FRONT FENDER (wheel arch) --
-    const fenderFC = at(p[WF], 0, -3 * scale);
-    ctx.strokeStyle = OUTLINE;
-    ctx.lineWidth = 1.5 * scale;
-    ctx.beginPath();
-    const fenderR = WHEEL_R + 1.5 * scale;
-    const fAng = Math.atan2(fwd.y, fwd.x);
-    ctx.arc(fenderFC.x, fenderFC.y + 1 * scale, fenderR, fAng + Math.PI, fAng, true);
-    ctx.stroke();
-
-    // -- REAR FENDER (wheel arch) --
-    const fenderRC = at(p[WR], 0, -3 * scale);
-    ctx.beginPath();
-    ctx.arc(fenderRC.x, fenderRC.y + 1 * scale, fenderR, fAng + Math.PI, fAng, true);
-    ctx.stroke();
-
-    // -- WINDOW --
-    const winBL = at(p[WF], 3.5 * scale, -5.5 * scale);
-    const winBR = at(p[WF], 7.5 * scale, -5.5 * scale);
-    const winTR = at(p[WF], 7.5 * scale, -7.5 * scale);
-    const winTL = at(p[WF], 3.5 * scale, -7.5 * scale);
-
-    ctx.fillStyle = WINDOW;
-    ctx.globalAlpha = 0.5;
-    ctx.beginPath();
-    ctx.moveTo(winBL.x, winBL.y);
-    ctx.lineTo(winBR.x, winBR.y);
-    ctx.lineTo(winTR.x, winTR.y);
-    ctx.lineTo(winTL.x, winTL.y);
-    ctx.closePath();
-    ctx.fill();
-    ctx.globalAlpha = 1;
-
-    // Window frame
-    ctx.strokeStyle = OUTLINE;
-    ctx.lineWidth = 0.8 * scale;
-    ctx.stroke();
-
-    // -- EXHAUST PIPE (vertical from rear) --
-    const pipeBase = at(p[WR], 0.5 * scale, -5 * scale);
-    const pipeTop = at(p[WR], 0.5 * scale, -8.5 * scale);
-    ctx.strokeStyle = RIM;
-    ctx.lineWidth = 1.5 * scale;
-    ctx.beginPath();
-    ctx.moveTo(pipeBase.x, pipeBase.y);
-    ctx.lineTo(pipeTop.x, pipeTop.y);
-    ctx.stroke();
-    // Pipe cap
-    ctx.strokeStyle = RIM_LIGHT;
-    ctx.lineWidth = 2 * scale;
-    ctx.beginPath();
-    ctx.moveTo(pipeTop.x - fwd.x * 0.8 * scale, pipeTop.y - fwd.y * 0.8 * scale);
-    ctx.lineTo(pipeTop.x + fwd.x * 0.8 * scale, pipeTop.y + fwd.y * 0.8 * scale);
+    ctx.arc(cx, cy, r, angle + Math.PI, angle, true);
     ctx.stroke();
   }
 
-  private drawWheel(ctx: CanvasRenderingContext2D, x: number, y: number, rotation: number) {
-    const r = WHEEL_R;
-
+  private drawWheel(ctx: CanvasRenderingContext2D, x: number, y: number, r: number, rot: number) {
     // Outer tire
-    ctx.fillStyle = TIRE;
-    ctx.strokeStyle = OUTLINE;
-    ctx.lineWidth = 0.8;
+    ctx.fillStyle = TIRE_COLOR;
+    ctx.strokeStyle = TIRE_EDGE;
+    ctx.lineWidth = r * 0.12;
     ctx.beginPath();
     ctx.arc(x, y, r, 0, Math.PI * 2);
     ctx.fill();
     ctx.stroke();
 
-    // Tire tread marks (small bumps around the perimeter)
+    // Tread marks
     ctx.strokeStyle = '#333';
-    ctx.lineWidth = 0.6;
-    for (let i = 0; i < 16; i++) {
-      const a = rotation + (i * Math.PI * 2 / 16);
-      const ix = x + Math.cos(a) * r * 0.82;
-      const iy = y + Math.sin(a) * r * 0.82;
-      const ox = x + Math.cos(a) * r * 0.98;
-      const oy = y + Math.sin(a) * r * 0.98;
+    ctx.lineWidth = r * 0.08;
+    const treads = 14;
+    for (let i = 0; i < treads; i++) {
+      const a = rot + (i * Math.PI * 2 / treads);
       ctx.beginPath();
-      ctx.moveTo(ix, iy);
-      ctx.lineTo(ox, oy);
+      ctx.moveTo(x + Math.cos(a) * r * 0.78, y + Math.sin(a) * r * 0.78);
+      ctx.lineTo(x + Math.cos(a) * r * 0.95, y + Math.sin(a) * r * 0.95);
       ctx.stroke();
     }
 
-    // Rim (inner circle)
-    ctx.fillStyle = RIM;
+    // Inner rim
+    ctx.fillStyle = RIM_COLOR;
     ctx.strokeStyle = '#333';
-    ctx.lineWidth = 0.6;
+    ctx.lineWidth = r * 0.06;
     ctx.beginPath();
-    ctx.arc(x, y, r * 0.48, 0, Math.PI * 2);
+    ctx.arc(x, y, r * 0.5, 0, Math.PI * 2);
     ctx.fill();
     ctx.stroke();
 
-    // Rim detail — 5 spokes
-    ctx.strokeStyle = RIM_LIGHT;
-    ctx.lineWidth = 1;
+    // Spokes
+    ctx.strokeStyle = RIM_SPOKE;
+    ctx.lineWidth = r * 0.12;
     for (let i = 0; i < 5; i++) {
-      const a = rotation + (i * Math.PI * 2 / 5);
+      const a = rot + (i * Math.PI * 2 / 5);
       ctx.beginPath();
       ctx.moveTo(x + Math.cos(a) * r * 0.15, y + Math.sin(a) * r * 0.15);
-      ctx.lineTo(x + Math.cos(a) * r * 0.42, y + Math.sin(a) * r * 0.42);
+      ctx.lineTo(x + Math.cos(a) * r * 0.44, y + Math.sin(a) * r * 0.44);
       ctx.stroke();
     }
 
-    // Hub center
-    ctx.fillStyle = RIM_LIGHT;
+    // Hub
+    ctx.fillStyle = RIM_HUB;
     ctx.beginPath();
-    ctx.arc(x, y, r * 0.12, 0, Math.PI * 2);
+    ctx.arc(x, y, r * 0.14, 0, Math.PI * 2);
     ctx.fill();
   }
 
-  private drawDriver(ctx: CanvasRenderingContext2D, p: Array<{x: number; y: number}>, mounted: boolean) {
+  private drawDriver(ctx: CanvasRenderingContext2D, p: Array<{x: number; y: number}>, frameLen: number) {
     const seat = p[DS];
     const head = p[DH];
-
-    const dx = head.x - seat.x;
-    const dy = head.y - seat.y;
+    const dx = head.x - seat.x, dy = head.y - seat.y;
     const len = Math.sqrt(dx * dx + dy * dy) || 1;
     const nx = dx / len, ny = dy / len;
 
-    // Body
-    ctx.strokeStyle = DRIVER_C;
-    ctx.lineWidth = 2.2;
+    // Body line
+    ctx.strokeStyle = BODY_DARK;
+    ctx.lineWidth = frameLen * 0.1;
     ctx.beginPath();
     ctx.moveTo(seat.x, seat.y);
     ctx.lineTo(head.x, head.y);
     ctx.stroke();
 
-    // Head (helmet)
-    const hx = head.x + nx * 3;
-    const hy = head.y + ny * 3;
+    // Helmet
+    const hx = head.x + nx * frameLen * 0.15;
+    const hy = head.y + ny * frameLen * 0.15;
+    const hr = frameLen * 0.14;
 
-    ctx.fillStyle = BODY;
+    ctx.fillStyle = BODY_DARK;
     ctx.strokeStyle = OUTLINE;
-    ctx.lineWidth = 1.2;
+    ctx.lineWidth = frameLen * 0.03;
     ctx.beginPath();
-    ctx.arc(hx, hy, 3.2, 0, Math.PI * 2);
+    ctx.arc(hx, hy, hr, 0, Math.PI * 2);
     ctx.fill();
     ctx.stroke();
 
     // Visor
-    const perpX = -ny;
-    const perpY = nx;
+    const px = -ny, py = nx; // perpendicular
     ctx.fillStyle = WINDOW;
     ctx.globalAlpha = 0.7;
     ctx.beginPath();
-    ctx.arc(hx + perpX * 1.2, hy + perpY * 1.2, 1.8, 0, Math.PI * 2);
+    ctx.arc(hx + px * hr * 0.35, hy + py * hr * 0.35, hr * 0.55, 0, Math.PI * 2);
     ctx.fill();
     ctx.globalAlpha = 1;
   }
@@ -300,31 +286,16 @@ export class TruckRenderer {
   private drawExhaust(ctx: CanvasRenderingContext2D, p: Array<{x: number; y: number}>, total: number) {
     const count = total - EXHAUST_START;
     if (count < 2) return;
-
     for (let i = 0; i < count; i++) {
       const idx = EXHAUST_START + i;
       if (idx >= total) break;
       const t = i / (count - 1);
-      ctx.fillStyle = EXHAUST_C;
-      ctx.globalAlpha = (1 - t) * 0.2;
+      ctx.fillStyle = EXHAUST_CLR;
+      ctx.globalAlpha = (1 - t) * 0.18;
       ctx.beginPath();
-      ctx.arc(p[idx].x, p[idx].y, 0.8 + t * 2.5, 0, Math.PI * 2);
+      ctx.arc(p[idx].x, p[idx].y, 0.6 + t * 2, 0, Math.PI * 2);
       ctx.fill();
     }
     ctx.globalAlpha = 1;
-  }
-
-  // Helpers
-  private mid(a: {x:number;y:number}, b: {x:number;y:number}) {
-    return { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
-  }
-  private dist(a: {x:number;y:number}, b: {x:number;y:number}) {
-    const dx = b.x - a.x, dy = b.y - a.y;
-    return Math.sqrt(dx * dx + dy * dy);
-  }
-  private dir(a: {x:number;y:number}, b: {x:number;y:number}) {
-    const dx = b.x - a.x, dy = b.y - a.y;
-    const len = Math.sqrt(dx * dx + dy * dy) || 1;
-    return { x: dx / len, y: dy / len };
   }
 }
