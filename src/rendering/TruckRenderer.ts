@@ -63,12 +63,16 @@ export class TruckRenderer {
   private sparks: Spark[] = [];
   private flashAlpha = 0;
   private wasSledIntact = true;
+  private wasDriverMounted = true;
+  private hasCrashed = false;
 
   resetDebris() {
     this.debris = [];
     this.sparks = [];
     this.flashAlpha = 0;
     this.wasSledIntact = true;
+    this.wasDriverMounted = true;
+    this.hasCrashed = false;
     this.prevWFx = 0;
   }
 
@@ -76,11 +80,15 @@ export class TruckRenderer {
     if (!rider || rider.points.length < 6) return;
     const p = rider.points;
 
-    // Detect crash
-    if (this.wasSledIntact && !rider.sledIntact) {
+    // Detect crash — trigger on sled break OR driver eject (whichever happens first)
+    const sledBroke = this.wasSledIntact && !rider.sledIntact;
+    const driverEjected = this.wasDriverMounted && !rider.mounted;
+    if (!this.hasCrashed && (sledBroke || driverEjected)) {
       this.spawnDebris(p);
+      this.hasCrashed = true;
     }
     this.wasSledIntact = rider.sledIntact;
+    this.wasDriverMounted = rider.mounted;
 
     // Frame vectors
     const dx = p[WR].x - p[WF].x;
