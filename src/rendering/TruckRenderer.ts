@@ -52,8 +52,9 @@ export class TruckRenderer {
     const len = Math.sqrt(dx * dx + dy * dy) || 1;
     // forward = along wheel axle line (left to right)
     const fx = dx / len, fy = dy / len;
-    // up = perpendicular, pointing away from ground (into the frame)
-    const ux = -fy, uy = fx;
+    // up = perpendicular, pointing away from ground (toward chassis tops)
+    // In screen coords (+Y down), rotate forward 90° clockwise = (fy, -fx)
+    const ux = fy, uy = -fx;
 
     // Update wheel rotation
     // Use velocity of the wheel midpoint
@@ -191,8 +192,9 @@ export class TruckRenderer {
 
   private drawArch(ctx: CanvasRenderingContext2D, cx: number, cy: number, r: number, fx: number, fy: number) {
     const angle = Math.atan2(fy, fx);
+    // Draw the upper half of the circle (fender above wheel)
     ctx.beginPath();
-    ctx.arc(cx, cy, r, angle + Math.PI, angle, true);
+    ctx.arc(cx, cy, r, angle + Math.PI, angle, false);
     ctx.stroke();
   }
 
