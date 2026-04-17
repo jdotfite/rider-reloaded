@@ -81,15 +81,17 @@ export class TruckRenderer {
       ctx.lineJoin = 'round';
 
       // ── SUSPENSION STRUTS ──
+      // Connect from wheel visual center up to body bottom
+      const wOff = wheelR / len; // wheel radius as fraction of frame length
       const strutW = len * 0.06;
       ctx.strokeStyle = BUMPER;
       ctx.lineWidth = strutW;
       // Front strut
-      const sf1 = at(-0.38, 0);
+      const sf1 = at(-0.38, wOff);
       const sf2 = at(-0.38, 0.3);
       ctx.beginPath(); ctx.moveTo(sf1.x, sf1.y); ctx.lineTo(sf2.x, sf2.y); ctx.stroke();
       // Rear strut
-      const sr1 = at(0.38, 0);
+      const sr1 = at(0.38, wOff);
       const sr2 = at(0.38, 0.3);
       ctx.beginPath(); ctx.moveTo(sr1.x, sr1.y); ctx.lineTo(sr2.x, sr2.y); ctx.stroke();
 
@@ -174,15 +176,21 @@ export class TruckRenderer {
       // ── WHEEL ARCHES ──
       ctx.strokeStyle = OUTLINE;
       ctx.lineWidth = len * 0.04;
+      // Wheel visual centers (offset up from contact point by wheel radius)
+      const wfx = p[WF].x + ux * wheelR, wfy = p[WF].y + uy * wheelR;
+      const wrx = p[WR].x + ux * wheelR, wry = p[WR].y + uy * wheelR;
+
       // Front arch
-      this.drawArch(ctx, p[WF].x, p[WF].y, wheelR + len * 0.04, fx, fy);
+      this.drawArch(ctx, wfx, wfy, wheelR + len * 0.04, fx, fy);
       // Rear arch
-      this.drawArch(ctx, p[WR].x, p[WR].y, wheelR + len * 0.04, fx, fy);
+      this.drawArch(ctx, wrx, wry, wheelR + len * 0.04, fx, fy);
     }
 
-    // ── WHEELS (always drawn) ──
-    this.drawWheel(ctx, p[WF].x, p[WF].y, wheelR, this.wheelAngle);
-    this.drawWheel(ctx, p[WR].x, p[WR].y, wheelR, this.wheelAngle);
+    // ── WHEELS (drawn at visual center, offset up from contact point) ──
+    const wfx = p[WF].x + ux * wheelR, wfy = p[WF].y + uy * wheelR;
+    const wrx = p[WR].x + ux * wheelR, wry = p[WR].y + uy * wheelR;
+    this.drawWheel(ctx, wfx, wfy, wheelR, this.wheelAngle);
+    this.drawWheel(ctx, wrx, wry, wheelR, this.wheelAngle);
 
     // ── DRIVER ──
     if (rider.points.length > DH) {
