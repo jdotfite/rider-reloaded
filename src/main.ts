@@ -610,6 +610,7 @@ function startPlayback() {
   if (gameLoop.state === GameState.EDITING) {
     grid.rebuild(store.lines);
     rider.reset();
+    truckRenderer.resetDebris();
     savedCameraPos = camera.position.clone();
     savedCameraZoom = camera.zoom;
     cameraFollowing = true;
@@ -624,6 +625,7 @@ function startPlayback() {
 function stopPlayback() {
   gameLoop.stop();
   rider.setStartPosition(store.startPosition);
+  truckRenderer.resetDebris();
   cameraFollowing = false;
   if (savedCameraPos) {
     camera.position.copyFrom(savedCameraPos);
