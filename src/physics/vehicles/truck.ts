@@ -42,14 +42,14 @@ const TRUCK_POINTS: PointDef[] = [
   { x: 5,    y: 0,    type: 'collision', friction: 0.8 },    // 4: DRIVER_SEAT (like BUTT)
   { x: 5,    y: -5.5, type: 'collision', friction: 0.8 },    // 5: DRIVER_HEAD (like SHOULDER)
 
-  // Exhaust flutter
-  { x: 18,   y: -1,   type: 'flutter', friction: 0 },
-  { x: 20,   y: -1,   type: 'flutter', friction: 0 },
-  { x: 22,   y: -1,   type: 'flutter', friction: 0 },
-  { x: 24,   y: -1,   type: 'flutter', friction: 0 },
-  { x: 26,   y: -1,   type: 'flutter', friction: 0 },
-  { x: 28,   y: -1,   type: 'flutter', friction: 0 },
-  { x: 30,   y: -1,   type: 'flutter', friction: 0 },
+  // Exhaust flutter (trails behind — negative x = back of truck)
+  { x: -2,   y: -1,   type: 'flutter', friction: 0 },
+  { x: -4,   y: -1,   type: 'flutter', friction: 0 },
+  { x: -6,   y: -1,   type: 'flutter', friction: 0 },
+  { x: -8,   y: -1,   type: 'flutter', friction: 0 },
+  { x: -10,  y: -1,   type: 'flutter', friction: 0 },
+  { x: -12,  y: -1,   type: 'flutter', friction: 0 },
+  { x: -14,  y: -1,   type: 'flutter', friction: 0 },
 ];
 
 const TRUCK_CONSTRAINTS: ConstraintDef[] = [
@@ -77,8 +77,8 @@ const TRUCK_CONSTRAINTS: ConstraintDef[] = [
   { type: 'repel', p1: DRIVER_HEAD, p2: WHEEL_FRONT, lengthFactor: 0.5 },
   { type: 'repel', p1: DRIVER_HEAD, p2: WHEEL_REAR, lengthFactor: 0.5 },
 
-  // Exhaust chains
-  { type: 'chain', p1: CHASSIS_REAR, p2: EXHAUST_START },
+  // Exhaust chains (from back of truck = CHASSIS_FRONT at x:0)
+  { type: 'chain', p1: CHASSIS_FRONT, p2: EXHAUST_START },
   { type: 'chain', p1: EXHAUST_START, p2: EXHAUST_START + 1 },
   { type: 'chain', p1: EXHAUST_START + 1, p2: EXHAUST_START + 2 },
   { type: 'chain', p1: EXHAUST_START + 2, p2: EXHAUST_START + 3 },
