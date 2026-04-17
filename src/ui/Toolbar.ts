@@ -246,8 +246,8 @@ export class Toolbar {
       const fps = 40;
       const seconds = frame / fps;
       const mins = Math.floor(seconds / 60);
-      const secs = (seconds % 60).toFixed(3);
-      this.timelineStart.textContent = `${mins}:${secs.padStart(6, '0')}`;
+      const secs = Math.floor(seconds % 60);
+      this.timelineStart.textContent = `${mins}:${String(secs).padStart(2, '0')}`;
       this.frameDisplay.textContent = `F${frame}`;
 
       if (!this.seekThrottleTimer) {
@@ -479,13 +479,13 @@ export class Toolbar {
     const fps = 40;
     const seconds = frame / fps;
     const mins = Math.floor(seconds / 60);
-    const secs = (seconds % 60).toFixed(3);
-    this.timelineStart.textContent = `${mins}:${secs.padStart(6, '0')}`;
+    const secs = Math.floor(seconds % 60);
+    this.timelineStart.textContent = `${mins}:${String(secs).padStart(2, '0')}`;
 
     const maxSeconds = maxFrame / fps;
     const maxMins = Math.floor(maxSeconds / 60);
-    const maxSecs = (maxSeconds % 60).toFixed(3);
-    this.timelineEnd.textContent = `${maxMins}:${maxSecs.padStart(6, '0')}`;
+    const maxSecs = Math.floor(maxSeconds % 60);
+    this.timelineEnd.textContent = `${maxMins}:${String(maxSecs).padStart(2, '0')}`;
 
     this.frameDisplay.textContent = `F${frame}`;
   }

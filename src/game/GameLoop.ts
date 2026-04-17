@@ -3,7 +3,7 @@ import { PhysicsEngine } from '../physics/PhysicsEngine';
 import { TIMESTEP } from '../constants';
 import type { RiderSnapshot } from '../physics/Rider';
 
-const SNAPSHOT_INTERVAL = 40; // save snapshot every 40 frames (~1 second)
+const SNAPSHOT_INTERVAL = 10; // save snapshot every 10 frames (~0.25 seconds)
 
 interface FrameSnapshot {
   frame: number;
@@ -121,9 +121,10 @@ export class GameLoop {
     this.snapshots = [];
   }
 
-  /** Reset frame counter and clear stale snapshots (e.g. after grid rebuild) */
+  /** Reset frame counter, max frame, and clear stale snapshots (e.g. after grid rebuild) */
   resetSimulation() {
     this.frame = 0;
+    this.maxFrame = 0;
     this.snapshots = [];
   }
 

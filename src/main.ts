@@ -113,8 +113,11 @@ input.getGameState = () => gameLoop.state;
 input.onPlayPauseToggle = () => {
   if (gameLoop.state === GameState.EDITING) {
     startPlayback();
+  } else if (gameLoop.state === GameState.PAUSED) {
+    ensureGridFresh();
+    gameLoop.play();
   } else {
-    gameLoop.togglePlayPause();
+    gameLoop.pause();
   }
 };
 input.onStop = () => stopPlayback();
@@ -180,10 +183,8 @@ const gameLoop = new GameLoop(physics, () => {
   const speed = rider.getCenterSpeed() * (1000 / TIMESTEP);
   toolbar.updateStats(store.lines.length, speed);
 
-  // Update timeline during playback
-  if (gameLoop.state !== GameState.EDITING) {
-    toolbar.updateTimeline(gameLoop.frame, Math.max(gameLoop.maxFrame, gameLoop.frame));
-  }
+  // Update timeline always (shows 0:00 when stopped, current position during playback)
+  toolbar.updateTimeline(gameLoop.frame, Math.max(gameLoop.maxFrame, gameLoop.frame));
 
   uiRenderer.update({
     frame: gameLoop.frame,
@@ -654,9 +655,11 @@ renderer.addRenderCallback((ctx) => {
 
   // Onion skinning: draw ghost riders from previous snapshots
   if (onionSkinning && gameLoop.state !== GameState.EDITING) {
-    const ghosts = gameLoop.getOnionSnapshots(4);
+    const ghosts = gameLoop.getOnionSnapshots(8);
     for (let i = ghosts.length - 1; i >= 0; i--) {
-      const opacity = 0.1 + (ghosts.length - 1 - i) * 0.05;
+      // Fade from most recent (brightest) to oldest (faintest)
+      const t = (ghosts.length - 1 - i) / Math.max(ghosts.length - 1, 1);
+      const opacity = 0.25 * (1 - t * 0.8); // 0.25 → 0.05
       ctx.globalAlpha = opacity;
       const ghostData = Rider.renderDataFromSnapshot(ghosts[i].snapshot);
       renderVehicle(ctx, ghostData);
