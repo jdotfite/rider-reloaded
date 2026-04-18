@@ -208,6 +208,9 @@ toolbar.onOnionSkinToggle = (enabled) => {
 toolbar.onSnapToggle = (enabled) => {
   snapEnabled = enabled;
 };
+toolbar.onSmooth = () => {
+  selectTool.triggerSmooth();
+};
 toolbar.onLineTypeSelect = (type) => {
   currentLineType = type;
   toolbar.setActiveLineType(type);

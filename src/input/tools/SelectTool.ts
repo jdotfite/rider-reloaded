@@ -192,6 +192,13 @@ export class SelectTool implements Tool {
     return this.selectedIds.size;
   }
 
+  triggerSmooth() {
+    if (this.selectedIds.size > 0 && this.state === 'idle') {
+      this.smoothPending = true;
+      this.prepareSmoothChains();
+    }
+  }
+
   render(ctx: CanvasRenderingContext2D) {
     // Smooth preview
     if (this.state === 'smoothing' && this.smoothPreviewPoints.length > 0) {

@@ -61,8 +61,10 @@ export class Toolbar {
   onStepForward: (() => void) | null = null;
   onStepBack: (() => void) | null = null;
   onSnapToggle: ((enabled: boolean) => void) | null = null;
+  onSmooth: (() => void) | null = null;
 
   private toolButtons: Map<string, HTMLButtonElement> = new Map();
+  private smoothBtn!: HTMLButtonElement;
   private lineTypeButtons: Map<LineType, HTMLButtonElement> = new Map();
   private playBtn!: HTMLButtonElement;
   private pauseBtn!: HTMLButtonElement;
@@ -141,8 +143,8 @@ export class Toolbar {
     this.addToolGridBtn('pencil', ICONS.pen, 'Pen');
     this.addToolGridBtn('line', ICONS.line, 'Line');
     this.addToolGridBtn('eraser', ICONS.eraser, 'Erase');
-    this.addToolGridBtn('select', ICONS.select, 'Select');
     this.addToolGridBtn('edit', ICONS.edit, 'Edit');
+    this.addToolGridBtn('select', ICONS.select, 'Select');
     this.addToolGridBtn('flag', ICONS.flag, 'Flag');
 
     // Onion skin toggle
@@ -159,6 +161,12 @@ export class Toolbar {
       snapCheckbox.addEventListener('change', () => {
         this.onSnapToggle?.(snapCheckbox.checked);
       });
+    }
+
+    // Smooth button (visible only when select tool is active)
+    this.smoothBtn = document.getElementById('smooth-btn') as HTMLButtonElement;
+    if (this.smoothBtn) {
+      this.smoothBtn.addEventListener('click', () => this.onSmooth?.());
     }
 
     // Transport buttons
@@ -329,6 +337,9 @@ export class Toolbar {
   setActiveTool(name: string) {
     for (const [n, btn] of this.toolButtons) {
       btn.classList.toggle('active', n === name);
+    }
+    if (this.smoothBtn) {
+      this.smoothBtn.style.display = name === 'select' ? '' : 'none';
     }
   }
 

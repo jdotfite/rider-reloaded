@@ -158,8 +158,8 @@ export class InputManager {
     if (e.code === 'Digit1') this.onToolSwitch?.('pencil');
     if (e.code === 'Digit2') this.onToolSwitch?.('line');
     if (e.code === 'Digit3') this.onToolSwitch?.('eraser');
-    if (e.code === 'Digit4') this.onToolSwitch?.('select');
-    if (e.code === 'Digit5') this.onToolSwitch?.('edit');
+    if (e.code === 'Digit4') this.onToolSwitch?.('edit');
+    if (e.code === 'Digit5') this.onToolSwitch?.('select');
     if (e.code === 'Digit6') this.onToolSwitch?.('flag');
     if (e.code === 'KeyQ') this.onLineTypeSwitch?.('solid');
     if (e.code === 'KeyW') this.onLineTypeSwitch?.('acc');
