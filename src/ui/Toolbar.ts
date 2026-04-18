@@ -61,10 +61,17 @@ export class Toolbar {
   onStepForward: (() => void) | null = null;
   onStepBack: (() => void) | null = null;
   onSnapToggle: ((enabled: boolean) => void) | null = null;
-  onSmooth: (() => void) | null = null;
+  onSmoothStart: (() => boolean) | null = null;
+  onSmoothChange: ((amount: number) => void) | null = null;
+  onSmoothApply: (() => void) | null = null;
+  onSmoothCancel: (() => void) | null = null;
 
   private toolButtons: Map<string, HTMLButtonElement> = new Map();
+  private smoothContainer!: HTMLElement;
   private smoothBtn!: HTMLButtonElement;
+  private smoothSliderRow!: HTMLElement;
+  private smoothSlider!: HTMLInputElement;
+  private smoothValue!: HTMLElement;
   private lineTypeButtons: Map<LineType, HTMLButtonElement> = new Map();
   private playBtn!: HTMLButtonElement;
   private pauseBtn!: HTMLButtonElement;
@@ -163,10 +170,39 @@ export class Toolbar {
       });
     }
 
-    // Smooth button (visible only when select tool is active)
+    // Smooth UI (visible only when select tool is active)
+    this.smoothContainer = document.getElementById('smooth-container') as HTMLElement;
     this.smoothBtn = document.getElementById('smooth-btn') as HTMLButtonElement;
+    this.smoothSliderRow = document.getElementById('smooth-slider-row') as HTMLElement;
+    this.smoothSlider = document.getElementById('smooth-slider') as HTMLInputElement;
+    this.smoothValue = document.getElementById('smooth-value') as HTMLElement;
+    const smoothApply = document.getElementById('smooth-apply') as HTMLButtonElement;
+    const smoothCancel = document.getElementById('smooth-cancel') as HTMLButtonElement;
+
     if (this.smoothBtn) {
-      this.smoothBtn.addEventListener('click', () => this.onSmooth?.());
+      this.smoothBtn.addEventListener('click', () => {
+        const started = this.onSmoothStart?.() ?? false;
+        if (started) this.showSmoothSlider();
+      });
+    }
+    if (this.smoothSlider) {
+      this.smoothSlider.addEventListener('input', () => {
+        const v = parseInt(this.smoothSlider.value, 10);
+        this.smoothValue.textContent = `${v}%`;
+        this.onSmoothChange?.(v / 100);
+      });
+    }
+    if (smoothApply) {
+      smoothApply.addEventListener('click', () => {
+        this.onSmoothApply?.();
+        this.hideSmoothSlider();
+      });
+    }
+    if (smoothCancel) {
+      smoothCancel.addEventListener('click', () => {
+        this.onSmoothCancel?.();
+        this.hideSmoothSlider();
+      });
     }
 
     // Transport buttons
@@ -338,9 +374,24 @@ export class Toolbar {
     for (const [n, btn] of this.toolButtons) {
       btn.classList.toggle('active', n === name);
     }
-    if (this.smoothBtn) {
-      this.smoothBtn.style.display = name === 'select' ? '' : 'none';
+    if (this.smoothContainer) {
+      this.smoothContainer.style.display = name === 'select' ? '' : 'none';
+      if (name !== 'select') this.hideSmoothSlider();
     }
+  }
+
+  showSmoothSlider() {
+    if (this.smoothBtn) this.smoothBtn.style.display = 'none';
+    if (this.smoothSliderRow) this.smoothSliderRow.style.display = '';
+    if (this.smoothSlider) {
+      this.smoothSlider.value = '0';
+      this.smoothValue.textContent = '0%';
+    }
+  }
+
+  hideSmoothSlider() {
+    if (this.smoothBtn) this.smoothBtn.style.display = '';
+    if (this.smoothSliderRow) this.smoothSliderRow.style.display = 'none';
   }
 
   setActiveLineType(type: LineType) {

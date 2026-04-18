@@ -208,8 +208,16 @@ toolbar.onOnionSkinToggle = (enabled) => {
 toolbar.onSnapToggle = (enabled) => {
   snapEnabled = enabled;
 };
-toolbar.onSmooth = () => {
-  selectTool.triggerSmooth();
+toolbar.onSmoothStart = () => selectTool.startSmooth();
+toolbar.onSmoothChange = (amount) => selectTool.setSmoothAmount(amount);
+toolbar.onSmoothApply = () => selectTool.applySmooth();
+toolbar.onSmoothCancel = () => selectTool.cancelSmooth();
+selectTool.onSmoothRequest = () => {
+  const started = selectTool.startSmooth();
+  if (started) toolbar.showSmoothSlider();
+};
+selectTool.onSmoothEnd = () => {
+  toolbar.hideSmoothSlider();
 };
 toolbar.onLineTypeSelect = (type) => {
   currentLineType = type;

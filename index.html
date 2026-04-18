@@ -1023,7 +1023,19 @@
             <input type="checkbox" id="snap-checkbox" checked />
             <span>Snap to endpoints</span>
           </label>
-          <button id="smooth-btn" style="display:none; width:100%; margin-top:var(--sp-1); padding:var(--sp-1) var(--sp-2); background:var(--bg-hover); border:1px solid var(--border); border-radius:4px; cursor:pointer; font-size:var(--text-sm); color:var(--ink);" title="Select lines then click to smooth (S)">Smooth selection (S)</button>
+          <div id="smooth-container" style="display:none; margin-top:var(--sp-2);">
+            <button id="smooth-btn" style="width:100%; padding:var(--sp-1) var(--sp-2); background:var(--bg-hover); border:1px solid var(--border); border-radius:4px; cursor:pointer; font-size:var(--text-sm); color:var(--ink);" title="Select lines then click to smooth (S)">Smooth (S)</button>
+            <div id="smooth-slider-row" style="display:none;">
+              <div style="display:flex; align-items:center; gap:var(--sp-1); margin-top:var(--sp-1);">
+                <input type="range" id="smooth-slider" min="0" max="100" value="0" style="flex:1; accent-color:#4488cc;" />
+                <span id="smooth-value" style="font-size:var(--text-xs); color:var(--ink-muted); min-width:28px; text-align:right;">0%</span>
+              </div>
+              <div style="display:flex; gap:var(--sp-1); margin-top:var(--sp-1);">
+                <button id="smooth-apply" style="flex:1; padding:var(--sp-1); background:#4488cc; color:#fff; border:none; border-radius:4px; cursor:pointer; font-size:var(--text-sm);">Apply</button>
+                <button id="smooth-cancel" style="flex:1; padding:var(--sp-1); background:var(--bg-hover); border:1px solid var(--border); border-radius:4px; cursor:pointer; font-size:var(--text-sm); color:var(--ink);">Cancel</button>
+              </div>
+            </div>
+          </div>
         </div>
 
         <button id="svg-import-btn">SVG Import</button>

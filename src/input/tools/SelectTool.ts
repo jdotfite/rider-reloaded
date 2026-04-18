@@ -29,11 +29,14 @@ export class SelectTool implements Tool {
   private dragCommitted = false;
 
   // Smooth state
-  private smoothPending = false;
   private smoothOriginalChains: SmoothChain[] = [];
   private smoothPreviewPoints: Vec2[][] = [];
   private smoothAmount = 0;
-  private smoothDragStartX = 0;
+
+  // Callback when S key requests smooth (so toolbar can show slider)
+  onSmoothRequest: (() => void) | null = null;
+  // Callback when smooth ends (so toolbar can hide slider)
+  onSmoothEnd: (() => void) | null = null;
 
   constructor(store: TrackStore) {
     this.store = store;
@@ -43,31 +46,18 @@ export class SelectTool implements Tool {
     if (e.code === 'KeyS' && !e.ctrlKey && !e.altKey && !e.metaKey) {
       if (this.selectedIds.size > 0 && this.state === 'idle') {
         e.preventDefault();
-        this.smoothPending = true;
-        this.prepareSmoothChains();
+        this.onSmoothRequest?.();
       }
     }
-    if (e.code === 'Escape' && (this.smoothPending || this.state === 'smoothing')) {
+    if (e.code === 'Escape' && this.state === 'smoothing') {
       e.preventDefault();
       this.cancelSmooth();
     }
   }
 
   onMouseDown(worldPos: Vec2, screenPos: Vec2) {
-    // Start smoothing interaction
-    if (this.smoothPending && this.smoothOriginalChains.length > 0) {
-      this.state = 'smoothing';
-      this.smoothDragStartX = screenPos.x;
-      this.smoothAmount = 0;
-      this.smoothPending = false;
-      this.store.beginTransaction();
-      return;
-    }
-
-    // Cancel smooth pending if clicking without chains
-    if (this.smoothPending) {
-      this.smoothPending = false;
-    }
+    // Block normal interaction while smoothing — user must use slider
+    if (this.state === 'smoothing') return;
 
     // If clicking on an already selected line, start dragging
     if (this.selectedIds.size > 0) {
@@ -143,14 +133,6 @@ export class SelectTool implements Tool {
       }
       return;
     }
-
-    if (this.state === 'smoothing') {
-      const dx = screenPos.x - this.smoothDragStartX;
-      // 200px of horizontal drag = full smoothing
-      this.smoothAmount = Math.max(0, Math.min(1, dx / 200));
-      this.updateSmoothPreview();
-      return;
-    }
   }
 
   onMouseUp(worldPos: Vec2, screenPos: Vec2) {
@@ -164,15 +146,9 @@ export class SelectTool implements Tool {
       this.state = 'idle';
       return;
     }
-
-    if (this.state === 'smoothing') {
-      this.commitSmooth();
-      return;
-    }
   }
 
   getCursor(): string | null {
-    if (this.smoothPending || this.state === 'smoothing') return 'ew-resize';
     return null;
   }
 
@@ -192,11 +168,50 @@ export class SelectTool implements Tool {
     return this.selectedIds.size;
   }
 
-  triggerSmooth() {
-    if (this.selectedIds.size > 0 && this.state === 'idle') {
-      this.smoothPending = true;
-      this.prepareSmoothChains();
+  // ── Public smooth API (driven by toolbar slider) ──
+
+  /** Begin smoothing. Returns false if nothing to smooth. */
+  startSmooth(): boolean {
+    if (this.selectedIds.size === 0 || this.state !== 'idle') return false;
+    this.prepareSmoothChains();
+    if (this.smoothOriginalChains.length === 0) return false;
+    this.state = 'smoothing';
+    this.smoothAmount = 0;
+    this.store.beginTransaction();
+    return true;
+  }
+
+  /** Set smooth amount (0–1) and update live preview. */
+  setSmoothAmount(amount: number) {
+    if (this.state !== 'smoothing') return;
+    this.smoothAmount = Math.max(0, Math.min(1, amount));
+    this.updateSmoothPreview();
+  }
+
+  /** Commit the current smooth and return to idle. */
+  applySmooth() {
+    if (this.state !== 'smoothing') return;
+    this.commitSmooth();
+  }
+
+  /** Cancel smoothing and return to idle. */
+  cancelSmooth() {
+    if (this.state !== 'smoothing') {
+      this.smoothOriginalChains = [];
+      this.smoothPreviewPoints = [];
+      this.smoothAmount = 0;
+      return;
     }
+    this.store.endTransaction();
+    this.state = 'idle';
+    this.smoothOriginalChains = [];
+    this.smoothPreviewPoints = [];
+    this.smoothAmount = 0;
+    this.onSmoothEnd?.();
+  }
+
+  isSmoothing(): boolean {
+    return this.state === 'smoothing';
   }
 
   render(ctx: CanvasRenderingContext2D) {
@@ -252,15 +267,6 @@ export class SelectTool implements Tool {
         ctx.strokeRect(bounds.minX - 2, bounds.minY - 2, bounds.maxX - bounds.minX + 4, bounds.maxY - bounds.minY + 4);
         ctx.setLineDash([]);
       }
-
-      // Smooth pending indicator
-      if (this.smoothPending) {
-        ctx.fillStyle = 'rgba(68, 136, 204, 0.85)';
-        ctx.font = '12px sans-serif';
-        if (bounds) {
-          ctx.fillText('Drag to smooth →', bounds.minX, bounds.minY - 8);
-        }
-      }
     }
 
     // Box selection rectangle
@@ -297,12 +303,8 @@ export class SelectTool implements Tool {
 
   private prepareSmoothChains() {
     const selectedLines = this.store.lines.filter(l => this.selectedIds.has(l.id));
-    if (selectedLines.length === 0) {
-      this.smoothPending = false;
-      return;
-    }
+    if (selectedLines.length === 0) return;
 
-    // Group lines into connected chains by matching endpoints
     const visited = new Set<number>();
     this.smoothOriginalChains = [];
 
@@ -310,7 +312,6 @@ export class SelectTool implements Tool {
       if (visited.has(startLine.id)) continue;
       visited.add(startLine.id);
 
-      // Build chain forward from startLine.p2
       const forwardIds: number[] = [startLine.id];
       const forwardPoints: Vec2[] = [startLine.p1.clone(), startLine.p2.clone()];
       let tip = startLine.p2;
@@ -339,7 +340,6 @@ export class SelectTool implements Tool {
         }
       }
 
-      // Build chain backward from startLine.p1
       const backwardIds: number[] = [];
       const backwardPoints: Vec2[] = [];
       tip = startLine.p1;
@@ -389,14 +389,12 @@ export class SelectTool implements Tool {
 
   private commitSmooth() {
     if (this.smoothAmount > 0) {
-      // Remove original lines
       const allOldIds = new Set<number>();
       for (const chain of this.smoothOriginalChains) {
         for (const id of chain.lineIds) allOldIds.add(id);
       }
       this.store.removeLines(allOldIds);
 
-      // Add smoothed lines
       const newIds = new Set<number>();
       for (let ci = 0; ci < this.smoothOriginalChains.length; ci++) {
         const chain = this.smoothOriginalChains[ci];
@@ -412,19 +410,6 @@ export class SelectTool implements Tool {
 
     this.store.endTransaction();
     this.state = 'idle';
-    this.smoothOriginalChains = [];
-    this.smoothPreviewPoints = [];
-    this.smoothAmount = 0;
-  }
-
-  private cancelSmooth() {
-    if (this.state === 'smoothing') {
-      this.store.endTransaction();
-      // Undo the transaction since we didn't make changes during drag
-      // (endTransaction with no changes won't push to undo)
-    }
-    this.state = 'idle';
-    this.smoothPending = false;
     this.smoothOriginalChains = [];
     this.smoothPreviewPoints = [];
     this.smoothAmount = 0;
