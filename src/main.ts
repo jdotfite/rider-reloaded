@@ -27,6 +27,9 @@ import { TriggerStore } from './store/TriggerStore';
 import { TriggerRenderer } from './rendering/TriggerRenderer';
 import { TruckRenderer } from './rendering/TruckRenderer';
 import { VEHICLES, getVehicle } from './physics/vehicles';
+import { AudioPlayer } from './audio/AudioPlayer';
+import { WaveformRenderer } from './audio/WaveformRenderer';
+import { parseYouTubeId, YouTubePlayer } from './audio/youtube';
 
 // Core
 const canvas = document.getElementById('canvas') as HTMLCanvasElement;
@@ -40,6 +43,43 @@ store.onMutation = () => {
 const grid = new SpatialGrid();
 const triggerStore = new TriggerStore();
 const triggerRenderer = new TriggerRenderer();
+const audioPlayer = new AudioPlayer();
+const ytPlayer = new YouTubePlayer();
+const waveformCanvas = document.getElementById('waveform-canvas') as HTMLCanvasElement;
+const waveformRenderer = new WaveformRenderer(waveformCanvas);
+const hudBeat = document.getElementById('hud-beat') as HTMLElement;
+const statBeat = document.getElementById('stat-beat') as HTMLElement;
+const metronomeFlash = document.getElementById('metronome-flash') as HTMLElement;
+let lastBeatIndex = -1; // track which beat we were on to detect crossings
+
+// Unified audio helpers — forward to whichever source is loaded
+function audioPlay() {
+  if (audioPlayer.loaded) { audioPlayer.playbackRate = gameLoop.playbackSpeed; audioPlayer.play(); }
+  if (ytPlayer.loaded) { ytPlayer.playbackRate = gameLoop.playbackSpeed; ytPlayer.play(); }
+}
+function audioPause() {
+  audioPlayer.pause();
+  ytPlayer.pause();
+}
+function audioStop() {
+  audioPlayer.stop();
+  ytPlayer.stop();
+}
+function audioSeekFrame(frame: number) {
+  audioPlayer.seekToFrame(frame);
+  ytPlayer.seekToFrame(frame);
+}
+function audioSyncFrame(frame: number) {
+  if (audioPlayer.loaded) audioPlayer.syncToFrame(frame);
+  if (ytPlayer.loaded) ytPlayer.syncToFrame(frame);
+}
+function audioSetSpeed(speed: number) {
+  audioPlayer.playbackRate = speed;
+  ytPlayer.playbackRate = speed;
+}
+function audioAnyLoaded(): boolean {
+  return audioPlayer.loaded || ytPlayer.loaded;
+}
 
 // Start position
 store.startPosition = new Vec2(0, 0);
@@ -116,8 +156,10 @@ input.onPlayPauseToggle = () => {
   } else if (gameLoop.state === GameState.PAUSED) {
     ensureGridFresh();
     gameLoop.play();
+    audioPlay();
   } else {
     gameLoop.pause();
+    audioPause();
   }
 };
 input.onStop = () => stopPlayback();
@@ -183,8 +225,51 @@ const gameLoop = new GameLoop(physics, () => {
   const speed = rider.getCenterSpeed() * (1000 / TIMESTEP);
   toolbar.updateStats(store.lines.length, speed);
 
+  // Update beat HUD counter
+  if (waveformRenderer.bpm > 0 && gameLoop.state !== GameState.EDITING) {
+    const fps = 1000 / TIMESTEP;
+    const beatInterval = 60 / waveformRenderer.bpm;
+    const currentSeconds = gameLoop.frame / fps;
+    const offsetSeconds = waveformRenderer.beatOffset;
+    const relTime = currentSeconds - offsetSeconds;
+    const currentBeatFloat = relTime / beatInterval;
+    const nextBeatIndex = Math.ceil(currentBeatFloat);
+    const nextBeatSeconds = nextBeatIndex * beatInterval + offsetSeconds;
+    const framesToNext = Math.max(0, Math.round((nextBeatSeconds - currentSeconds) * fps));
+    const beatNum = Math.floor(currentBeatFloat);
+    const measure = Math.floor(beatNum / 4) + 1;
+    const beat = (((beatNum % 4) + 4) % 4) + 1;
+    statBeat.textContent = `${measure}:${beat}  +${framesToNext}f`;
+    hudBeat.style.display = '';
+
+    // Metronome flash on beat crossing
+    if (gameLoop.state === GameState.PLAYING && beatNum !== lastBeatIndex && beatNum >= 0) {
+      lastBeatIndex = beatNum;
+      const isDownbeat = beatNum % 4 === 0;
+      metronomeFlash.style.background = isDownbeat
+        ? 'radial-gradient(ellipse at center, rgba(255,80,80,0.12) 0%, transparent 70%)'
+        : 'radial-gradient(ellipse at center, rgba(100,100,255,0.08) 0%, transparent 70%)';
+      metronomeFlash.classList.remove('flash');
+      void metronomeFlash.offsetWidth; // force reflow to restart animation
+      metronomeFlash.classList.add('flash');
+    }
+  } else {
+    hudBeat.style.display = 'none';
+    lastBeatIndex = -1;
+  }
+
   // Update timeline always (shows 0:00 when stopped, current position during playback)
   toolbar.updateTimeline(gameLoop.frame, Math.max(gameLoop.maxFrame, gameLoop.frame));
+
+  // Audio drift correction during playback
+  if (gameLoop.state === GameState.PLAYING) {
+    audioSyncFrame(gameLoop.frame);
+  }
+
+  // Update waveform visualization (also draws beat grid even without audio)
+  if (waveformRenderer.hasAudio || waveformRenderer.bpm > 0) {
+    waveformRenderer.draw(gameLoop.frame, Math.max(gameLoop.maxFrame, gameLoop.frame));
+  }
 
   uiRenderer.update({
     frame: gameLoop.frame,
@@ -200,6 +285,19 @@ gameLoop.setSnapshotCallbacks(
   (snap) => rider.restoreSnapshot(snap),
   () => rider.reset(),
 );
+
+// ── Beat position recording ──
+// Record rider center position at every frame for beat marker rendering
+const riderPositions: Array<{ x: number; y: number }> = [];
+
+gameLoop.onFrame = (frame: number) => {
+  const center = rider.getCenter(1);
+  // Ensure array is large enough (seekToFrame may jump around)
+  while (riderPositions.length < frame) {
+    riderPositions.push({ x: 0, y: 0 });
+  }
+  riderPositions[frame - 1] = { x: center.x, y: center.y };
+};
 
 toolbar.onToolSelect = (name) => switchTool(name);
 toolbar.onOnionSkinToggle = (enabled) => {
@@ -222,6 +320,9 @@ selectTool.onSmoothEnd = () => {
 toolbar.onLineTypeSelect = (type) => {
   currentLineType = type;
   toolbar.setActiveLineType(type);
+  if (currentTool === selectTool && selectTool.getSelectedCount() > 0) {
+    selectTool.changeSelectedType(type);
+  }
 };
 toolbar.onClear = () => confirmNewTrack();
 toolbar.onUndo = () => {
@@ -233,7 +334,7 @@ toolbar.onRedo = () => {
 toolbar.onSave = () => saveTrack();
 toolbar.onLoad = () => openLoadDialog();
 toolbar.onPlay = () => startPlayback();
-toolbar.onPause = () => gameLoop.pause();
+toolbar.onPause = () => { gameLoop.pause(); audioPause(); };
 toolbar.onStop = () => stopPlayback();
 toolbar.onFit = () => fitView();
 toolbar.onLayerPrev = () => cycleLayer(-1);
@@ -253,6 +354,18 @@ toolbar.onLayerReorder = (from, to) => {
 // Speed presets
 toolbar.onSpeedChange = (speed) => {
   gameLoop.playbackSpeed = speed;
+  audioSetSpeed(speed);
+};
+
+// Audio scrub preview — plays a short audio snippet at the scrubbed position
+toolbar.onTimelineScrub = (frame) => {
+  const snappedFrame = waveformRenderer.snapFrameToBeat(frame);
+  if (audioPlayer.loaded) {
+    audioPlayer.scrubPreview(snappedFrame);
+  }
+  if (ytPlayer.loaded) {
+    ytPlayer.seekToFrame(snappedFrame);
+  }
 };
 
 // Timeline seek — auto-starts playback if in editing mode
@@ -271,24 +384,26 @@ toolbar.onTimelineSeek = (frame) => {
   if (gridDirty) {
     ensureGridFresh();
   }
-  gameLoop.seekToFrame(frame);
+  const snappedFrame = waveformRenderer.snapFrameToBeat(frame);
+  gameLoop.seekToFrame(snappedFrame);
+  audioSeekFrame(snappedFrame);
 };
 
 // Draw/Ride toggle — split behavior
 toolbar.onDrawClick = () => {
   if (gameLoop.state === GameState.PLAYING) {
-    gameLoop.pause(); // Pause but keep rider visible, allow drawing
+    gameLoop.pause();
+    audioPause();
   }
-  // If EDITING or PAUSED, no-op (already in draw mode)
 };
 toolbar.onRideClick = () => {
   if (gameLoop.state === GameState.EDITING) {
     startPlayback();
   } else if (gameLoop.state === GameState.PAUSED) {
     ensureGridFresh();
-    gameLoop.play(); // Resume from current frame
+    gameLoop.play();
+    audioPlay();
   }
-  // If PLAYING, no-op
 };
 
 // Screenshot
@@ -315,6 +430,7 @@ toolbar.onStepForward = () => {
     ensureGridFresh();
   }
   gameLoop.stepForward();
+  audioSeekFrame(gameLoop.frame);
 };
 
 // Step back — seek to previous frame using snapshot system
@@ -322,12 +438,14 @@ toolbar.onStepBack = () => {
   if (gameLoop.state === GameState.EDITING) return;
   if (gameLoop.state === GameState.PLAYING) {
     gameLoop.pause();
+    audioPause();
   }
   if (gridDirty) {
     ensureGridFresh();
   }
   if (gameLoop.frame > 0) {
     gameLoop.seekToFrame(gameLoop.frame - 1);
+    audioSeekFrame(gameLoop.frame);
   }
 };
 
@@ -463,6 +581,78 @@ window.addEventListener('keydown', (e) => {
     closeConfirmModal();
   }
 });
+
+// --- Audio state persistence ---
+const AUDIO_STATE_KEY = 'line-rider-audio';
+
+interface AudioState {
+  type: 'youtube' | 'none';
+  youtubeId?: string;
+  volume: number;
+  offset: number;
+  bpm: number;
+  beatSnap: number;
+}
+
+function saveAudioState() {
+  try {
+    const state: AudioState = {
+      type: ytPlayer.loaded ? 'youtube' : 'none',
+      youtubeId: ytPlayer.videoId || undefined,
+      volume: parseInt((document.getElementById('audio-volume') as HTMLInputElement)?.value || '80', 10),
+      offset: parseFloat((document.getElementById('audio-offset') as HTMLInputElement)?.value || '0'),
+      bpm: waveformRenderer.bpm,
+      beatSnap: waveformRenderer.beatSnap,
+    };
+    localStorage.setItem(AUDIO_STATE_KEY, JSON.stringify(state));
+  } catch { /* ignore */ }
+}
+
+async function restoreAudioState() {
+  try {
+    const raw = localStorage.getItem(AUDIO_STATE_KEY);
+    if (!raw) return;
+    const state: AudioState = JSON.parse(raw);
+
+    // Restore volume/offset/bpm controls
+    const volSlider = document.getElementById('audio-volume') as HTMLInputElement;
+    const volLabel = document.getElementById('audio-volume-label')!;
+    const offsetInput = document.getElementById('audio-offset') as HTMLInputElement;
+    const bpmInput = document.getElementById('audio-bpm') as HTMLInputElement;
+    const snapSelect = document.getElementById('audio-beat-snap') as HTMLSelectElement;
+    const bpmInfo = document.getElementById('audio-bpm-info')!;
+
+    if (volSlider) { volSlider.value = String(state.volume); volLabel.textContent = `${state.volume}%`; }
+    if (offsetInput) { offsetInput.value = String(state.offset); }
+    audioPlayer.volume = state.volume / 100;
+    audioPlayer.offset = state.offset;
+    ytPlayer.volume = state.volume;
+    ytPlayer.offset = state.offset;
+    waveformRenderer.beatOffset = state.offset;
+
+    if (state.bpm > 0) {
+      waveformRenderer.bpm = state.bpm;
+      if (bpmInput) bpmInput.value = String(state.bpm);
+      const fpb = waveformRenderer.framesPerBeat;
+      if (bpmInfo) bpmInfo.textContent = fpb > 0 ? `${fpb.toFixed(1)} f/beat` : '';
+      document.body.classList.add('has-waveform');
+    }
+    if (state.beatSnap !== undefined) {
+      waveformRenderer.beatSnap = state.beatSnap;
+      if (snapSelect) snapSelect.value = String(state.beatSnap);
+    }
+
+    // Restore YouTube player
+    if (state.type === 'youtube' && state.youtubeId) {
+      try {
+        await ytPlayer.load(state.youtubeId);
+        waveformRenderer.setDuration(ytPlayer.duration);
+        document.body.classList.add('has-waveform');
+        document.body.classList.add('audio-loaded');
+      } catch { /* video may no longer be available */ }
+    }
+  } catch { /* ignore corrupt state */ }
+}
 
 // --- Autosave to localStorage ---
 const AUTOSAVE_KEY = 'line-rider-autosave';
@@ -627,11 +817,16 @@ function startPlayback() {
     savedCameraZoom = camera.zoom;
     cameraFollowing = true;
     gridDirty = false;
+    riderPositions.length = 0; // clear beat position history
+    lastBeatIndex = -1;
+    // Start audio from beginning
+    audioSeekFrame(0);
   } else if (gameLoop.state === GameState.PAUSED) {
     // Always rebuild grid when resuming — edits may have moved lines
     ensureGridFresh();
   }
   gameLoop.play();
+  audioPlay();
 }
 
 function stopPlayback() {
@@ -644,6 +839,7 @@ function stopPlayback() {
     camera.zoom = savedCameraZoom;
     savedCameraPos = null;
   }
+  audioStop();
 }
 
 // Register render callbacks
@@ -682,6 +878,88 @@ renderer.addRenderCallback((ctx) => {
   const renderData = rider.getRenderData(renderAlpha);
   renderVehicle(ctx, renderData);
 
+  // ── Beat markers on canvas ──
+  // Draw markers at world positions where the rider will be on each beat
+  if (
+    waveformRenderer.bpm > 0 &&
+    riderPositions.length > 0 &&
+    gameLoop.state !== GameState.EDITING
+  ) {
+    const fps = 1000 / TIMESTEP;
+    const beatInterval = 60 / waveformRenderer.bpm; // seconds per beat
+    const offsetSeconds = waveformRenderer.beatOffset;
+    const snap = waveformRenderer.beatSnap;
+    const currentFrame = gameLoop.frame;
+    const maxRecorded = riderPositions.length;
+    const invZoom = 1 / camera.zoom;
+
+    // Determine range of beat frames to draw
+    let beatIndex = 0;
+    let t = offsetSeconds >= 0 ? offsetSeconds : 0;
+    while (t < maxRecorded / fps) {
+      const beatFrame = Math.round(t * fps);
+      if (beatFrame > 0 && beatFrame <= maxRecorded) {
+        const pos = riderPositions[beatFrame - 1];
+        if (pos.x !== 0 || pos.y !== 0) {
+          const isDownbeat = beatIndex % 4 === 0;
+          const isFuture = beatFrame > currentFrame;
+
+          // Vertical line through rider position
+          const lineH = (isDownbeat ? 60 : 35) * invZoom;
+          ctx.strokeStyle = isFuture
+            ? (isDownbeat ? 'rgba(255,80,80,0.5)' : 'rgba(255,80,80,0.25)')
+            : (isDownbeat ? 'rgba(80,80,255,0.5)' : 'rgba(80,80,255,0.25)');
+          ctx.lineWidth = (isDownbeat ? 2 : 1) * invZoom;
+          ctx.beginPath();
+          ctx.moveTo(pos.x, pos.y - lineH);
+          ctx.lineTo(pos.x, pos.y + lineH);
+          ctx.stroke();
+
+          // Dot at rider center
+          const dotR = (isDownbeat ? 4 : 2.5) * invZoom;
+          ctx.fillStyle = isFuture
+            ? (isDownbeat ? 'rgba(255,80,80,0.7)' : 'rgba(255,80,80,0.4)')
+            : (isDownbeat ? 'rgba(80,80,255,0.7)' : 'rgba(80,80,255,0.4)');
+          ctx.beginPath();
+          ctx.arc(pos.x, pos.y, dotR, 0, Math.PI * 2);
+          ctx.fill();
+
+          // Beat number label on downbeats
+          if (isDownbeat) {
+            const fontSize = Math.max(10, 12 * invZoom);
+            ctx.font = `bold ${fontSize}px sans-serif`;
+            ctx.fillStyle = isFuture ? 'rgba(255,80,80,0.6)' : 'rgba(80,80,255,0.6)';
+            ctx.textAlign = 'center';
+            ctx.fillText(String(beatIndex / 4 + 1), pos.x, pos.y - lineH - 4 * invZoom);
+          }
+        }
+      }
+
+      // Sub-beat markers
+      if (snap > 1) {
+        const subInterval = beatInterval / snap;
+        for (let s = 1; s < snap; s++) {
+          const subTime = t + s * subInterval;
+          const subFrame = Math.round(subTime * fps);
+          if (subFrame > 0 && subFrame <= maxRecorded) {
+            const sp = riderPositions[subFrame - 1];
+            if (sp.x !== 0 || sp.y !== 0) {
+              const isFuture = subFrame > currentFrame;
+              const subDotR = 1.5 * invZoom;
+              ctx.fillStyle = isFuture ? 'rgba(255,80,80,0.2)' : 'rgba(80,80,255,0.2)';
+              ctx.beginPath();
+              ctx.arc(sp.x, sp.y, subDotR, 0, Math.PI * 2);
+              ctx.fill();
+            }
+          }
+        }
+      }
+
+      t += beatInterval;
+      beatIndex++;
+    }
+  }
+
   // Camera follow during playback + trigger evaluation
   if (cameraFollowing && gameLoop.state === GameState.PLAYING) {
     const center = rider.getCenter(renderAlpha);
@@ -711,10 +989,255 @@ renderer.addRenderCallback((ctx) => {
   }
 });
 
+// ── Audio Panel UI ──
+{
+  const audioPanel = document.getElementById('audio-panel')!;
+  const audioClose = document.getElementById('audio-close')!;
+  const audioDropZone = document.getElementById('audio-drop-zone')!;
+  const audioFileInput = document.getElementById('audio-file-input') as HTMLInputElement;
+  const audioYtInput = document.getElementById('audio-yt-input') as HTMLInputElement;
+  const audioYtBtn = document.getElementById('audio-yt-btn') as HTMLButtonElement;
+  const audioFileInfo = document.getElementById('audio-file-info')!;
+  const audioNameEl = document.getElementById('audio-name')!;
+  const audioDurationEl = document.getElementById('audio-duration')!;
+  const audioControls = document.getElementById('audio-controls')!;
+  const audioVolumeSlider = document.getElementById('audio-volume') as HTMLInputElement;
+  const audioVolumeLabel = document.getElementById('audio-volume-label')!;
+  const audioOffsetInput = document.getElementById('audio-offset') as HTMLInputElement;
+  const audioRemoveBtn = document.getElementById('audio-remove-btn')!;
+  const audioStatus = document.getElementById('audio-status')!;
+  const btnSound = document.getElementById('btn-sound')!;
+
+  function showAudioPanel() {
+    document.body.classList.add('audio-open');
+  }
+  function hideAudioPanel() {
+    document.body.classList.remove('audio-open');
+  }
+  let statusFadeTimer: ReturnType<typeof setTimeout> | null = null;
+  function setAudioStatus(msg: string, type: 'info' | 'error' | 'success' = 'info') {
+    if (statusFadeTimer) { clearTimeout(statusFadeTimer); statusFadeTimer = null; }
+    audioStatus.textContent = msg;
+    audioStatus.className = type !== 'info' ? type : '';
+    // Auto-fade success messages
+    if (type === 'success') {
+      statusFadeTimer = setTimeout(() => { audioStatus.textContent = ''; audioStatus.className = ''; }, 3000);
+    }
+  }
+  function updateAudioLoadedIndicator() {
+    document.body.classList.toggle('audio-loaded', audioAnyLoaded());
+  }
+  function updateAudioUI() {
+    const hasLocal = audioPlayer.loaded;
+    const hasYT = ytPlayer.loaded;
+    const hasAny = hasLocal || hasYT;
+
+    audioFileInfo.style.display = hasAny ? '' : 'none';
+    audioControls.style.display = hasAny ? '' : 'none';
+
+    if (hasLocal) {
+      audioNameEl.textContent = audioPlayer.name;
+      const mins = Math.floor(audioPlayer.duration / 60);
+      const secs = Math.floor(audioPlayer.duration % 60);
+      audioDurationEl.textContent = `${mins}:${String(secs).padStart(2, '0')}`;
+    } else if (hasYT) {
+      audioNameEl.textContent = ytPlayer.name;
+      const mins = Math.floor(ytPlayer.duration / 60);
+      const secs = Math.floor(ytPlayer.duration % 60);
+      audioDurationEl.textContent = `${mins}:${String(secs).padStart(2, '0')}`;
+    }
+  }
+
+  // Open/close panel
+  btnSound.addEventListener('click', showAudioPanel);
+  audioClose.addEventListener('click', hideAudioPanel);
+  window.addEventListener('keydown', (e) => {
+    if (e.code === 'Escape' && document.body.classList.contains('audio-open')) {
+      hideAudioPanel();
+    }
+  });
+
+  // File drop zone
+  audioDropZone.addEventListener('click', () => audioFileInput.click());
+  audioDropZone.addEventListener('dragover', (e) => {
+    e.preventDefault();
+    audioDropZone.classList.add('dragover');
+  });
+  audioDropZone.addEventListener('dragleave', () => {
+    audioDropZone.classList.remove('dragover');
+  });
+  audioDropZone.addEventListener('drop', async (e) => {
+    e.preventDefault();
+    audioDropZone.classList.remove('dragover');
+    const file = e.dataTransfer?.files[0];
+    if (file && file.type.startsWith('audio/')) {
+      await loadAudioFile(file);
+    }
+  });
+  audioFileInput.addEventListener('change', async () => {
+    const file = audioFileInput.files?.[0];
+    if (file) await loadAudioFile(file);
+    audioFileInput.value = '';
+  });
+
+  async function loadAudioFile(file: File) {
+    setAudioStatus('Loading...');
+    try {
+      // Unload any existing YouTube player
+      ytPlayer.unload();
+
+      await audioPlayer.loadFile(file);
+      setAudioStatus('Loaded!', 'success');
+      updateAudioUI();
+      updateAudioLoadedIndicator();
+      saveAudioState();
+      if (audioPlayer.audioBuffer) {
+        waveformRenderer.loadBuffer(audioPlayer.audioBuffer);
+        document.body.classList.add('has-waveform');
+      }
+      // Auto-close panel after short delay
+      setTimeout(hideAudioPanel, 800);
+    } catch (err) {
+      setAudioStatus(`Failed to load: ${(err as Error).message}`, 'error');
+    }
+  }
+
+  // YouTube URL
+  audioYtBtn.addEventListener('click', () => loadFromYouTube());
+  audioYtInput.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') loadFromYouTube();
+  });
+
+  async function loadFromYouTube() {
+    const input = audioYtInput.value.trim();
+    if (!input) return;
+
+    const videoId = parseYouTubeId(input);
+    if (!videoId) {
+      setAudioStatus('Invalid YouTube URL', 'error');
+      return;
+    }
+
+    setAudioStatus('Loading YouTube video...');
+    audioYtBtn.disabled = true;
+
+    try {
+      // Unload any existing local audio (YT player replaces it)
+      audioPlayer.unload();
+      waveformRenderer.clear();
+
+      await ytPlayer.load(videoId);
+      waveformRenderer.setDuration(ytPlayer.duration);
+      document.body.classList.add('has-waveform');
+      setAudioStatus('Loaded!', 'success');
+      updateAudioUI();
+      updateAudioLoadedIndicator();
+      saveAudioState();
+      audioYtInput.value = '';
+      // Auto-close panel after short delay
+      setTimeout(hideAudioPanel, 800);
+    } catch (err) {
+      setAudioStatus(`YouTube error: ${(err as Error).message}`, 'error');
+    } finally {
+      audioYtBtn.disabled = false;
+    }
+  }
+
+  // Volume
+  audioVolumeSlider.addEventListener('input', () => {
+    const v = parseInt(audioVolumeSlider.value, 10);
+    audioPlayer.volume = v / 100;
+    ytPlayer.volume = v;
+    audioVolumeLabel.textContent = `${v}%`;
+    saveAudioState();
+  });
+
+  // Offset — sync to both audio player, YT player, and waveform beat grid
+  audioOffsetInput.addEventListener('change', () => {
+    const offset = parseFloat(audioOffsetInput.value) || 0;
+    audioPlayer.offset = offset;
+    ytPlayer.offset = offset;
+    waveformRenderer.beatOffset = offset;
+    saveAudioState();
+  });
+
+  // BPM
+  const audioBpmInput = document.getElementById('audio-bpm') as HTMLInputElement;
+  const audioTapBtn = document.getElementById('audio-tap-btn') as HTMLButtonElement;
+  const audioBpmInfo = document.getElementById('audio-bpm-info')!;
+  const audioBeatSnap = document.getElementById('audio-beat-snap') as HTMLSelectElement;
+
+  audioBpmInput.addEventListener('change', () => {
+    const bpm = parseFloat(audioBpmInput.value) || 0;
+    waveformRenderer.bpm = bpm;
+    updateBpmInfo();
+    // Expand timeline if BPM is set (even without audio)
+    if (bpm > 0 || audioAnyLoaded()) {
+      document.body.classList.add('has-waveform');
+    } else if (!audioAnyLoaded()) {
+      document.body.classList.remove('has-waveform');
+    }
+    saveAudioState();
+  });
+
+  audioBeatSnap.addEventListener('change', () => {
+    waveformRenderer.beatSnap = parseInt(audioBeatSnap.value, 10);
+    waveformRenderer.bpm = waveformRenderer.bpm; // force redraw
+    saveAudioState();
+  });
+
+  function updateBpmInfo() {
+    const fpb = waveformRenderer.framesPerBeat;
+    audioBpmInfo.textContent = fpb > 0 ? `${fpb.toFixed(1)} f/beat` : '';
+  }
+
+  // Tap tempo
+  let tapTimes: number[] = [];
+  let tapResetTimer: ReturnType<typeof setTimeout> | null = null;
+
+  audioTapBtn.addEventListener('click', () => {
+    const now = performance.now();
+
+    // Reset if >2s since last tap
+    if (tapResetTimer) clearTimeout(tapResetTimer);
+    tapResetTimer = setTimeout(() => { tapTimes = []; }, 2000);
+
+    tapTimes.push(now);
+    // Keep last 8 taps
+    if (tapTimes.length > 8) tapTimes.shift();
+
+    if (tapTimes.length >= 2) {
+      // Average interval between consecutive taps
+      let totalInterval = 0;
+      for (let i = 1; i < tapTimes.length; i++) {
+        totalInterval += tapTimes[i] - tapTimes[i - 1];
+      }
+      const avgInterval = totalInterval / (tapTimes.length - 1);
+      const bpm = Math.round(60000 / avgInterval * 10) / 10;
+      audioBpmInput.value = String(bpm);
+      waveformRenderer.bpm = bpm;
+      updateBpmInfo();
+    }
+  });
+
+  // Remove
+  audioRemoveBtn.addEventListener('click', () => {
+    audioPlayer.unload();
+    ytPlayer.unload();
+    waveformRenderer.clear();
+    document.body.classList.remove('has-waveform');
+    setAudioStatus('Audio removed', 'info');
+    updateAudioUI();
+    updateAudioLoadedIndicator();
+    try { localStorage.removeItem(AUDIO_STATE_KEY); } catch {}
+  });
+}
+
 // Flush autosave on page unload so no pending changes are lost
 window.addEventListener('beforeunload', autosaveNow);
 
 // Start — restore autosaved track if available
 loadAutosave();
+restoreAudioState();
 gameLoop.start();
 fitView();

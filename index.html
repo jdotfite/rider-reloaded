@@ -433,6 +433,20 @@
       letter-spacing: 0.04em;
       color: rgba(0,0,0,0.4);
     }
+    #metronome-flash {
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+      z-index: 4;
+      opacity: 0;
+    }
+    #metronome-flash.flash {
+      animation: beat-flash 0.12s ease-out;
+    }
+    @keyframes beat-flash {
+      0% { opacity: 1; }
+      100% { opacity: 0; }
+    }
 
     /* ══════════════════════════════════════════════
        RIGHT SIDEBAR
@@ -642,8 +656,32 @@
       text-align: right;
       letter-spacing: 0.02em;
     }
-    #timeline-track { flex: 1; min-width: 0; }
-    #timeline-scrubber { width: 100%; }
+    #timeline-track {
+      flex: 1;
+      min-width: 0;
+      position: relative;
+      height: 8px;
+      transition: height var(--transition-base);
+    }
+    body.has-waveform #timeline-track {
+      height: 40px;
+    }
+    #waveform-canvas {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      pointer-events: none;
+      border-radius: var(--radius-sm);
+    }
+    #timeline-scrubber {
+      width: 100%;
+      position: relative;
+      z-index: 1;
+    }
+    body.has-waveform #timeline-scrubber {
+      margin-top: 16px;
+    }
 
     /* — Range inputs — */
     input[type="range"] {
@@ -671,7 +709,14 @@
       box-shadow: 0 1px 3px rgba(0,0,0,0.2);
       cursor: pointer;
     }
-    #timeline-scrubber { height: 8px; border-radius: var(--radius-sm); }
+    #timeline-scrubber {
+      height: 8px;
+      border-radius: var(--radius-sm);
+    }
+    /* When waveform is visible, make the scrubber track semi-transparent */
+    body.has-waveform #timeline-scrubber {
+      background: rgba(0,0,0,0.06);
+    }
 
     /* — Transport + Speed row — */
     #transport-row {
@@ -743,6 +788,188 @@
     #transport-right .btn-icon {
       width: var(--control-h);
       height: var(--control-h);
+    }
+
+    /* ══════════════════════════════════════════════
+       AUDIO PANEL (modal)
+       ══════════════════════════════════════════════ */
+    #audio-panel {
+      display: none;
+      position: fixed;
+      top: 50%; left: 50%;
+      transform: translate(-50%, -50%);
+      z-index: 200;
+      width: 400px;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      box-shadow: 0 12px 40px rgba(0,0,0,0.15);
+      overflow: hidden;
+    }
+    body.audio-open #audio-panel { display: block; }
+    #audio-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 14px var(--sp-4);
+      border-bottom: 1px solid var(--border);
+      font: 700 var(--text-md)/1 var(--font);
+    }
+    #audio-close {
+      width: 28px; height: 28px;
+      min-width: 28px; min-height: 28px;
+      padding: 0;
+      border-radius: var(--radius-md);
+      background: transparent;
+      border: 1px solid transparent;
+    }
+    #audio-close:hover {
+      background: var(--bg-alt);
+      border-color: var(--border);
+    }
+    #audio-body {
+      padding: var(--sp-4);
+      display: flex;
+      flex-direction: column;
+      gap: var(--sp-3);
+    }
+    #audio-body .audio-row {
+      display: flex;
+      align-items: center;
+      gap: var(--sp-2);
+    }
+    #audio-body .audio-row label {
+      font: 600 var(--text-sm)/1 var(--font);
+      color: var(--ink-secondary);
+      min-width: 52px;
+      letter-spacing: 0.04em;
+    }
+    #audio-body .audio-row input[type="text"],
+    #audio-body .audio-row input[type="number"] {
+      flex: 1;
+      min-height: var(--control-h);
+      border-radius: var(--radius-md);
+      border: 1px solid var(--border);
+      background: var(--bg);
+      color: var(--ink);
+      padding: var(--sp-1) var(--sp-2);
+      font: 500 var(--text-base)/1 var(--font);
+      outline: none;
+    }
+    #audio-body .audio-row input:focus {
+      border-color: var(--border-focus);
+    }
+    #audio-body .audio-row input[type="range"] {
+      flex: 1;
+    }
+    #audio-file-info {
+      display: flex;
+      align-items: center;
+      gap: var(--sp-2);
+      padding: var(--sp-2) var(--sp-3);
+      background: var(--bg-alt);
+      border-radius: var(--radius-md);
+      font: 500 var(--text-sm)/1.3 var(--font);
+      color: var(--ink-secondary);
+      min-height: 36px;
+    }
+    #audio-file-info .audio-name {
+      flex: 1;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    #audio-file-info .audio-duration {
+      font: 600 var(--text-xs)/1 var(--font-mono);
+      color: var(--ink-muted);
+    }
+    #audio-status {
+      font: 500 var(--text-sm)/1.3 var(--font);
+      color: var(--ink-muted);
+      min-height: 18px;
+    }
+    #audio-status.error {
+      color: #d32f2f;
+    }
+    #audio-status.success {
+      color: #2e7d32;
+      font-weight: 600;
+    }
+    /* Sound button indicator when audio is loaded */
+    body.audio-loaded #btn-sound {
+      color: var(--ink);
+      background: var(--bg-alt);
+      border-color: var(--border);
+    }
+    body.audio-loaded #btn-sound::after {
+      content: '';
+      position: absolute;
+      bottom: 4px;
+      right: 4px;
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: #2e7d32;
+    }
+    #btn-sound { position: relative; }
+    #audio-drop-zone {
+      border: 2px dashed var(--border);
+      border-radius: var(--radius-md);
+      padding: var(--sp-4);
+      text-align: center;
+      font: 500 var(--text-sm)/1.5 var(--font);
+      color: var(--ink-muted);
+      cursor: pointer;
+      transition: border-color var(--transition-fast), background var(--transition-fast);
+    }
+    #audio-drop-zone:hover,
+    #audio-drop-zone.dragover {
+      border-color: var(--ink);
+      background: var(--bg-alt);
+    }
+    #audio-yt-row {
+      display: flex;
+      gap: var(--sp-1);
+    }
+    #audio-yt-row input {
+      flex: 1;
+      min-height: var(--control-h);
+      border-radius: var(--radius-md);
+      border: 1px solid var(--border);
+      background: var(--bg);
+      color: var(--ink);
+      padding: var(--sp-1) var(--sp-2);
+      font: 500 var(--text-base)/1 var(--font);
+      outline: none;
+    }
+    #audio-yt-row input:focus {
+      border-color: var(--border-focus);
+    }
+    #audio-yt-row button {
+      min-width: 70px;
+    }
+    .audio-controls {
+      display: flex;
+      flex-direction: column;
+      gap: var(--sp-2);
+    }
+    .audio-controls .audio-row span.value-label {
+      font: 600 var(--text-xs)/1 var(--font-mono);
+      color: var(--ink-muted);
+      min-width: 36px;
+      text-align: right;
+    }
+    #audio-remove-btn {
+      background: transparent;
+      border-color: var(--border);
+      color: #d32f2f;
+      font-size: var(--text-xs);
+      min-height: var(--control-h-sm);
+      padding: var(--sp-1) var(--sp-2);
+    }
+    #audio-remove-btn:hover {
+      background: #ffebee;
+      border-color: #d32f2f;
     }
 
     /* ══════════════════════════════════════════════
@@ -994,9 +1221,11 @@
       <!-- CANVAS -->
       <div id="canvas-container">
         <canvas id="canvas"></canvas>
+        <div id="metronome-flash"></div>
         <div id="canvas-hud">
           <div id="hud-score">SCORE: <span id="stat-score">0</span></div>
           <div id="hud-speed"><span id="stat-speed">0</span> km/h</div>
+          <div id="hud-beat" style="display:none"><span id="stat-beat"></span></div>
         </div>
       </div>
 
@@ -1065,6 +1294,7 @@
       <div id="timeline">
         <span id="timeline-start">0:00.000</span>
         <div id="timeline-track">
+          <canvas id="waveform-canvas"></canvas>
           <input type="range" id="timeline-scrubber" min="0" max="1200" value="0" aria-label="Timeline scrubber" />
         </div>
         <span id="timeline-end">0:00.000</span>
@@ -1107,6 +1337,76 @@
       </div>
     </footer>
 
+    <!-- Audio panel -->
+    <div id="audio-panel" role="dialog" aria-label="Audio settings">
+      <div id="audio-header">
+        <span>Audio</span>
+        <button id="audio-close" aria-label="Close">
+          <svg class="icon icon-sm" viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        </button>
+      </div>
+      <div id="audio-body">
+        <div id="audio-drop-zone">
+          Drop an audio file here or click to browse
+          <input type="file" id="audio-file-input" accept="audio/*" style="display:none" />
+        </div>
+
+        <div style="display:flex; align-items:center; gap:var(--sp-2);">
+          <div style="flex:1; height:1px; background:var(--border);"></div>
+          <span style="font:500 var(--text-xs)/1 var(--font); color:var(--ink-muted); text-transform:uppercase; letter-spacing:0.1em;">or YouTube</span>
+          <div style="flex:1; height:1px; background:var(--border);"></div>
+        </div>
+
+        <div id="audio-yt-row">
+          <input type="text" id="audio-yt-input" placeholder="Paste YouTube URL..." />
+          <button id="audio-yt-btn">Load</button>
+        </div>
+
+        <div id="audio-status"></div>
+
+        <div id="audio-file-info" style="display:none;">
+          <svg class="icon icon-sm" viewBox="0 0 24 24" style="flex-shrink:0; color:var(--ink-muted);"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>
+          <span class="audio-name" id="audio-name">No audio</span>
+          <span class="audio-duration" id="audio-duration"></span>
+        </div>
+
+        <div class="audio-controls" id="audio-controls" style="display:none;">
+          <div class="audio-row">
+            <label>Volume</label>
+            <input type="range" id="audio-volume" min="0" max="100" value="80" />
+            <span class="value-label" id="audio-volume-label">80%</span>
+          </div>
+          <div class="audio-row">
+            <label>Offset</label>
+            <input type="number" id="audio-offset" value="0" step="0.1" style="max-width:80px;" />
+            <span style="font:500 var(--text-xs)/1 var(--font); color:var(--ink-muted);">seconds</span>
+          </div>
+
+          <div style="border-top:1px solid var(--border-light); margin:var(--sp-1) 0;"></div>
+
+          <div class="audio-row">
+            <label>BPM</label>
+            <input type="number" id="audio-bpm" value="" min="1" max="999" step="0.1" placeholder="—" style="max-width:72px;" />
+            <button id="audio-tap-btn" style="min-width:50px; min-height:var(--control-h-sm); padding:var(--sp-1) var(--sp-2); font-size:var(--text-xs);">Tap</button>
+            <span class="value-label" id="audio-bpm-info" style="min-width:auto;"></span>
+          </div>
+          <div class="audio-row">
+            <label>Snap</label>
+            <select id="audio-beat-snap" style="flex:1; min-height:var(--control-h); border-radius:var(--radius-md); border:1px solid var(--border); background:var(--bg); color:var(--ink); padding:var(--sp-1) var(--sp-2); font:500 var(--text-base)/1 var(--font); outline:none; cursor:pointer;">
+              <option value="0">Off</option>
+              <option value="1" selected>Beat</option>
+              <option value="2">1/2 beat</option>
+              <option value="4">1/4 beat</option>
+            </select>
+          </div>
+
+          <div style="display:flex; justify-content:flex-end;">
+            <button id="audio-remove-btn">Remove Audio</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <!-- Hotkeys panel -->
     <div id="hotkeys-panel" role="dialog" aria-label="Keyboard shortcuts">
       <div id="hotkeys-header">
@@ -1124,21 +1424,26 @@
         <div class="hk-row"><kbd>4</kbd><span>Edit tool</span></div>
         <div class="hk-row"><kbd>5</kbd><span>Select tool</span></div>
         <div class="hk-row"><kbd>6</kbd><span>Flag tool</span></div>
+        <div class="hk-row"><kbd>Ctrl+C</kbd><span>Copy selected lines (Select tool)</span></div>
+        <div class="hk-row"><kbd>Ctrl+X</kbd><span>Cut selected lines (Select tool)</span></div>
+        <div class="hk-row"><kbd>Ctrl+V</kbd><span>Paste copied lines (Select tool)</span></div>
+        <div class="hk-row"><kbd>Ctrl+D</kbd><span>Duplicate selected lines (Select tool)</span></div>
         <div class="hk-row"><kbd>S</kbd><span>Smooth selected lines (Select tool)</span></div>
+        <div class="hk-row"><kbd>Delete</kbd><span>Delete selected lines (Select tool)</span></div>
         <div class="hk-row"><kbd>C</kbd><span>Convert to bezier path (Edit tool)</span></div>
         <div class="hk-row"><kbd>Dbl-click</kbd><span>Toggle smooth/corner anchor (Edit tool)</span></div>
         <div class="hk-row"><kbd>Dbl-click</kbd><span>Add anchor on curve segment (Edit tool)</span></div>
         <div class="hk-row"><kbd>Delete</kbd><span>Remove selected anchor (Edit tool)</span></div>
         <div class="hk-row"><kbd>F</kbd><span>Flip line direction (Edit tool)</span></div>
-        <div class="hk-row"><kbd>Q</kbd><span>Solid line type</span></div>
-        <div class="hk-row"><kbd>W</kbd><span>Accel line type</span></div>
-        <div class="hk-row"><kbd>E</kbd><span>Scenery line type</span></div>
+        <div class="hk-row"><kbd>Q</kbd><span>Solid line type or convert selection to solid</span></div>
+        <div class="hk-row"><kbd>W</kbd><span>Accel line type or convert selection to accel</span></div>
+        <div class="hk-row"><kbd>E</kbd><span>Scenery line type or convert selection to scenery</span></div>
         <div class="hk-row"><kbd>F</kbd><span>Fit view (non-Edit tools)</span></div>
         <div class="hk-row"><kbd>Ctrl+Z</kbd><span>Undo</span></div>
         <div class="hk-row"><kbd>Ctrl+Shift+Z</kbd><span>Redo</span></div>
         <div class="hk-row"><kbd>Ctrl+S</kbd><span>Save track</span></div>
         <div class="hk-row"><kbd>Ctrl+O</kbd><span>Load track</span></div>
-        <div class="hk-row"><kbd>Delete</kbd><span>Clear track</span></div>
+        <div class="hk-row"><kbd>Delete</kbd><span>Clear track when nothing else is selected</span></div>
         <div class="hk-row"><kbd>Scroll</kbd><span>Zoom in/out</span></div>
         <div class="hk-row"><kbd>Middle-drag</kbd><span>Pan</span></div>
         <div class="hk-row"><kbd>Right-drag</kbd><span>Quick erase</span></div>

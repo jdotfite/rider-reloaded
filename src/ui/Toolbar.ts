@@ -61,6 +61,7 @@ export class Toolbar {
   onStepForward: (() => void) | null = null;
   onStepBack: (() => void) | null = null;
   onSnapToggle: ((enabled: boolean) => void) | null = null;
+  onTimelineScrub: ((frame: number) => void) | null = null;
   onSmoothStart: (() => boolean) | null = null;
   onSmoothChange: ((amount: number) => void) | null = null;
   onSmoothApply: (() => void) | null = null;
@@ -294,6 +295,9 @@ export class Toolbar {
       this.timelineStart.textContent = `${mins}:${String(secs).padStart(2, '0')}`;
       this.frameDisplay.textContent = `F${frame}`;
 
+      // Audio scrub preview (fires on every input for immediate feedback)
+      this.onTimelineScrub?.(frame);
+
       if (!this.seekThrottleTimer) {
         this.seekThrottleTimer = setTimeout(() => {
           this.seekThrottleTimer = null;
@@ -335,7 +339,7 @@ export class Toolbar {
     const btnEffects = document.getElementById('btn-effects');
     const btnSettings = document.getElementById('btn-settings');
     const hotkeysClose = document.getElementById('hotkeys-close');
-    btnSound?.addEventListener('click', () => alert('Sound controls coming soon'));
+    // Sound button is handled directly in main.ts (opens audio panel)
     btnEffects?.addEventListener('click', () => alert('Effects coming soon'));
     btnSettings?.addEventListener('click', () => {
       document.body.classList.toggle('hotkeys-open');

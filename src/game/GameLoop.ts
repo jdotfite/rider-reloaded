@@ -21,6 +21,9 @@ export class GameLoop {
   private lastTime: number = 0;
   private onRender: () => void;
 
+  /** Called after each physics step with the current frame number */
+  onFrame: ((frame: number) => void) | null = null;
+
   // Snapshot system for fast seeking
   private snapshots: FrameSnapshot[] = [];
   private saveSnapshotFn: (() => RiderSnapshot) | null = null;
@@ -62,6 +65,9 @@ export class GameLoop {
         this.physics.step();
         this.frame++;
         this.accumulator -= TIMESTEP;
+
+        // Notify position recorder
+        this.onFrame?.(this.frame);
 
         // Save periodic snapshots
         if (this.saveSnapshotFn && this.frame % SNAPSHOT_INTERVAL === 0) {
@@ -135,6 +141,7 @@ export class GameLoop {
     if (this.state !== GameState.PAUSED) return;
     this.physics.step();
     this.frame++;
+    this.onFrame?.(this.frame);
     if (this.frame > this.maxFrame) {
       this.maxFrame = this.frame;
     }
@@ -191,6 +198,7 @@ export class GameLoop {
     while (this.frame < targetFrame) {
       this.physics.step();
       this.frame++;
+      this.onFrame?.(this.frame);
 
       // Save snapshots as we pass interval points
       if (this.saveSnapshotFn && this.frame % SNAPSHOT_INTERVAL === 0) {
