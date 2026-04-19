@@ -131,6 +131,33 @@ export class TrackStore {
     return added;
   }
 
+  pasteLines(lines: Array<{
+    p1: Vec2;
+    p2: Vec2;
+    type: LineType;
+    flipped?: boolean;
+    leftExtended?: boolean;
+    rightExtended?: boolean;
+    multiplier?: number;
+    layer?: number;
+  }>): Line[] {
+    if (lines.length === 0 || !this.canEditActiveLayer()) return [];
+    this.beginMutation();
+    const added: Line[] = [];
+    for (const line of lines) {
+      const pastedLine = this.createLine(line.p1, line.p2, line.type, {
+        flipped: line.flipped,
+        leftExtended: line.leftExtended,
+        rightExtended: line.rightExtended,
+        layer: line.layer ?? this.activeLayerId,
+        multiplier: line.multiplier,
+      });
+      this.lines.push(pastedLine);
+      added.push(pastedLine);
+    }
+    return added;
+  }
+
   flipLine(lineId: number): Line | null {
     const existing = this.lines.find(l => l.id === lineId);
     if (!existing) return null;
@@ -868,6 +895,53 @@ export class TrackStore {
     this.beginMutation();
     this.lines = this.lines.filter(line => !lineIds.has(line.id));
     this.invalidateBezierPaths(lineIds);
+  }
+
+  /** Change the type of the given lines. Partial Bezier selections are invalidated. */
+  changeLineTypes(lineIds: Set<number>, newType: LineType) {
+    if (lineIds.size === 0) return;
+    const hasTypeChange = this.lines.some(line => lineIds.has(line.id) && line.type !== newType);
+    if (!hasTypeChange) return;
+    this.beginMutation();
+    this.lines = this.lines.map(line => {
+      if (!lineIds.has(line.id) || line.type === newType) return line;
+      return this.createLine(line.p1, line.p2, newType, {
+        id: line.id,
+        flipped: line.flipped,
+        leftExtended: line.leftExtended,
+        rightExtended: line.rightExtended,
+        layer: line.layer,
+        multiplier: line instanceof AccLine ? line.multiplier : undefined,
+      });
+    });
+    this.bezierPaths = this.bezierPaths.filter(path => {
+      const hasSelectedLine = path.lineIds.some(id => lineIds.has(id));
+      if (!hasSelectedLine) return true;
+
+      const allSelected = path.lineIds.every(id => lineIds.has(id));
+      if (allSelected) {
+        path.lineType = newType;
+        return true;
+      }
+
+      return false;
+    });
+  }
+
+  /** Duplicate the given lines with an offset. Returns the duplicated lines. */
+  duplicateLines(lineIds: Set<number>, dx: number, dy: number): Line[] {
+    const toDuplicate = this.lines.filter(l => lineIds.has(l.id));
+    if (toDuplicate.length === 0) return [];
+    const offset = new Vec2(dx, dy);
+    return this.pasteLines(toDuplicate.map(line => ({
+      p1: line.p1.add(offset),
+      p2: line.p2.add(offset),
+      type: line.type,
+      flipped: line.flipped,
+      leftExtended: line.leftExtended,
+      rightExtended: line.rightExtended,
+      multiplier: line instanceof AccLine ? line.multiplier : undefined,
+    })));
   }
 
   private invalidateBezierPaths(removedIds: Set<number>) {

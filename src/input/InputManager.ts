@@ -104,8 +104,20 @@ export class InputManager {
   };
 
   private onKeyDown = (e: KeyboardEvent) => {
-    // Ignore if typing in an input
-    if ((e.target as HTMLElement).tagName === 'INPUT') return;
+    const target = e.target as HTMLElement | null;
+    if (
+      target &&
+      (
+        target.tagName === 'INPUT' ||
+        target.tagName === 'TEXTAREA' ||
+        target.tagName === 'SELECT' ||
+        target.isContentEditable
+      )
+    ) {
+      return;
+    }
+
+    const primaryModifier = e.ctrlKey || e.metaKey;
 
     if (e.code === 'Space') {
       e.preventDefault();
@@ -118,7 +130,7 @@ export class InputManager {
       }
     }
 
-    if (e.ctrlKey && e.code === 'KeyZ') {
+    if (primaryModifier && e.code === 'KeyZ') {
       e.preventDefault();
       if (e.shiftKey) {
         this.onRedo?.();
@@ -128,24 +140,35 @@ export class InputManager {
       return;
     }
 
-    if (e.ctrlKey && e.code === 'KeyS') {
+    if (primaryModifier && e.code === 'KeyS') {
       e.preventDefault();
       this.onSaveTrack?.();
       return;
     }
 
-    if (e.ctrlKey && e.code === 'KeyO') {
+    if (primaryModifier && e.code === 'KeyO') {
       e.preventDefault();
       this.onLoadTrack?.();
       return;
     }
+
+    if (e.code === 'Digit1') this.onToolSwitch?.('pencil');
+    if (e.code === 'Digit2') this.onToolSwitch?.('line');
+    if (e.code === 'Digit3') this.onToolSwitch?.('eraser');
+    if (e.code === 'Digit4') this.onToolSwitch?.('edit');
+    if (e.code === 'Digit5') this.onToolSwitch?.('select');
+    if (e.code === 'Digit6') this.onToolSwitch?.('flag');
+
+    // Forward to active tool
+    this.tool?.onKeyDown?.(e);
+    if (e.defaultPrevented) return;
 
     if (e.code === 'Escape') {
       e.preventDefault();
       this.onStop?.();
     }
 
-    if (e.code === 'Delete') {
+    if (e.code === 'Delete' && !primaryModifier && !e.altKey) {
       e.preventDefault();
       this.onClearTrack?.();
     }
@@ -155,18 +178,11 @@ export class InputManager {
       this.onFitView?.();
     }
 
-    if (e.code === 'Digit1') this.onToolSwitch?.('pencil');
-    if (e.code === 'Digit2') this.onToolSwitch?.('line');
-    if (e.code === 'Digit3') this.onToolSwitch?.('eraser');
-    if (e.code === 'Digit4') this.onToolSwitch?.('edit');
-    if (e.code === 'Digit5') this.onToolSwitch?.('select');
-    if (e.code === 'Digit6') this.onToolSwitch?.('flag');
-    if (e.code === 'KeyQ') this.onLineTypeSwitch?.('solid');
-    if (e.code === 'KeyW') this.onLineTypeSwitch?.('acc');
-    if (e.code === 'KeyE') this.onLineTypeSwitch?.('scenery');
-
-    // Forward to active tool
-    this.tool?.onKeyDown?.(e);
+    if (!primaryModifier && !e.altKey) {
+      if (e.code === 'KeyQ') this.onLineTypeSwitch?.('solid');
+      if (e.code === 'KeyW') this.onLineTypeSwitch?.('acc');
+      if (e.code === 'KeyE') this.onLineTypeSwitch?.('scenery');
+    }
 
     // Arrow key panning
     const panAmount = e.shiftKey ? 200 : 80;

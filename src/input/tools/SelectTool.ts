@@ -2,11 +2,22 @@ import { Vec2 } from '../../math/Vec2';
 import { Tool } from './Tool';
 import { TrackStore } from '../../store/TrackStore';
 import { LineType } from '../../physics/lines/LineTypes';
+import { AccLine } from '../../physics/lines/AccLine';
 import { SELECT_RADIUS } from '../../constants';
 import { chaikinSmooth } from '../../math/chaikin';
 import { pointsToSegments } from '../../math/smooth';
 
 type SelectState = 'idle' | 'box-selecting' | 'dragging' | 'smoothing';
+
+interface ClipboardLine {
+  p1: { x: number; y: number };
+  p2: { x: number; y: number };
+  type: LineType;
+  flipped: boolean;
+  leftExtended: boolean;
+  rightExtended: boolean;
+  multiplier?: number;
+}
 
 interface SmoothChain {
   lineIds: number[];
@@ -33,6 +44,10 @@ export class SelectTool implements Tool {
   private smoothPreviewPoints: Vec2[][] = [];
   private smoothAmount = 0;
 
+  // Clipboard for copy/paste
+  private clipboard: ClipboardLine[] = [];
+  private pasteOffset = 0; // increases with each paste so successive pastes don't stack
+
   // Callback when S key requests smooth (so toolbar can show slider)
   onSmoothRequest: (() => void) | null = null;
   // Callback when smooth ends (so toolbar can hide slider)
@@ -43,8 +58,11 @@ export class SelectTool implements Tool {
   }
 
   onKeyDown(e: KeyboardEvent) {
+    const primaryModifier = e.ctrlKey || e.metaKey;
+    const canEditSelection = this.state === 'idle' && this.selectedIds.size > 0;
+
     if (e.code === 'KeyS' && !e.ctrlKey && !e.altKey && !e.metaKey) {
-      if (this.selectedIds.size > 0 && this.state === 'idle') {
+      if (canEditSelection) {
         e.preventDefault();
         this.onSmoothRequest?.();
       }
@@ -52,6 +70,41 @@ export class SelectTool implements Tool {
     if (e.code === 'Escape' && this.state === 'smoothing') {
       e.preventDefault();
       this.cancelSmooth();
+    }
+
+    // Copy
+    if (primaryModifier && !e.altKey && e.code === 'KeyC' && canEditSelection) {
+      e.preventDefault();
+      this.copySelected();
+    }
+    // Cut
+    if (primaryModifier && !e.altKey && e.code === 'KeyX' && canEditSelection) {
+      e.preventDefault();
+      this.copySelected();
+      this.deleteSelected();
+    }
+    // Paste
+    if (primaryModifier && !e.altKey && e.code === 'KeyV' && this.state === 'idle' && this.clipboard.length > 0) {
+      e.preventDefault();
+      this.pasteClipboard();
+    }
+    // Duplicate (Ctrl+D)
+    if (primaryModifier && !e.altKey && e.code === 'KeyD' && canEditSelection) {
+      e.preventDefault();
+      this.duplicateSelected();
+    }
+
+    // Delete selected
+    if ((e.code === 'Delete' || e.code === 'Backspace') && canEditSelection) {
+      e.preventDefault();
+      this.deleteSelected();
+    }
+
+    // Change type of selected lines (Q/W/E)
+    if (!primaryModifier && !e.altKey && canEditSelection) {
+      if (e.code === 'KeyQ') { this.changeSelectedType(LineType.SOLID); }
+      if (e.code === 'KeyW') { this.changeSelectedType(LineType.ACC); }
+      if (e.code === 'KeyE') { this.changeSelectedType(LineType.SCENERY); }
     }
   }
 
@@ -166,6 +219,57 @@ export class SelectTool implements Tool {
 
   getSelectedCount(): number {
     return this.selectedIds.size;
+  }
+
+  /** Copy selected lines to internal clipboard */
+  copySelected() {
+    if (this.selectedIds.size === 0) return;
+    const selected = this.store.lines.filter(l => this.selectedIds.has(l.id));
+    this.clipboard = selected.map(line => ({
+      p1: { x: line.p1.x, y: line.p1.y },
+      p2: { x: line.p2.x, y: line.p2.y },
+      type: line.type,
+      flipped: line.flipped,
+      leftExtended: line.leftExtended,
+      rightExtended: line.rightExtended,
+      multiplier: line instanceof AccLine ? line.multiplier : undefined,
+    }));
+    this.pasteOffset = 0;
+  }
+
+  /** Paste clipboard lines with a small offset */
+  pasteClipboard() {
+    if (this.clipboard.length === 0) return;
+    const nextOffset = this.pasteOffset + 20;
+    const dx = nextOffset;
+    const dy = nextOffset;
+
+    const added = this.store.pasteLines(this.clipboard.map(cl => ({
+      p1: new Vec2(cl.p1.x + dx, cl.p1.y + dy),
+      p2: new Vec2(cl.p2.x + dx, cl.p2.y + dy),
+      type: cl.type,
+      flipped: cl.flipped,
+      leftExtended: cl.leftExtended,
+      rightExtended: cl.rightExtended,
+      multiplier: cl.multiplier,
+    })));
+    if (added.length === 0) return;
+    this.pasteOffset = nextOffset;
+    this.selectedIds = new Set(added.map(l => l.id));
+  }
+
+  /** Duplicate selected lines in-place with offset */
+  duplicateSelected() {
+    if (this.selectedIds.size === 0) return;
+    const added = this.store.duplicateLines(this.selectedIds, 20, 20);
+    if (added.length === 0) return;
+    this.selectedIds = new Set(added.map(l => l.id));
+  }
+
+  /** Change the type of all selected lines */
+  changeSelectedType(newType: LineType) {
+    if (this.selectedIds.size === 0 || this.state !== 'idle') return;
+    this.store.changeLineTypes(this.selectedIds, newType);
   }
 
   // ── Public smooth API (driven by toolbar slider) ──
