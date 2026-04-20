@@ -8,6 +8,7 @@ import { RepelStick } from './constraints/RepelStick';
 import { BindStick } from './constraints/BindStick';
 import { BindJoint } from './constraints/BindJoint';
 import { DirectedChain } from './constraints/DirectedChain';
+import { SpringStick } from './constraints/SpringStick';
 import {
   RIDER_POINTS, RIDER_CONSTRAINTS, RIDER_JOINTS,
   ConstraintDef, SHOULDER, BUTT,
@@ -25,7 +26,7 @@ export interface RiderSnapshot {
 export class Rider {
   points: Point[] = [];
   collisionPoints: CollisionPoint[] = [];
-  iteratingConstraints: Array<Stick | BindStick> = [];
+  iteratingConstraints: Array<Stick | BindStick | SpringStick> = [];
   repelSticks: RepelStick[] = [];
   bindJoints: BindJoint[] = [];
   chains: DirectedChain[] = [];
@@ -120,6 +121,11 @@ export class Rider {
         break;
       case 'bind_stick':
         this.iteratingConstraints.push(new BindStick(p[def.p1], p[def.p2], this.binding));
+        break;
+      case 'spring':
+        this.iteratingConstraints.push(
+          new SpringStick(p[def.p1], p[def.p2], def.stiffness, def.lengthFactor ?? 1),
+        );
         break;
       case 'chain':
         this.chains.push(new DirectedChain(p[def.p1], p[def.p2]));

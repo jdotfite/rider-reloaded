@@ -30,13 +30,21 @@ export interface BindStickDef {
   p2: number;
 }
 
+export interface SpringDef {
+  type: 'spring';
+  p1: number;
+  p2: number;
+  stiffness: number;
+  lengthFactor?: number;
+}
+
 export interface ChainDef {
   type: 'chain';
   p1: number;
   p2: number;
 }
 
-export type ConstraintDef = StickDef | RepelDef | BindStickDef | ChainDef;
+export type ConstraintDef = StickDef | RepelDef | BindStickDef | SpringDef | ChainDef;
 
 export interface JointDef {
   p1: number;

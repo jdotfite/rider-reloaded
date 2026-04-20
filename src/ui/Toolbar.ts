@@ -30,6 +30,7 @@ export class Toolbar {
   // Callbacks
   onToolSelect: ((tool: string) => void) | null = null;
   onLineTypeSelect: ((type: LineType) => void) | null = null;
+  onConvertSelectedType: ((type: LineType) => void) | null = null;
   onClear: (() => void) | null = null;
   onUndo: (() => void) | null = null;
   onRedo: (() => void) | null = null;
@@ -73,7 +74,9 @@ export class Toolbar {
   private smoothSliderRow!: HTMLElement;
   private smoothSlider!: HTMLInputElement;
   private smoothValue!: HTMLElement;
+  private selectedCount!: HTMLElement;
   private lineTypeButtons: Map<LineType, HTMLButtonElement> = new Map();
+  private convertTypeButtons: Map<LineType, HTMLButtonElement> = new Map();
   private playBtn!: HTMLButtonElement;
   private pauseBtn!: HTMLButtonElement;
   private stopBtn!: HTMLButtonElement;
@@ -157,6 +160,7 @@ export class Toolbar {
 
     // Onion skin toggle
     const onionCheckbox = document.getElementById('onion-checkbox') as HTMLInputElement;
+    const mobileOnionBtn = document.getElementById('mobile-onion-btn') as HTMLButtonElement | null;
     if (onionCheckbox) {
       onionCheckbox.addEventListener('change', () => {
         this.onOnionSkinToggle?.(onionCheckbox.checked);
@@ -165,11 +169,35 @@ export class Toolbar {
 
     // Snap toggle
     const snapCheckbox = document.getElementById('snap-checkbox') as HTMLInputElement;
+    const mobileSnapBtn = document.getElementById('mobile-snap-btn') as HTMLButtonElement | null;
     if (snapCheckbox) {
       snapCheckbox.addEventListener('change', () => {
         this.onSnapToggle?.(snapCheckbox.checked);
       });
     }
+
+    const bindMobileToggle = (
+      checkbox: HTMLInputElement | null,
+      button: HTMLButtonElement | null,
+      activeLabel: string,
+      inactiveLabel: string,
+    ) => {
+      if (!checkbox || !button) return;
+      const sync = () => {
+        button.classList.toggle('active', checkbox.checked);
+        button.setAttribute('aria-pressed', checkbox.checked ? 'true' : 'false');
+        button.title = checkbox.checked ? activeLabel : inactiveLabel;
+      };
+      sync();
+      checkbox.addEventListener('change', sync);
+      button.addEventListener('click', () => {
+        checkbox.checked = !checkbox.checked;
+        checkbox.dispatchEvent(new Event('change', { bubbles: true }));
+      });
+    };
+
+    bindMobileToggle(onionCheckbox, mobileOnionBtn, 'Onion skin on', 'Onion skin off');
+    bindMobileToggle(snapCheckbox, mobileSnapBtn, 'Snap to endpoints on', 'Snap to endpoints off');
 
     // Smooth UI (visible only when select tool is active)
     this.smoothContainer = document.getElementById('smooth-container') as HTMLElement;
@@ -177,8 +205,25 @@ export class Toolbar {
     this.smoothSliderRow = document.getElementById('smooth-slider-row') as HTMLElement;
     this.smoothSlider = document.getElementById('smooth-slider') as HTMLInputElement;
     this.smoothValue = document.getElementById('smooth-value') as HTMLElement;
+    this.selectedCount = document.getElementById('selected-count') as HTMLElement;
     const smoothApply = document.getElementById('smooth-apply') as HTMLButtonElement;
     const smoothCancel = document.getElementById('smooth-cancel') as HTMLButtonElement;
+    const convertSolid = document.getElementById('convert-solid-btn') as HTMLButtonElement;
+    const convertAccel = document.getElementById('convert-accel-btn') as HTMLButtonElement;
+    const convertScene = document.getElementById('convert-scene-btn') as HTMLButtonElement;
+
+    if (convertSolid) {
+      convertSolid.addEventListener('click', () => this.onConvertSelectedType?.(LineType.SOLID));
+      this.convertTypeButtons.set(LineType.SOLID, convertSolid);
+    }
+    if (convertAccel) {
+      convertAccel.addEventListener('click', () => this.onConvertSelectedType?.(LineType.ACC));
+      this.convertTypeButtons.set(LineType.ACC, convertAccel);
+    }
+    if (convertScene) {
+      convertScene.addEventListener('click', () => this.onConvertSelectedType?.(LineType.SCENERY));
+      this.convertTypeButtons.set(LineType.SCENERY, convertScene);
+    }
 
     if (this.smoothBtn) {
       this.smoothBtn.addEventListener('click', () => {
@@ -205,6 +250,7 @@ export class Toolbar {
         this.hideSmoothSlider();
       });
     }
+    this.setSelectedLineState(0, false);
 
     // Transport buttons
     this.pauseBtn = this.requireElement('pause-btn') as HTMLButtonElement;
@@ -335,10 +381,81 @@ export class Toolbar {
   }
 
   private setupPlaceholders() {
+    const topbar = document.getElementById('topbar');
+    const topbarActions = document.getElementById('topbar-actions');
+    const mobileActionsHost = document.getElementById('mobile-actions-host');
     const btnSound = document.getElementById('btn-sound');
+    const btnDesktopLayout = document.getElementById('btn-desktop-layout') as HTMLButtonElement | null;
+    const btnMobileDock = document.getElementById('btn-mobile-dock') as HTMLButtonElement | null;
     const btnEffects = document.getElementById('btn-effects');
     const btnSettings = document.getElementById('btn-settings');
     const hotkeysClose = document.getElementById('hotkeys-close');
+
+    const desktopLayoutKey = 'line-rider-desktop-tools-layout';
+    const applyDesktopLayoutMode = (mode: 'sidebar' | 'top') => {
+      document.body.classList.toggle('desktop-top-tools', mode === 'top');
+      if (!btnDesktopLayout) return;
+      btnDesktopLayout.classList.toggle('active', mode === 'top');
+      btnDesktopLayout.setAttribute('aria-pressed', mode === 'top' ? 'true' : 'false');
+      btnDesktopLayout.title = mode === 'top'
+        ? 'Switch to sidebar tools'
+        : 'Switch to top tools';
+      btnDesktopLayout.setAttribute('aria-label', btnDesktopLayout.title);
+    };
+
+    let desktopLayoutMode: 'sidebar' | 'top' = 'sidebar';
+    try {
+      const savedMode = window.localStorage.getItem(desktopLayoutKey);
+      if (savedMode === 'top') desktopLayoutMode = 'top';
+    } catch {}
+    applyDesktopLayoutMode(desktopLayoutMode);
+    btnDesktopLayout?.addEventListener('click', () => {
+      desktopLayoutMode = desktopLayoutMode === 'sidebar' ? 'top' : 'sidebar';
+      applyDesktopLayoutMode(desktopLayoutMode);
+      try {
+        window.localStorage.setItem(desktopLayoutKey, desktopLayoutMode);
+      } catch {}
+    });
+
+    const mobileDockKey = 'line-rider-mobile-dock-mode';
+    const applyMobileDockMode = (mode: 'center' | 'edge') => {
+      document.body.classList.toggle('mobile-dock-edge', mode === 'edge');
+      if (!btnMobileDock) return;
+      btnMobileDock.classList.toggle('active', mode === 'edge');
+      btnMobileDock.setAttribute('aria-pressed', mode === 'edge' ? 'true' : 'false');
+      btnMobileDock.title = mode === 'edge'
+        ? 'Float tools near the top center'
+        : 'Dock tools to the right edge';
+      btnMobileDock.setAttribute('aria-label', btnMobileDock.title);
+    };
+
+    let mobileDockMode: 'center' | 'edge' = 'center';
+    try {
+      const savedMode = window.localStorage.getItem(mobileDockKey);
+      if (savedMode === 'edge') mobileDockMode = 'edge';
+    } catch {}
+    applyMobileDockMode(mobileDockMode);
+    btnMobileDock?.addEventListener('click', () => {
+      mobileDockMode = mobileDockMode === 'center' ? 'edge' : 'center';
+      applyMobileDockMode(mobileDockMode);
+      try {
+        window.localStorage.setItem(mobileDockKey, mobileDockMode);
+      } catch {}
+    });
+
+    const syncActionMount = () => {
+      if (!topbar || !topbarActions || !mobileActionsHost) return;
+      if (window.innerWidth <= 899) {
+        if (topbarActions.parentElement !== mobileActionsHost) {
+          mobileActionsHost.appendChild(topbarActions);
+        }
+      } else if (topbarActions.parentElement !== topbar) {
+        topbar.appendChild(topbarActions);
+      }
+    };
+    syncActionMount();
+    window.addEventListener('resize', syncActionMount);
+
     // Sound button is handled directly in main.ts (opens audio panel)
     btnEffects?.addEventListener('click', () => alert('Effects coming soon'));
     btnSettings?.addEventListener('click', () => {
@@ -396,6 +513,21 @@ export class Toolbar {
   hideSmoothSlider() {
     if (this.smoothBtn) this.smoothBtn.style.display = '';
     if (this.smoothSliderRow) this.smoothSliderRow.style.display = 'none';
+  }
+
+  setSelectedLineState(count: number, smoothing: boolean) {
+    const hasSelection = count > 0;
+    if (this.selectedCount) {
+      this.selectedCount.textContent = smoothing
+        ? `Smoothing ${count}`
+        : (hasSelection ? `${count} selected` : 'No selection');
+    }
+    for (const btn of this.convertTypeButtons.values()) {
+      btn.disabled = !hasSelection || smoothing;
+    }
+    if (this.smoothBtn) {
+      this.smoothBtn.disabled = !hasSelection || smoothing;
+    }
   }
 
   setActiveLineType(type: LineType) {

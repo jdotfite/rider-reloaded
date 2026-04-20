@@ -2,7 +2,6 @@ import { Vec2 } from './math/Vec2';
 import { Camera } from './camera/Camera';
 import { Renderer } from './rendering/Renderer';
 import { LineRenderer } from './rendering/LineRenderer';
-import { RiderRenderer } from './rendering/RiderRenderer';
 import { FlagRenderer } from './rendering/FlagRenderer';
 import { UIRenderer } from './rendering/UIRenderer';
 import { InputManager } from './input/InputManager';
@@ -25,8 +24,8 @@ import { ERASER_RADIUS, TIMESTEP } from './constants';
 import { exportTrackAsSvg } from './export/svgExport';
 import { TriggerStore } from './store/TriggerStore';
 import { TriggerRenderer } from './rendering/TriggerRenderer';
-import { TruckRenderer } from './rendering/TruckRenderer';
-import { VEHICLES, getVehicle } from './physics/vehicles';
+import { VEHICLE_MANIFESTS, getVehicleManifest } from './vehicles';
+import type { VehicleRenderer } from './vehicles';
 import { AudioPlayer } from './audio/AudioPlayer';
 import { WaveformRenderer } from './audio/WaveformRenderer';
 import { parseYouTubeId, YouTubePlayer } from './audio/youtube';
@@ -90,33 +89,37 @@ let physics = new PhysicsEngine(rider, grid);
 
 // Sub-renderers
 const lineRenderer = new LineRenderer();
-const riderRenderer = new RiderRenderer();
-const truckRenderer = new TruckRenderer();
 const flagRenderer = new FlagRenderer();
 const uiRenderer = new UIRenderer();
+const vehicleRenderers = new Map<string, VehicleRenderer>(
+  VEHICLE_MANIFESTS.map(vehicle => [vehicle.id, vehicle.createRenderer()]),
+);
 
 // Vehicle state
-let activeVehicleId = 'sled';
+let activeVehicle = getVehicleManifest('sled');
+
+function resetVehicleRenderers() {
+  for (const renderer of vehicleRenderers.values()) {
+    renderer.reset?.();
+  }
+}
 
 function setVehicle(id: string) {
-  const vehicle = getVehicle(id);
-  activeVehicleId = vehicle.id;
-  rider.setVehicle(vehicle);
+  const vehicle = getVehicleManifest(id);
+  activeVehicle = vehicle;
+  resetVehicleRenderers();
+  rider.setVehicle(vehicle.physics);
   // Update topbar sled info
   const sledInfo = document.querySelector('#sled-info span');
   if (sledInfo) sledInfo.textContent = vehicle.name;
   // Update vehicle slot active states
   document.querySelectorAll('.rider-slot').forEach(slot => {
-    slot.classList.toggle('active', (slot as HTMLElement).dataset.vehicle === id);
+    slot.classList.toggle('active', (slot as HTMLElement).dataset.vehicle === vehicle.id);
   });
 }
 
 function renderVehicle(ctx: CanvasRenderingContext2D, data: import('./rendering/RiderRenderer').RiderRenderData) {
-  if (activeVehicleId === 'truck') {
-    truckRenderer.render(ctx, data);
-  } else {
-    riderRenderer.render(ctx, data);
-  }
+  vehicleRenderers.get(activeVehicle.id)?.render(ctx, data);
 }
 
 // Current state
@@ -224,6 +227,7 @@ const gameLoop = new GameLoop(physics, () => {
   // Update stats in canvas HUD
   const speed = rider.getCenterSpeed() * (1000 / TIMESTEP);
   toolbar.updateStats(store.lines.length, speed);
+  toolbar.setSelectedLineState(currentTool === selectTool ? selectTool.getSelectedCount() : 0, selectTool.isSmoothing());
 
   // Update beat HUD counter
   if (waveformRenderer.bpm > 0 && gameLoop.state !== GameState.EDITING) {
@@ -310,6 +314,11 @@ toolbar.onSmoothStart = () => selectTool.startSmooth();
 toolbar.onSmoothChange = (amount) => selectTool.setSmoothAmount(amount);
 toolbar.onSmoothApply = () => selectTool.applySmooth();
 toolbar.onSmoothCancel = () => selectTool.cancelSmooth();
+toolbar.onConvertSelectedType = (type) => {
+  if (currentTool === selectTool) {
+    selectTool.changeSelectedType(type);
+  }
+};
 selectTool.onSmoothRequest = () => {
   const started = selectTool.startSmooth();
   if (started) toolbar.showSmoothSlider();
@@ -461,17 +470,27 @@ toolbar.onSvgExport = () => {
   setTimeout(() => URL.revokeObjectURL(url), 0);
 };
 
-// Vehicle selection
-document.querySelectorAll('.rider-slot[data-vehicle]').forEach(slot => {
-  slot.addEventListener('click', () => {
-    const el = slot as HTMLElement;
-    if (el.classList.contains('locked')) return;
-    const vehicleId = el.dataset.vehicle;
-    if (vehicleId && gameLoop.state === GameState.EDITING) {
-      setVehicle(vehicleId);
-    }
-  });
-});
+function buildVehiclePicker() {
+  const vehiclePicker = document.getElementById('rider-customization');
+  if (!vehiclePicker) return;
+
+  vehiclePicker.innerHTML = '';
+  for (const vehicle of VEHICLE_MANIFESTS) {
+    const slot = document.createElement('div');
+    slot.className = 'rider-slot';
+    slot.dataset.vehicle = vehicle.id;
+    slot.title = vehicle.name;
+    slot.innerHTML = vehicle.iconSvg;
+    slot.addEventListener('click', () => {
+      if (gameLoop.state !== GameState.EDITING) return;
+      setVehicle(vehicle.id);
+    });
+    vehiclePicker.appendChild(slot);
+  }
+}
+
+buildVehiclePicker();
+setVehicle(activeVehicle.id);
 
 // Layer rename modal
 if (layerRenameSave && layerRenameCancel && layerRenameInput) {
@@ -812,7 +831,7 @@ function startPlayback() {
   if (gameLoop.state === GameState.EDITING) {
     grid.rebuild(store.lines);
     rider.reset();
-    truckRenderer.resetDebris();
+    resetVehicleRenderers();
     savedCameraPos = camera.position.clone();
     savedCameraZoom = camera.zoom;
     cameraFollowing = true;
@@ -832,7 +851,7 @@ function startPlayback() {
 function stopPlayback() {
   gameLoop.stop();
   rider.setStartPosition(store.startPosition);
-  truckRenderer.resetDebris();
+  resetVehicleRenderers();
   cameraFollowing = false;
   if (savedCameraPos) {
     camera.position.copyFrom(savedCameraPos);
@@ -880,11 +899,12 @@ renderer.addRenderCallback((ctx) => {
 
   // ── Beat markers on canvas ──
   // Draw markers at world positions where the rider will be on each beat
-  if (
+  const showBeatGuides =
     waveformRenderer.bpm > 0 &&
     riderPositions.length > 0 &&
-    gameLoop.state !== GameState.EDITING
-  ) {
+    (gameLoop.state !== GameState.EDITING || !gridDirty);
+
+  if (showBeatGuides) {
     const fps = 1000 / TIMESTEP;
     const beatInterval = 60 / waveformRenderer.bpm; // seconds per beat
     const offsetSeconds = waveformRenderer.beatOffset;
@@ -892,46 +912,25 @@ renderer.addRenderCallback((ctx) => {
     const currentFrame = gameLoop.frame;
     const maxRecorded = riderPositions.length;
     const invZoom = 1 / camera.zoom;
+    const editingGuides = gameLoop.state === GameState.EDITING;
+    const beatMarkers: Array<{ x: number; y: number; isDownbeat: boolean; isFuture: boolean; measure: number }> = [];
+    const subBeatMarkers: Array<{ x: number; y: number; isFuture: boolean }> = [];
 
     // Determine range of beat frames to draw
-    let beatIndex = 0;
-    let t = offsetSeconds >= 0 ? offsetSeconds : 0;
+    let beatIndex = offsetSeconds >= 0 ? 0 : Math.ceil(-offsetSeconds / beatInterval);
+    let t = offsetSeconds >= 0 ? offsetSeconds : offsetSeconds + beatIndex * beatInterval;
     while (t < maxRecorded / fps) {
       const beatFrame = Math.round(t * fps);
       if (beatFrame > 0 && beatFrame <= maxRecorded) {
         const pos = riderPositions[beatFrame - 1];
         if (pos.x !== 0 || pos.y !== 0) {
-          const isDownbeat = beatIndex % 4 === 0;
-          const isFuture = beatFrame > currentFrame;
-
-          // Vertical line through rider position
-          const lineH = (isDownbeat ? 60 : 35) * invZoom;
-          ctx.strokeStyle = isFuture
-            ? (isDownbeat ? 'rgba(255,80,80,0.5)' : 'rgba(255,80,80,0.25)')
-            : (isDownbeat ? 'rgba(80,80,255,0.5)' : 'rgba(80,80,255,0.25)');
-          ctx.lineWidth = (isDownbeat ? 2 : 1) * invZoom;
-          ctx.beginPath();
-          ctx.moveTo(pos.x, pos.y - lineH);
-          ctx.lineTo(pos.x, pos.y + lineH);
-          ctx.stroke();
-
-          // Dot at rider center
-          const dotR = (isDownbeat ? 4 : 2.5) * invZoom;
-          ctx.fillStyle = isFuture
-            ? (isDownbeat ? 'rgba(255,80,80,0.7)' : 'rgba(255,80,80,0.4)')
-            : (isDownbeat ? 'rgba(80,80,255,0.7)' : 'rgba(80,80,255,0.4)');
-          ctx.beginPath();
-          ctx.arc(pos.x, pos.y, dotR, 0, Math.PI * 2);
-          ctx.fill();
-
-          // Beat number label on downbeats
-          if (isDownbeat) {
-            const fontSize = Math.max(10, 12 * invZoom);
-            ctx.font = `bold ${fontSize}px sans-serif`;
-            ctx.fillStyle = isFuture ? 'rgba(255,80,80,0.6)' : 'rgba(80,80,255,0.6)';
-            ctx.textAlign = 'center';
-            ctx.fillText(String(beatIndex / 4 + 1), pos.x, pos.y - lineH - 4 * invZoom);
-          }
+          beatMarkers.push({
+            x: pos.x,
+            y: pos.y,
+            isDownbeat: beatIndex % 4 === 0,
+            isFuture: beatFrame > currentFrame,
+            measure: Math.floor(beatIndex / 4) + 1,
+          });
         }
       }
 
@@ -944,12 +943,11 @@ renderer.addRenderCallback((ctx) => {
           if (subFrame > 0 && subFrame <= maxRecorded) {
             const sp = riderPositions[subFrame - 1];
             if (sp.x !== 0 || sp.y !== 0) {
-              const isFuture = subFrame > currentFrame;
-              const subDotR = 1.5 * invZoom;
-              ctx.fillStyle = isFuture ? 'rgba(255,80,80,0.2)' : 'rgba(80,80,255,0.2)';
-              ctx.beginPath();
-              ctx.arc(sp.x, sp.y, subDotR, 0, Math.PI * 2);
-              ctx.fill();
+              subBeatMarkers.push({
+                x: sp.x,
+                y: sp.y,
+                isFuture: subFrame > currentFrame,
+              });
             }
           }
         }
@@ -957,6 +955,69 @@ renderer.addRenderCallback((ctx) => {
 
       t += beatInterval;
       beatIndex++;
+    }
+
+    if (beatMarkers.length > 1) {
+      ctx.save();
+      ctx.beginPath();
+      ctx.moveTo(beatMarkers[0].x, beatMarkers[0].y);
+      for (let i = 1; i < beatMarkers.length; i++) {
+        ctx.lineTo(beatMarkers[i].x, beatMarkers[i].y);
+      }
+      ctx.strokeStyle = editingGuides ? 'rgba(255,255,255,0.28)' : 'rgba(255,255,255,0.14)';
+      ctx.lineWidth = 7 * invZoom;
+      ctx.lineJoin = 'round';
+      ctx.lineCap = 'round';
+      ctx.stroke();
+      ctx.setLineDash([12 * invZoom, 8 * invZoom]);
+      ctx.strokeStyle = editingGuides ? 'rgba(214,150,34,0.62)' : 'rgba(214,150,34,0.34)';
+      ctx.lineWidth = 2.4 * invZoom;
+      ctx.stroke();
+      ctx.restore();
+    }
+
+    for (const marker of subBeatMarkers) {
+      const subDotR = (editingGuides ? 2.2 : 1.6) * invZoom;
+      ctx.fillStyle = editingGuides
+        ? 'rgba(214,150,34,0.42)'
+        : (marker.isFuture ? 'rgba(255,80,80,0.2)' : 'rgba(80,80,255,0.2)');
+      ctx.beginPath();
+      ctx.arc(marker.x, marker.y, subDotR, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    for (const marker of beatMarkers) {
+      const lineH = (marker.isDownbeat ? (editingGuides ? 82 : 60) : (editingGuides ? 48 : 35)) * invZoom;
+      ctx.strokeStyle = editingGuides
+        ? (marker.isDownbeat ? 'rgba(214,150,34,0.82)' : 'rgba(214,150,34,0.5)')
+        : (marker.isFuture
+          ? (marker.isDownbeat ? 'rgba(255,80,80,0.5)' : 'rgba(255,80,80,0.25)')
+          : (marker.isDownbeat ? 'rgba(80,80,255,0.5)' : 'rgba(80,80,255,0.25)'));
+      ctx.lineWidth = (marker.isDownbeat ? 2.3 : 1.3) * invZoom;
+      ctx.beginPath();
+      ctx.moveTo(marker.x, marker.y - lineH);
+      ctx.lineTo(marker.x, marker.y + lineH);
+      ctx.stroke();
+
+      const dotR = (marker.isDownbeat ? 4.4 : 2.8) * invZoom;
+      ctx.fillStyle = editingGuides
+        ? (marker.isDownbeat ? 'rgba(214,150,34,0.92)' : 'rgba(214,150,34,0.62)')
+        : (marker.isFuture
+          ? (marker.isDownbeat ? 'rgba(255,80,80,0.7)' : 'rgba(255,80,80,0.4)')
+          : (marker.isDownbeat ? 'rgba(80,80,255,0.7)' : 'rgba(80,80,255,0.4)'));
+      ctx.beginPath();
+      ctx.arc(marker.x, marker.y, dotR, 0, Math.PI * 2);
+      ctx.fill();
+
+      if (marker.isDownbeat) {
+        const fontSize = Math.max(10, 12 * invZoom);
+        ctx.font = `bold ${fontSize}px sans-serif`;
+        ctx.fillStyle = editingGuides
+          ? 'rgba(214,150,34,0.95)'
+          : (marker.isFuture ? 'rgba(255,80,80,0.6)' : 'rgba(80,80,255,0.6)');
+        ctx.textAlign = 'center';
+        ctx.fillText(String(marker.measure), marker.x, marker.y - lineH - 4 * invZoom);
+      }
     }
   }
 
