@@ -1452,10 +1452,13 @@
 
       #sidebar-left {
         left: max(10px, calc(env(safe-area-inset-left) + 8px));
-        top: max(10px, calc(env(safe-area-inset-top) + 10px));
+        top: calc(env(safe-area-inset-top) + 96px);
         flex-direction: column;
         align-items: flex-start;
-        gap: 8px;
+        gap: 4px;
+      }
+      body.mobile-dock-edge #sidebar-left {
+        top: max(10px, calc(env(safe-area-inset-top) + 10px));
       }
       #layers-panel {
         display: none;
@@ -1465,14 +1468,14 @@
       #mobile-actions-host {
         display: flex;
         flex-direction: column;
-        gap: 6px;
+        gap: 4px;
         margin: 0;
-        padding: 8px 6px;
+        padding: 5px 4px;
         border: 1px solid rgba(17,17,17,0.08);
-        border-radius: 18px;
-        background: rgba(255,255,255,0.86);
-        box-shadow: 0 14px 30px rgba(17,17,17,0.1);
-        backdrop-filter: blur(18px);
+        border-radius: 16px;
+        background: rgba(255,255,255,0.82);
+        box-shadow: 0 10px 20px rgba(17,17,17,0.08);
+        backdrop-filter: blur(14px);
       }
       #mobile-actions-host {
         pointer-events: auto;
@@ -1484,30 +1487,37 @@
       #sidebar-left-footer .btn-icon,
       #mobile-actions-host .btn-icon {
         flex: none;
-        width: 36px;
-        height: 36px;
-        min-width: 36px;
-        min-height: 36px;
+        width: 32px;
+        height: 32px;
+        min-width: 32px;
+        min-height: 32px;
       }
 
       #sidebar-right {
-        top: max(10px, calc(env(safe-area-inset-top) + 10px));
-        left: max(76px, calc(env(safe-area-inset-left) + 74px));
-        right: max(12px, calc(env(safe-area-inset-right) + 42px));
-        width: auto;
+        top: max(8px, calc(env(safe-area-inset-top) + 8px));
+        left: 50%;
+        transform: translateX(-50%);
+        width: min(312px, calc(100vw - 24px));
         display: grid;
-        grid-template-columns: minmax(128px, 164px) minmax(0, 1fr);
+        grid-template-columns: minmax(0, 108px) minmax(0, 1fr);
         grid-template-areas:
           "mode types"
           "tools tools"
           "options options";
-        gap: 5px;
+        gap: 4px 6px;
         align-items: stretch;
+        padding: 6px;
+        border: 1px solid rgba(17,17,17,0.1);
+        border-radius: 24px;
+        background: linear-gradient(180deg, rgba(255,255,255,0.96), rgba(248,248,248,0.88));
+        box-shadow: 0 14px 34px rgba(17,17,17,0.12);
+        backdrop-filter: blur(20px);
       }
       body.mobile-dock-edge #sidebar-right {
         left: auto;
         right: max(10px, calc(env(safe-area-inset-right) + 8px));
-        width: min(84vw, 380px);
+        transform: none;
+        width: min(280px, calc(100vw - 18px));
       }
       #sidebar-right .section-label,
       #svg-import-btn,
@@ -1519,52 +1529,50 @@
       #draw-ride-toggle,
       #tool-grid,
       #track-type-panel {
-        background: rgba(255,255,255,0.88);
-        border: 1px solid rgba(17,17,17,0.08);
-        box-shadow: 0 14px 30px rgba(17,17,17,0.1);
-        backdrop-filter: blur(18px);
+        background: transparent;
+        border: none;
+        box-shadow: none;
+        backdrop-filter: none;
       }
       #draw-ride-toggle {
         grid-area: mode;
         width: auto;
         margin: 0;
-        padding: 4px;
-        gap: 4px;
+        padding: 2px;
+        gap: 2px;
         border-radius: 999px;
         display: grid;
         grid-template-columns: 1fr 1fr;
+        background: rgba(17,17,17,0.05);
       }
       #draw-ride-toggle button {
         min-height: 32px;
-        padding: 0 10px;
+        padding: 0 6px;
         border-radius: 999px;
         border: 1px solid transparent;
         background: transparent;
-        font-size: 9px;
-        letter-spacing: 0.14em;
+        font-size: 10px;
+        letter-spacing: 0.12em;
       }
       #draw-ride-toggle button.active {
         background: var(--ink);
         border-color: var(--ink);
         color: var(--ink-inverse);
+        box-shadow: 0 6px 14px rgba(17,17,17,0.16);
       }
 
       #tool-grid {
         grid-area: tools;
         grid-template-columns: repeat(6, minmax(0, 1fr));
         gap: 4px;
-        padding: 6px;
-        border-radius: 16px;
-      }
-      body.mobile-dock-edge #tool-grid {
-        grid-template-columns: repeat(3, minmax(0, 1fr));
+        padding: 0;
       }
       #tool-grid button {
         min-height: 38px;
         aspect-ratio: 1;
         padding: 0;
-        border-radius: 11px;
-        background: rgba(255,255,255,0.76);
+        border-radius: 14px;
+        background: rgba(255,255,255,0.84);
         border: 1px solid rgba(17,17,17,0.08);
       }
       #tool-grid button:hover {
@@ -1590,29 +1598,31 @@
       #track-type-panel {
         grid-area: types;
         border-top: none;
-        padding: 4px;
+        padding: 2px;
         border-radius: 18px;
         display: flex;
         align-items: center;
+        background: rgba(17,17,17,0.05);
       }
       #line-type-strip {
         width: 100%;
         display: grid;
         grid-template-columns: repeat(3, minmax(0, 1fr));
-        gap: 6px;
+        gap: 4px;
         padding: 0;
       }
       #line-type-strip button {
         min-height: 32px;
-        padding: 0 8px;
-        font-size: 10px;
+        padding: 0 6px;
+        font-size: 9px;
         font-weight: 700;
-        letter-spacing: 0.08em;
+        letter-spacing: 0.06em;
         text-transform: uppercase;
         border-radius: 999px;
         border: 1px solid rgba(17,17,17,0.08);
-        background: rgba(255,255,255,0.76);
+        background: rgba(255,255,255,0.72);
         color: var(--ink-secondary);
+        white-space: nowrap;
       }
       #line-type-strip button.active {
         background: rgba(17,17,17,0.94);
@@ -1639,13 +1649,40 @@
         padding: 10px;
         border-radius: 16px;
         border: 1px solid rgba(17,17,17,0.08);
-        background: linear-gradient(180deg, rgba(240,246,255,0.96), rgba(255,255,255,0.9));
+        background: linear-gradient(180deg, rgba(244,247,252,0.98), rgba(255,255,255,0.92));
+        box-shadow: 0 10px 22px rgba(17,17,17,0.08);
+      }
+      .select-action-header {
+        margin-bottom: 6px;
+      }
+      #convert-type-strip {
+        gap: 4px;
+        margin-bottom: 6px;
+      }
+      #convert-type-strip button,
+      #smooth-btn,
+      #smooth-slider-row button {
+        min-height: 32px;
+        font-size: 11px;
+        border-radius: 12px;
+      }
+      .select-action-hint {
+        font-size: 10px;
+      }
+      #smooth-slider-row > div:first-child {
+        margin-top: 6px;
+      }
+      #smooth-slider-row > div:last-child {
+        margin-top: 6px;
       }
 
       #canvas-hud {
-        top: calc(env(safe-area-inset-top) + 134px);
+        top: calc(env(safe-area-inset-top) + 102px);
         right: max(12px, calc(env(safe-area-inset-right) + 12px));
         gap: 4px;
+      }
+      body.mobile-dock-edge #canvas-hud {
+        top: calc(env(safe-area-inset-top) + 124px);
       }
       #canvas-hud div {
         padding: 4px 8px;
