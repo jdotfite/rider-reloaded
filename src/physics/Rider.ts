@@ -16,11 +16,13 @@ import {
 import { INITIAL_RIDER_VELOCITY } from '../constants';
 import { RiderRenderData } from '../rendering/RiderRenderer';
 import { VehicleDef } from './vehicles/VehicleDef';
+import { rotateVec } from '../portal/portalMath';
 
 export interface RiderSnapshot {
   positions: Array<{ px: number; py: number; ppx: number; ppy: number }>;
   riderMounted: boolean;
   sledIntact: boolean;
+  portalCooldowns?: Array<{ pairId: number; frames: number }>;
 }
 
 export class Rider {
@@ -36,6 +38,8 @@ export class Rider {
   private velocityScale = 1;
   private startPos: Vec2;
   private vehicle: VehicleDef | null = null;
+  private portalCooldowns: Map<number, number> = new Map();
+  private portalTriggerIndices: number[] = [0, 1, 2, 3];
 
   /** Indices used for camera center — default to BUTT/SHOULDER */
   private centerIdx1 = BUTT;
@@ -58,6 +62,7 @@ export class Rider {
       this.centerIdx1 = vehicle.renderPoints.butt ?? BUTT;
       this.centerIdx2 = vehicle.renderPoints.shoulder ?? SHOULDER;
     }
+    this.portalTriggerIndices = this.resolvePortalTriggerIndices(vehicle);
     this.reset();
   }
 
@@ -69,6 +74,7 @@ export class Rider {
     this.bindJoints = [];
     this.chains = [];
     this.binding.reset();
+    this.portalCooldowns.clear();
 
     const pointDefs = this.vehicle?.points ?? RIDER_POINTS;
     const constraintDefs = this.vehicle?.constraints ?? RIDER_CONSTRAINTS;
@@ -151,6 +157,7 @@ export class Rider {
       })),
       riderMounted: this.binding.riderMounted,
       sledIntact: this.binding.sledIntact,
+      portalCooldowns: [...this.portalCooldowns.entries()].map(([pairId, frames]) => ({ pairId, frames })),
     };
   }
 
@@ -165,6 +172,12 @@ export class Rider {
     }
     this.binding.riderMounted = snap.riderMounted;
     this.binding.sledIntact = snap.sledIntact;
+    this.portalCooldowns.clear();
+    for (const cooldown of snap.portalCooldowns ?? []) {
+      if (cooldown && cooldown.frames > 0) {
+        this.portalCooldowns.set(cooldown.pairId, cooldown.frames);
+      }
+    }
   }
 
   getRenderData(alpha: number = 1): RiderRenderData {
@@ -205,5 +218,110 @@ export class Rider {
     const averageX = (v1.x + v2.x) / 2;
     const averageY = (v1.y + v2.y) / 2;
     return Math.sqrt(averageX * averageX + averageY * averageY);
+  }
+
+  getPortalTriggerPoint(alpha: number = 1): Vec2 {
+    const indices = this.portalTriggerIndices.length > 0
+      ? this.portalTriggerIndices
+      : [this.centerIdx1, this.centerIdx2];
+    const t = Math.max(0, Math.min(1, alpha));
+    let x = 0;
+    let y = 0;
+    let count = 0;
+    for (const index of indices) {
+      const point = this.points[index];
+      if (!point) continue;
+      x += point.prevPos.x + (point.pos.x - point.prevPos.x) * t;
+      y += point.prevPos.y + (point.pos.y - point.prevPos.y) * t;
+      count++;
+    }
+    if (count === 0) return this.getCenter(alpha);
+    return new Vec2(x / count, y / count);
+  }
+
+  getPortalTriggerVelocity(): Vec2 {
+    const indices = this.portalTriggerIndices.length > 0
+      ? this.portalTriggerIndices
+      : [this.centerIdx1, this.centerIdx2];
+    let x = 0;
+    let y = 0;
+    let count = 0;
+    for (const index of indices) {
+      const point = this.points[index];
+      if (!point) continue;
+      const velocity = point.vel;
+      x += velocity.x;
+      y += velocity.y;
+      count++;
+    }
+    if (count === 0) {
+      return this.getCenter(1).sub(this.getCenter(0));
+    }
+    return new Vec2(x / count, y / count);
+  }
+
+  tickTransientState() {
+    if (this.portalCooldowns.size === 0) return;
+    for (const [pairId, frames] of this.portalCooldowns) {
+      if (frames <= 1) {
+        this.portalCooldowns.delete(pairId);
+      } else {
+        this.portalCooldowns.set(pairId, frames - 1);
+      }
+    }
+  }
+
+  isPortalBlocked(pairId: number): boolean {
+    return (this.portalCooldowns.get(pairId) ?? 0) > 0;
+  }
+
+  setPortalCooldown(pairId: number, frames: number) {
+    if (frames <= 0) {
+      this.portalCooldowns.delete(pairId);
+      return;
+    }
+    this.portalCooldowns.set(pairId, Math.max(0, Math.floor(frames)));
+  }
+
+  teleportAroundPoint(
+    currentAnchor: Vec2,
+    nextAnchor: Vec2,
+    rotationDelta: number,
+    mapVelocity: (velocity: Vec2) => Vec2,
+  ) {
+    for (const point of this.points) {
+      const relPos = point.pos.sub(currentAnchor);
+      const nextPos = nextAnchor.add(rotateVec(relPos, rotationDelta));
+      const velocity = point.pos.sub(point.prevPos);
+      const nextVelocity = mapVelocity(velocity);
+      point.pos.copyFrom(nextPos);
+      point.prevPos.copyFrom(nextPos.sub(nextVelocity));
+      point.momentum.copyFrom(nextVelocity);
+    }
+  }
+
+  private resolvePortalTriggerIndices(vehicle: VehicleDef): number[] {
+    const candidates = [
+      vehicle.renderPoints.peg,
+      vehicle.renderPoints.tail,
+      vehicle.renderPoints.nose,
+      vehicle.renderPoints.string,
+      vehicle.renderPoints.chassisFront,
+      vehicle.renderPoints.wheelFront,
+      vehicle.renderPoints.wheelRear,
+      vehicle.renderPoints.chassisRear,
+      vehicle.renderPoints.rearWheel,
+      vehicle.renderPoints.frontWheel,
+      vehicle.renderPoints.rearCage,
+      vehicle.renderPoints.frontCage,
+    ].filter((value): value is number => typeof value === 'number');
+
+    const unique = [...new Set(candidates)];
+    if (unique.length >= 2) return unique.slice(0, 4);
+
+    return this.collisionPoints
+      .slice(0, 4)
+      .map(point => this.points.indexOf(point))
+      .filter(index => index >= 0);
   }
 }

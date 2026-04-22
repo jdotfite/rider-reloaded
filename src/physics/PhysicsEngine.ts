@@ -5,17 +5,39 @@ import { AccLine } from './lines/AccLine';
 import { LineType } from './lines/LineTypes';
 import { CollisionPoint } from './points/CollisionPoint';
 import { ITERATIONS, MAX_LINE_COLLIDE_DIST } from '../constants';
+import type { PortalPair, PortalEndpoint, PortalEndpointKey } from '../store/PortalTypes';
+import {
+  pointInsidePortalCapsule,
+  portalLocalToWorld,
+  portalNormal,
+  portalTangent,
+  worldToPortalLocal,
+} from '../portal/portalMath';
+import { Vec2 } from '../math/Vec2';
+
+export interface PortalTeleportEvent {
+  pairId: number;
+  source: PortalEndpointKey;
+  destination: PortalEndpointKey;
+  entryPosition: Vec2;
+  exitPosition: Vec2;
+}
 
 export class PhysicsEngine {
   rider: Rider;
   grid: SpatialGrid;
+  onPortalTeleport: ((event: PortalTeleportEvent) => void) | null = null;
+  private getPortals: () => PortalPair[];
 
-  constructor(rider: Rider, grid: SpatialGrid) {
+  constructor(rider: Rider, grid: SpatialGrid, getPortals: () => PortalPair[] = () => []) {
     this.rider = rider;
     this.grid = grid;
+    this.getPortals = getPortals;
   }
 
   step() {
+    this.rider.tickTransientState();
+
     // 1. Verlet integration (stores momentum for collision checks)
     const gs = this.rider.gravityScale;
     for (const point of this.rider.points) {
@@ -43,6 +65,8 @@ export class PhysicsEngine {
     for (const chain of this.rider.chains) {
       chain.resolve();
     }
+
+    this.resolvePortals();
   }
 
   private resolveConstraints() {
@@ -124,5 +148,75 @@ export class PhysicsEngine {
       cp.prevPos.x += accX;
       cp.prevPos.y += accY;
     }
+  }
+
+  private resolvePortals() {
+    const portals = this.getPortals();
+    if (portals.length === 0) return;
+
+    const triggerPoint = this.rider.getPortalTriggerPoint(1);
+    const triggerVelocity = this.rider.getPortalTriggerVelocity();
+
+    for (const portal of portals) {
+      if (!portal.enabled || this.rider.isPortalBlocked(portal.id)) continue;
+
+      const candidates: Array<[PortalEndpointKey, PortalEndpointKey]> = portal.mode === 'twoWay'
+        ? [['entry', 'exit'], ['exit', 'entry']]
+        : [['entry', 'exit']];
+
+      for (const [sourceKey, destinationKey] of candidates) {
+        const source = portal[sourceKey];
+        if (!pointInsidePortalCapsule(triggerPoint, source, 2)) continue;
+        if (!this.passesDirectionRule(triggerVelocity, source, portal.physics.entryDirectionRule)) continue;
+        this.teleportThroughPortal(portal, sourceKey, destinationKey, triggerPoint);
+        return;
+      }
+    }
+  }
+
+  private passesDirectionRule(velocity: Vec2, endpoint: PortalEndpoint, rule: PortalPair['physics']['entryDirectionRule']) {
+    if (rule !== 'frontOnly') return true;
+    return velocity.dot(portalNormal(endpoint.rotation)) > 0;
+  }
+
+  private teleportThroughPortal(
+    pair: PortalPair,
+    sourceKey: PortalEndpointKey,
+    destinationKey: PortalEndpointKey,
+    triggerPoint: Vec2,
+  ) {
+    const source = pair[sourceKey];
+    const destination = pair[destinationKey];
+    const local = worldToPortalLocal(triggerPoint, source);
+    const mappedLocal = pair.physics.preserveLocalOffset ? local : new Vec2(0, 0);
+    const exitLocal = new Vec2(mappedLocal.x, destination.radius + 3);
+    const nextCenter = portalLocalToWorld(exitLocal, destination);
+    const rotationDelta = destination.rotation - source.rotation;
+    const sourceTangent = portalTangent(source.rotation);
+    const sourceNormal = portalNormal(source.rotation);
+    const destinationTangent = portalTangent(destination.rotation);
+    const destinationNormal = portalNormal(destination.rotation);
+
+    this.rider.teleportAroundPoint(triggerPoint, nextCenter, rotationDelta, (velocity) => {
+      if (pair.physics.velocityMode === 'world') {
+        return velocity.scale(pair.physics.speedMultiplier);
+      }
+      const localVelocity = new Vec2(
+        velocity.dot(sourceTangent),
+        velocity.dot(sourceNormal),
+      );
+      return destinationTangent.scale(localVelocity.x)
+        .add(destinationNormal.scale(localVelocity.y))
+        .scale(pair.physics.speedMultiplier);
+    });
+
+    this.rider.setPortalCooldown(pair.id, pair.physics.cooldownFrames);
+    this.onPortalTeleport?.({
+      pairId: pair.id,
+      source: sourceKey,
+      destination: destinationKey,
+      entryPosition: source.position.clone(),
+      exitPosition: destination.position.clone(),
+    });
   }
 }

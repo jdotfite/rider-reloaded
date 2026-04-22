@@ -3,6 +3,7 @@ import { LineType } from '../physics/lines/LineTypes';
 import { Vec2 } from '../math/Vec2';
 import { COLOR_SOLID, COLOR_ACC, COLOR_SCENERY, LINE_WIDTH } from '../constants';
 import type { TrackLayer } from '../store/TrackStore';
+import type { PortalPair } from '../store/PortalTypes';
 
 const TYPE_COLORS: Record<LineType, string> = {
   [LineType.SOLID]: COLOR_SOLID,
@@ -20,8 +21,9 @@ export function exportTrackAsSvg(
   lines: Line[],
   layers: TrackLayer[],
   startPosition: Vec2,
+  portals: PortalPair[] = [],
 ): string {
-  if (lines.length === 0) {
+  if (lines.length === 0 && portals.length === 0) {
     // Empty track — small default viewBox around start
     const pad = 50;
     const vx = startPosition.x - pad;
@@ -40,6 +42,13 @@ export function exportTrackAsSvg(
     maxX = Math.max(maxX, line.p1.x, line.p2.x);
     minY = Math.min(minY, line.p1.y, line.p2.y);
     maxY = Math.max(maxY, line.p1.y, line.p2.y);
+  }
+  for (const portal of portals) {
+    const bounds = portalBounds(portal);
+    minX = Math.min(minX, bounds.minX);
+    maxX = Math.max(maxX, bounds.maxX);
+    minY = Math.min(minY, bounds.minY);
+    maxY = Math.max(maxY, bounds.maxY);
   }
 
   const padding = 20;
@@ -75,7 +84,71 @@ export function exportTrackAsSvg(
   }
 
   const flag = buildFlag(startPosition);
-  return buildSvg(vx, vy, vw, vh, lineGroups, flag);
+  const portalGroups = buildPortalGroups(portals, layers);
+  return buildSvg(vx, vy, vw, vh, lineGroups + portalGroups, flag);
+}
+
+function buildPortalGroups(portals: PortalPair[], layers: TrackLayer[]): string {
+  const layerMap = new Map(layers.map(layer => [layer.id, layer]));
+  const visiblePortals = portals.filter(portal => layerMap.get(portal.layer)?.visible);
+  if (visiblePortals.length === 0) return '';
+
+  let groups = '  <g id="portals">\n';
+  for (const portal of visiblePortals) {
+    const opacity = portal.enabled ? '1' : '0.45';
+    groups += `    <g id="portal-${portal.id}" opacity="${opacity}">\n`;
+    if (portal.visual.showEditorLink) {
+      groups += `      <line x1="${r(portal.entry.position.x)}" y1="${r(portal.entry.position.y)}" x2="${r(portal.exit.position.x)}" y2="${r(portal.exit.position.y)}" stroke="#93a0d8" stroke-width="1.2" stroke-dasharray="6 5" />\n`;
+    }
+    groups += buildPortalEndpointSvg(portal.entry.position, portal.entry.rotation, portal.entry.length, portal.entry.radius, '#6f6cff');
+    groups += buildPortalEndpointSvg(portal.exit.position, portal.exit.rotation, portal.exit.length, portal.exit.radius, '#36d1ff');
+    groups += '    </g>\n';
+  }
+  groups += '  </g>\n';
+  return groups;
+}
+
+function buildPortalEndpointSvg(position: Vec2, rotation: number, length: number, radius: number, color: string): string {
+  const x = r(position.x);
+  const y = r(position.y);
+  const width = r(length);
+  const height = r(radius * 2);
+  const rx = r(radius);
+  const half = length / 2;
+  const arrowY = radius * 0.58;
+  return [
+    `      <g transform="translate(${x} ${y}) rotate(${r(rotation * 180 / Math.PI)})">`,
+    `        <rect x="${r(-half)}" y="${r(-radius)}" width="${width}" height="${height}" rx="${rx}" fill="${withAlpha(color, 0.18)}" stroke="${color}" stroke-width="2" />`,
+    `        <path d="M ${r(-5)} ${r(radius * 0.12)} L 0 ${r(arrowY)} L ${r(5)} ${r(radius * 0.12)}" fill="none" stroke="${color}" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" />`,
+    '      </g>\n',
+  ].join('\n');
+}
+
+function portalBounds(portal: PortalPair) {
+  let minX = Infinity;
+  let maxX = -Infinity;
+  let minY = Infinity;
+  let maxY = -Infinity;
+  for (const endpoint of [portal.entry, portal.exit]) {
+    const half = endpoint.length / 2;
+    const cos = Math.cos(endpoint.rotation);
+    const sin = Math.sin(endpoint.rotation);
+    const xExtent = Math.abs(cos) * half + Math.abs(sin) * endpoint.radius;
+    const yExtent = Math.abs(sin) * half + Math.abs(cos) * endpoint.radius;
+    minX = Math.min(minX, endpoint.position.x - xExtent);
+    maxX = Math.max(maxX, endpoint.position.x + xExtent);
+    minY = Math.min(minY, endpoint.position.y - yExtent);
+    maxY = Math.max(maxY, endpoint.position.y + yExtent);
+  }
+  return { minX, maxX, minY, maxY };
+}
+
+function withAlpha(color: string, alpha: number): string {
+  const normalized = Math.max(0, Math.min(1, alpha));
+  const rVal = parseInt(color.slice(1, 3), 16);
+  const gVal = parseInt(color.slice(3, 5), 16);
+  const bVal = parseInt(color.slice(5, 7), 16);
+  return `rgba(${rVal},${gVal},${bVal},${normalized})`;
 }
 
 function buildFlag(pos: Vec2): string {

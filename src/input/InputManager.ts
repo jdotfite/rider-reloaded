@@ -158,6 +158,7 @@ export class InputManager {
     if (e.code === 'Digit4') this.onToolSwitch?.('edit');
     if (e.code === 'Digit5') this.onToolSwitch?.('select');
     if (e.code === 'Digit6') this.onToolSwitch?.('flag');
+    if (e.code === 'Digit7') this.onToolSwitch?.('portal');
 
     // Forward to active tool
     this.tool?.onKeyDown?.(e);

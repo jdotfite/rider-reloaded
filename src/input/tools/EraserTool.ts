@@ -50,5 +50,6 @@ export class EraserTool implements Tool {
 
   private eraseAt(worldPos: Vec2) {
     this.store.removeLinesNear(worldPos, ERASER_RADIUS);
+    this.store.removePortalsNear(worldPos, ERASER_RADIUS);
   }
 }

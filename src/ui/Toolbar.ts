@@ -1,6 +1,12 @@
 import { LineType } from '../physics/lines/LineTypes';
 import { GameState } from '../game/GameState';
 import { ICONS } from './icons';
+import type {
+  PortalMode,
+  PortalPair,
+  PortalVelocityMode,
+  PortalVisibility,
+} from '../store/PortalTypes';
 
 export class Toolbar {
   // Left sidebar
@@ -67,6 +73,17 @@ export class Toolbar {
   onSmoothChange: ((amount: number) => void) | null = null;
   onSmoothApply: (() => void) | null = null;
   onSmoothCancel: (() => void) | null = null;
+  onPortalModeChange: ((mode: PortalMode) => void) | null = null;
+  onPortalVelocityModeChange: ((mode: PortalVelocityMode) => void) | null = null;
+  onPortalSpeedMultiplierChange: ((multiplier: number) => void) | null = null;
+  onPortalPreserveOffsetChange: ((enabled: boolean) => void) | null = null;
+  onPortalFrontOnlyChange: ((enabled: boolean) => void) | null = null;
+  onPortalCooldownChange: ((frames: number) => void) | null = null;
+  onPortalVisibilityChange: ((visibility: PortalVisibility) => void) | null = null;
+  onPortalSizeChange: ((length: number) => void) | null = null;
+  onPortalRadiusChange: ((radius: number) => void) | null = null;
+  onPortalShowEditorLinkChange: ((enabled: boolean) => void) | null = null;
+  onPortalEnabledChange: ((enabled: boolean) => void) | null = null;
 
   private toolButtons: Map<string, HTMLButtonElement> = new Map();
   private smoothContainer!: HTMLElement;
@@ -75,6 +92,26 @@ export class Toolbar {
   private smoothSlider!: HTMLInputElement;
   private smoothValue!: HTMLElement;
   private selectedCount!: HTMLElement;
+  private portalSettings!: HTMLElement;
+  private portalSelectionStatus!: HTMLElement;
+  private portalEmptyHint!: HTMLElement;
+  private portalSettingsFields!: HTMLElement;
+  private portalModeOneWay!: HTMLButtonElement;
+  private portalModeTwoWay!: HTMLButtonElement;
+  private portalVelocityMode!: HTMLSelectElement;
+  private portalSpeedMultiplier!: HTMLInputElement;
+  private portalSpeedValue!: HTMLElement;
+  private portalSize!: HTMLInputElement;
+  private portalSizeValue!: HTMLElement;
+  private portalRadius!: HTMLInputElement;
+  private portalRadiusValue!: HTMLElement;
+  private portalPreserveOffset!: HTMLInputElement;
+  private portalFrontOnly!: HTMLInputElement;
+  private portalShowLink!: HTMLInputElement;
+  private portalEnabled!: HTMLInputElement;
+  private portalCooldown!: HTMLInputElement;
+  private portalCooldownValue!: HTMLElement;
+  private portalVisibility!: HTMLSelectElement;
   private lineTypeButtons: Map<LineType, HTMLButtonElement> = new Map();
   private convertTypeButtons: Map<LineType, HTMLButtonElement> = new Map();
   private playBtn!: HTMLButtonElement;
@@ -153,6 +190,7 @@ export class Toolbar {
     // Tool grid (right sidebar, 2-column) — SVG icons
     this.addToolGridBtn('pencil', ICONS.pen, 'Pen');
     this.addToolGridBtn('line', ICONS.line, 'Line');
+    this.addToolGridBtn('portal', ICONS.portal, 'Portal');
     this.addToolGridBtn('eraser', ICONS.eraser, 'Erase');
     this.addToolGridBtn('edit', ICONS.edit, 'Edit');
     this.addToolGridBtn('select', ICONS.select, 'Select');
@@ -251,6 +289,70 @@ export class Toolbar {
       });
     }
     this.setSelectedLineState(0, false);
+
+    // Portal UI
+    this.portalSettings = document.getElementById('portal-settings') as HTMLElement;
+    this.portalSelectionStatus = document.getElementById('portal-selection-status') as HTMLElement;
+    this.portalEmptyHint = document.getElementById('portal-empty-hint') as HTMLElement;
+    this.portalSettingsFields = document.getElementById('portal-settings-fields') as HTMLElement;
+    this.portalModeOneWay = document.getElementById('portal-mode-oneway') as HTMLButtonElement;
+    this.portalModeTwoWay = document.getElementById('portal-mode-twoway') as HTMLButtonElement;
+    this.portalVelocityMode = document.getElementById('portal-velocity-mode') as HTMLSelectElement;
+    this.portalSpeedMultiplier = document.getElementById('portal-speed-mult') as HTMLInputElement;
+    this.portalSpeedValue = document.getElementById('portal-speed-value') as HTMLElement;
+    this.portalSize = document.getElementById('portal-size') as HTMLInputElement;
+    this.portalSizeValue = document.getElementById('portal-size-value') as HTMLElement;
+    this.portalRadius = document.getElementById('portal-radius') as HTMLInputElement;
+    this.portalRadiusValue = document.getElementById('portal-radius-value') as HTMLElement;
+    this.portalPreserveOffset = document.getElementById('portal-preserve-offset') as HTMLInputElement;
+    this.portalFrontOnly = document.getElementById('portal-front-only') as HTMLInputElement;
+    this.portalShowLink = document.getElementById('portal-show-link') as HTMLInputElement;
+    this.portalEnabled = document.getElementById('portal-enabled') as HTMLInputElement;
+    this.portalCooldown = document.getElementById('portal-cooldown') as HTMLInputElement;
+    this.portalCooldownValue = document.getElementById('portal-cooldown-value') as HTMLElement;
+    this.portalVisibility = document.getElementById('portal-visibility') as HTMLSelectElement;
+
+    this.portalModeOneWay?.addEventListener('click', () => this.onPortalModeChange?.('oneWay'));
+    this.portalModeTwoWay?.addEventListener('click', () => this.onPortalModeChange?.('twoWay'));
+    this.portalVelocityMode?.addEventListener('change', () => {
+      this.onPortalVelocityModeChange?.((this.portalVelocityMode.value === 'world' ? 'world' : 'remap'));
+    });
+    this.portalSpeedMultiplier?.addEventListener('input', () => {
+      const value = parseFloat(this.portalSpeedMultiplier.value || '1');
+      this.portalSpeedValue.textContent = `${value.toFixed(2)}x`;
+      this.onPortalSpeedMultiplierChange?.(value);
+    });
+    this.portalSize?.addEventListener('input', () => {
+      const value = parseInt(this.portalSize.value || '34', 10);
+      this.portalSizeValue.textContent = String(value);
+      this.onPortalSizeChange?.(value);
+    });
+    this.portalRadius?.addEventListener('input', () => {
+      const value = parseInt(this.portalRadius.value || '10', 10);
+      this.portalRadiusValue.textContent = String(value);
+      this.onPortalRadiusChange?.(value);
+    });
+    this.portalPreserveOffset?.addEventListener('change', () => {
+      this.onPortalPreserveOffsetChange?.(this.portalPreserveOffset.checked);
+    });
+    this.portalFrontOnly?.addEventListener('change', () => {
+      this.onPortalFrontOnlyChange?.(this.portalFrontOnly.checked);
+    });
+    this.portalShowLink?.addEventListener('change', () => {
+      this.onPortalShowEditorLinkChange?.(this.portalShowLink.checked);
+    });
+    this.portalEnabled?.addEventListener('change', () => {
+      this.onPortalEnabledChange?.(this.portalEnabled.checked);
+    });
+    this.portalCooldown?.addEventListener('input', () => {
+      const value = parseInt(this.portalCooldown.value || '10', 10);
+      this.portalCooldownValue.textContent = `${value}f`;
+      this.onPortalCooldownChange?.(value);
+    });
+    this.portalVisibility?.addEventListener('change', () => {
+      this.onPortalVisibilityChange?.(this.portalVisibility.value === 'always' ? 'always' : 'subtle');
+    });
+    this.setPortalState(false, null, false);
 
     // Transport buttons
     this.pauseBtn = this.requireElement('pause-btn') as HTMLButtonElement;
@@ -499,6 +601,9 @@ export class Toolbar {
       this.smoothContainer.style.display = name === 'select' ? '' : 'none';
       if (name !== 'select') this.hideSmoothSlider();
     }
+    if (this.portalSettings) {
+      this.portalSettings.style.display = name === 'portal' ? '' : 'none';
+    }
   }
 
   showSmoothSlider() {
@@ -528,6 +633,63 @@ export class Toolbar {
     if (this.smoothBtn) {
       this.smoothBtn.disabled = !hasSelection || smoothing;
     }
+  }
+
+  setPortalState(active: boolean, portal: PortalPair | null, placing: boolean, activeEndpoint: 'entry' | 'exit' | null = null) {
+    if (!this.portalSettings) return;
+    this.portalSettings.style.display = active ? '' : 'none';
+    if (!active) return;
+
+    const hasPortal = !!portal;
+    this.portalSelectionStatus.textContent = placing
+      ? 'Place exit'
+      : hasPortal
+        ? `${portal!.name} · ${activeEndpoint === 'exit' ? 'Exit' : 'Entry'}`
+        : 'Place entry';
+    this.portalEmptyHint.style.display = hasPortal ? 'none' : '';
+    this.portalEmptyHint.textContent = placing
+      ? 'Click a second point to place the exit portal.'
+      : 'Click once to place the entry portal, then click again to place the exit. Select a portal to rotate or stretch its endpoints.';
+    this.portalSettingsFields.style.display = hasPortal ? '' : 'none';
+
+    const disableFields = !hasPortal;
+    this.portalModeOneWay.disabled = disableFields;
+    this.portalModeTwoWay.disabled = disableFields;
+    this.portalVelocityMode.disabled = disableFields;
+    this.portalSpeedMultiplier.disabled = disableFields;
+    this.portalSize.disabled = disableFields;
+    this.portalRadius.disabled = disableFields;
+    this.portalPreserveOffset.disabled = disableFields;
+    this.portalFrontOnly.disabled = disableFields;
+    this.portalShowLink.disabled = disableFields;
+    this.portalEnabled.disabled = disableFields;
+    this.portalCooldown.disabled = disableFields;
+    this.portalVisibility.disabled = disableFields;
+
+    if (!portal) {
+      this.portalModeOneWay.classList.remove('active');
+      this.portalModeTwoWay.classList.remove('active');
+      this.portalShowLink.checked = false;
+      this.portalEnabled.checked = true;
+      return;
+    }
+
+    this.portalModeOneWay.classList.toggle('active', portal.mode === 'oneWay');
+    this.portalModeTwoWay.classList.toggle('active', portal.mode === 'twoWay');
+    this.portalVelocityMode.value = portal.physics.velocityMode;
+    this.portalSpeedMultiplier.value = String(portal.physics.speedMultiplier);
+    this.portalSpeedValue.textContent = `${portal.physics.speedMultiplier.toFixed(2)}x`;
+    this.portalSize.value = String(Math.round((portal.entry.length + portal.exit.length) / 2));
+    this.portalSizeValue.textContent = this.portalSize.value;
+    this.portalRadius.value = String(Math.round((portal.entry.radius + portal.exit.radius) / 2));
+    this.portalRadiusValue.textContent = this.portalRadius.value;
+    this.portalPreserveOffset.checked = portal.physics.preserveLocalOffset;
+    this.portalFrontOnly.checked = portal.physics.entryDirectionRule === 'frontOnly';
+    this.portalShowLink.checked = portal.visual.showEditorLink;
+    this.portalEnabled.checked = portal.enabled;
+    this.portalCooldown.value = String(portal.physics.cooldownFrames);
+    this.portalCooldownValue.textContent = `${portal.physics.cooldownFrames}f`;
+    this.portalVisibility.value = portal.visual.visibility;
   }
 
   setActiveLineType(type: LineType) {

@@ -11,6 +11,7 @@ import { EraserTool } from './input/tools/EraserTool';
 import { FlagTool } from './input/tools/FlagTool';
 import { SelectTool } from './input/tools/SelectTool';
 import { EditTool } from './input/tools/EditTool';
+import { PortalTool } from './input/tools/PortalTool';
 import { TrackStore } from './store/TrackStore';
 import { Rider } from './physics/Rider';
 import { PhysicsEngine } from './physics/PhysicsEngine';
@@ -24,6 +25,7 @@ import { ERASER_RADIUS, TIMESTEP } from './constants';
 import { exportTrackAsSvg } from './export/svgExport';
 import { TriggerStore } from './store/TriggerStore';
 import { TriggerRenderer } from './rendering/TriggerRenderer';
+import { PortalRenderer, PortalRenderEvent } from './rendering/PortalRenderer';
 import { VEHICLE_MANIFESTS, getVehicleManifest } from './vehicles';
 import type { VehicleRenderer } from './vehicles';
 import { AudioPlayer } from './audio/AudioPlayer';
@@ -42,6 +44,7 @@ store.onMutation = () => {
 const grid = new SpatialGrid();
 const triggerStore = new TriggerStore();
 const triggerRenderer = new TriggerRenderer();
+const portalRenderer = new PortalRenderer();
 const audioPlayer = new AudioPlayer();
 const ytPlayer = new YouTubePlayer();
 const waveformCanvas = document.getElementById('waveform-canvas') as HTMLCanvasElement;
@@ -50,6 +53,7 @@ const hudBeat = document.getElementById('hud-beat') as HTMLElement;
 const statBeat = document.getElementById('stat-beat') as HTMLElement;
 const metronomeFlash = document.getElementById('metronome-flash') as HTMLElement;
 let lastBeatIndex = -1; // track which beat we were on to detect crossings
+let portalCameraBias: { target: Vec2; strength: number; framesLeft: number } | null = null;
 
 // Unified audio helpers — forward to whichever source is loaded
 function audioPlay() {
@@ -85,7 +89,25 @@ store.startPosition = new Vec2(0, 0);
 
 // Rider + Physics
 let rider = new Rider(store.startPosition);
-let physics = new PhysicsEngine(rider, grid);
+let physics = new PhysicsEngine(
+  rider,
+  grid,
+  () => store.portals.filter(portal => portal.enabled && (store.layers.find(layer => layer.id === portal.layer)?.visible ?? true)),
+);
+const portalFxEvents: PortalRenderEvent[] = [];
+physics.onPortalTeleport = (event) => {
+  portalFxEvents.push({
+    pairId: event.pairId,
+    entryPosition: { x: event.entryPosition.x, y: event.entryPosition.y },
+    exitPosition: { x: event.exitPosition.x, y: event.exitPosition.y },
+    startedAt: performance.now(),
+  });
+  portalCameraBias = {
+    target: event.exitPosition.clone(),
+    strength: 0.42,
+    framesLeft: 10,
+  };
+};
 
 // Sub-renderers
 const lineRenderer = new LineRenderer();
@@ -133,6 +155,7 @@ const eraserTool = new EraserTool(store);
 const selectTool = new SelectTool(store);
 let snapEnabled = true;
 const editTool = new EditTool(store, () => camera.zoom, () => snapEnabled);
+const portalTool = new PortalTool(store, () => camera.zoom, () => snapEnabled);
 const flagTool = new FlagTool((position) => {
   if (!store.setStartPosition(position)) return;
   rider.setStartPosition(store.startPosition);
@@ -228,6 +251,12 @@ const gameLoop = new GameLoop(physics, () => {
   const speed = rider.getCenterSpeed() * (1000 / TIMESTEP);
   toolbar.updateStats(store.lines.length, speed);
   toolbar.setSelectedLineState(currentTool === selectTool ? selectTool.getSelectedCount() : 0, selectTool.isSmoothing());
+  toolbar.setPortalState(
+    currentTool === portalTool,
+    currentTool === portalTool ? portalTool.getSelectedPortal() : null,
+    currentTool === portalTool && portalTool.isPlacing(),
+    currentTool === portalTool ? portalTool.getActiveEndpoint() : null,
+  );
 
   // Update beat HUD counter
   if (waveformRenderer.bpm > 0 && gameLoop.state !== GameState.EDITING) {
@@ -318,6 +347,39 @@ toolbar.onConvertSelectedType = (type) => {
   if (currentTool === selectTool) {
     selectTool.changeSelectedType(type);
   }
+};
+toolbar.onPortalModeChange = (mode) => {
+  if (currentTool === portalTool) portalTool.setSelectedPortalMode(mode);
+};
+toolbar.onPortalVelocityModeChange = (mode) => {
+  if (currentTool === portalTool) portalTool.setSelectedVelocityMode(mode);
+};
+toolbar.onPortalSpeedMultiplierChange = (multiplier) => {
+  if (currentTool === portalTool) portalTool.setSelectedSpeedMultiplier(multiplier);
+};
+toolbar.onPortalPreserveOffsetChange = (enabled) => {
+  if (currentTool === portalTool) portalTool.setSelectedPreserveOffset(enabled);
+};
+toolbar.onPortalFrontOnlyChange = (enabled) => {
+  if (currentTool === portalTool) portalTool.setSelectedFrontOnly(enabled);
+};
+toolbar.onPortalCooldownChange = (frames) => {
+  if (currentTool === portalTool) portalTool.setSelectedCooldownFrames(frames);
+};
+toolbar.onPortalVisibilityChange = (visibility) => {
+  if (currentTool === portalTool) portalTool.setSelectedVisibility(visibility);
+};
+toolbar.onPortalSizeChange = (length) => {
+  if (currentTool === portalTool) portalTool.setSelectedPortalSize(length);
+};
+toolbar.onPortalRadiusChange = (radius) => {
+  if (currentTool === portalTool) portalTool.setSelectedPortalRadius(radius);
+};
+toolbar.onPortalShowEditorLinkChange = (enabled) => {
+  if (currentTool === portalTool) portalTool.setSelectedShowEditorLink(enabled);
+};
+toolbar.onPortalEnabledChange = (enabled) => {
+  if (currentTool === portalTool) portalTool.setSelectedEnabled(enabled);
 };
 selectTool.onSmoothRequest = () => {
   const started = selectTool.startSmooth();
@@ -460,7 +522,7 @@ toolbar.onStepBack = () => {
 
 // SVG export
 toolbar.onSvgExport = () => {
-  const svg = exportTrackAsSvg(store.lines, store.layers, store.startPosition);
+  const svg = exportTrackAsSvg(store.lines, store.layers, store.startPosition, store.portals);
   const blob = new Blob([svg], { type: 'image/svg+xml' });
   const url = URL.createObjectURL(blob);
   const anchor = document.createElement('a');
@@ -543,6 +605,7 @@ function switchTool(name: string) {
   else if (name === 'select') currentTool = selectTool;
   else if (name === 'edit') currentTool = editTool;
   else if (name === 'flag') currentTool = flagTool;
+  else if (name === 'portal') currentTool = portalTool;
   input.setTool(currentTool);
   toolbar.setActiveTool(name);
 }
@@ -551,6 +614,8 @@ function clearTrack() {
   if (gameLoop.state !== GameState.EDITING) return;
   store.clear();
   triggerStore.clear();
+  portalFxEvents.length = 0;
+  portalCameraBias = null;
   rider.setStartPosition(store.startPosition);
   fitView();
   autosaveNow();
@@ -565,7 +630,7 @@ const confirmSaveNew = document.getElementById('confirm-new-save')!;
 function confirmNewTrack() {
   if (gameLoop.state !== GameState.EDITING) return;
   // If the track is empty, just clear without prompting
-  if (store.lines.length === 0) {
+  if (store.lines.length === 0 && store.portals.length === 0) {
     clearTrack();
     return;
   }
@@ -713,11 +778,13 @@ function beginQuickErase(worldPos: Vec2) {
   if (!canEdit()) return;
   store.beginTransaction();
   store.removeLinesNear(worldPos, ERASER_RADIUS);
+  store.removePortalsNear(worldPos, ERASER_RADIUS);
 }
 
 function continueQuickErase(worldPos: Vec2) {
   if (!canEdit()) return;
   store.removeLinesNear(worldPos, ERASER_RADIUS);
+  store.removePortalsNear(worldPos, ERASER_RADIUS);
 }
 
 function endQuickErase() {
@@ -814,6 +881,17 @@ function fitView() {
     minY = Math.min(minY, line.p1.y, line.p2.y);
     maxY = Math.max(maxY, line.p1.y, line.p2.y);
   }
+  for (const portal of store.portals) {
+    for (const endpoint of [portal.entry, portal.exit]) {
+      const half = endpoint.length / 2;
+      const xExtent = Math.abs(Math.cos(endpoint.rotation)) * half + Math.abs(Math.sin(endpoint.rotation)) * endpoint.radius;
+      const yExtent = Math.abs(Math.sin(endpoint.rotation)) * half + Math.abs(Math.cos(endpoint.rotation)) * endpoint.radius;
+      minX = Math.min(minX, endpoint.position.x - xExtent);
+      maxX = Math.max(maxX, endpoint.position.x + xExtent);
+      minY = Math.min(minY, endpoint.position.y - yExtent);
+      maxY = Math.max(maxY, endpoint.position.y + yExtent);
+    }
+  }
 
   const boundsWidth = Math.max(1, maxX - minX);
   const boundsHeight = Math.max(1, maxY - minY);
@@ -838,6 +916,7 @@ function startPlayback() {
     gridDirty = false;
     riderPositions.length = 0; // clear beat position history
     lastBeatIndex = -1;
+    portalCameraBias = null;
     // Start audio from beginning
     audioSeekFrame(0);
   } else if (gameLoop.state === GameState.PAUSED) {
@@ -850,6 +929,8 @@ function startPlayback() {
 
 function stopPlayback() {
   gameLoop.stop();
+  portalFxEvents.length = 0;
+  portalCameraBias = null;
   rider.setStartPosition(store.startPosition);
   resetVehicleRenderers();
   cameraFollowing = false;
@@ -870,6 +951,16 @@ renderer.addRenderCallback((ctx) => {
 
   // Draw lines (show direction indicators when not playing)
   lineRenderer.render(ctx, store.lines, store.layers, gameLoop.state !== GameState.PLAYING);
+
+  while (portalFxEvents.length > 0 && performance.now() - portalFxEvents[0].startedAt > 280) {
+    portalFxEvents.shift();
+  }
+  portalRenderer.render(ctx, store.portals, store.layers, {
+    selectedPortalId: currentTool === portalTool ? portalTool.getSelectedPortalId() : null,
+    activeEndpoint: currentTool === portalTool ? portalTool.getActiveEndpoint() : null,
+    editing: gameLoop.state !== GameState.PLAYING,
+    events: portalFxEvents,
+  });
 
   // Draw active tool preview (editing or paused)
   if (gameLoop.state !== GameState.PLAYING && currentTool.render) {
@@ -1043,8 +1134,17 @@ renderer.addRenderCallback((ctx) => {
       camera.zoom += (targetZoom - camera.zoom) * 0.05;
     }
 
-    const fx = focusTarget ? focusTarget.x : center.x;
-    const fy = focusTarget ? focusTarget.y : center.y;
+    let fx = focusTarget ? focusTarget.x : center.x;
+    let fy = focusTarget ? focusTarget.y : center.y;
+    if (portalCameraBias && portalCameraBias.framesLeft > 0) {
+      fx += (portalCameraBias.target.x - fx) * portalCameraBias.strength;
+      fy += (portalCameraBias.target.y - fy) * portalCameraBias.strength;
+      portalCameraBias.framesLeft -= 1;
+      portalCameraBias.strength *= 0.78;
+      if (portalCameraBias.framesLeft <= 0 || portalCameraBias.strength < 0.02) {
+        portalCameraBias = null;
+      }
+    }
     camera.position.x += (fx - camera.position.x) * 0.1;
     camera.position.y += (fy - camera.position.y) * 0.1;
   }

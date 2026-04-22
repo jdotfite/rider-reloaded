@@ -618,6 +618,96 @@
       opacity: 0.45;
       cursor: not-allowed;
     }
+    #portal-settings {
+      display: none;
+      margin-top: var(--sp-2);
+      padding: var(--sp-2);
+      border: 1px solid var(--border-light);
+      border-radius: var(--radius-md);
+      background: linear-gradient(180deg, rgba(241,244,255,0.95), rgba(255,255,255,0.92));
+    }
+    .portal-panel-header {
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      gap: var(--sp-2);
+      margin-bottom: var(--sp-2);
+    }
+    .portal-panel-title {
+      font: 700 var(--text-xs)/1 var(--font);
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: var(--ink-muted);
+    }
+    #portal-selection-status {
+      font: 600 var(--text-xs)/1 var(--font-mono);
+      color: var(--ink-secondary);
+      white-space: nowrap;
+    }
+    #portal-empty-hint {
+      font: 500 var(--text-xs)/1.45 var(--font);
+      color: var(--ink-muted);
+    }
+    #portal-settings-fields {
+      display: grid;
+      gap: var(--sp-2);
+      margin-top: var(--sp-2);
+    }
+    .portal-segmented {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: var(--sp-1);
+    }
+    .portal-segmented button {
+      min-height: var(--control-h);
+      border-radius: var(--radius-md);
+      font-size: var(--text-sm);
+    }
+    .portal-segmented button.active {
+      background: var(--bg-active);
+      border-color: var(--bg-active);
+      color: var(--ink-inverse);
+    }
+    .portal-field {
+      display: grid;
+      grid-template-columns: 72px minmax(0, 1fr) auto;
+      align-items: center;
+      gap: var(--sp-2);
+      font: 600 var(--text-xs)/1 var(--font);
+      color: var(--ink-secondary);
+    }
+    .portal-field span {
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--ink-muted);
+    }
+    .portal-field input[type="range"],
+    .portal-field select {
+      width: 100%;
+    }
+    .portal-inline-value {
+      min-width: 40px;
+      text-align: right;
+      font: 600 var(--text-xs)/1 var(--font-mono);
+      color: var(--ink-secondary);
+    }
+    .portal-checkbox-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: var(--sp-1);
+    }
+    #portal-settings .tool-option-label {
+      padding: var(--sp-2);
+      margin: 0;
+      border: 1px solid rgba(17,17,17,0.08);
+      background: rgba(255,255,255,0.72);
+    }
+    #portal-settings button:disabled,
+    #portal-settings input:disabled,
+    #portal-settings select:disabled {
+      opacity: 0.45;
+      cursor: not-allowed;
+    }
 
     /* — SVG import/export — */
     #svg-import-btn, #svg-export-btn {
@@ -1355,6 +1445,16 @@
         box-shadow: 0 14px 30px rgba(17,17,17,0.08);
         backdrop-filter: blur(16px);
       }
+      body.desktop-top-tools #portal-settings {
+        min-width: 360px;
+        margin-top: 0;
+        padding: 10px 12px;
+        border-radius: 18px;
+        border: 1px solid rgba(17,17,17,0.08);
+        background: rgba(255,255,255,0.94);
+        box-shadow: 0 14px 30px rgba(17,17,17,0.08);
+        backdrop-filter: blur(16px);
+      }
       body.desktop-top-tools #rider-customization {
         display: flex;
         gap: 4px;
@@ -1563,7 +1663,7 @@
 
       #tool-grid {
         grid-area: tools;
-        grid-template-columns: repeat(6, minmax(0, 1fr));
+        grid-template-columns: repeat(7, minmax(0, 1fr));
         gap: 4px;
         padding: 0;
       }
@@ -1640,7 +1740,7 @@
         box-shadow: none;
         backdrop-filter: none;
       }
-      #tool-options .tool-option-label {
+      #tool-options > .tool-option-label {
         display: none;
       }
       #smooth-container {
@@ -1674,6 +1774,40 @@
       }
       #smooth-slider-row > div:last-child {
         margin-top: 6px;
+      }
+      #portal-settings {
+        width: 100%;
+        margin-top: 0;
+        padding: 10px;
+        border-radius: 16px;
+        border: 1px solid rgba(17,17,17,0.08);
+        background: linear-gradient(180deg, rgba(244,247,252,0.98), rgba(255,255,255,0.92));
+        box-shadow: 0 10px 22px rgba(17,17,17,0.08);
+      }
+      #portal-settings .tool-option-label {
+        display: flex;
+        padding: 8px;
+      }
+      .portal-field {
+        grid-template-columns: 58px minmax(0, 1fr) auto;
+        gap: 6px;
+      }
+      .portal-field span,
+      .portal-panel-title,
+      #portal-selection-status,
+      #portal-empty-hint {
+        font-size: 10px;
+      }
+      .portal-segmented button {
+        min-height: 32px;
+        font-size: 10px;
+      }
+      .portal-inline-value {
+        min-width: 34px;
+        font-size: 10px;
+      }
+      .portal-checkbox-grid {
+        grid-template-columns: 1fr;
       }
 
       #canvas-hud {
@@ -1885,6 +2019,73 @@
               </div>
             </div>
           </div>
+          <div id="portal-settings">
+            <div class="portal-panel-header">
+              <span class="portal-panel-title">Portal Pair</span>
+              <span id="portal-selection-status">Place entry</span>
+            </div>
+            <div id="portal-empty-hint">Click once to place the entry portal, then click again to place the exit. Select a portal to rotate or stretch its endpoints.</div>
+            <div id="portal-settings-fields">
+              <div class="portal-segmented">
+                <button id="portal-mode-oneway" type="button">One Way</button>
+                <button id="portal-mode-twoway" type="button">Two Way</button>
+              </div>
+              <label class="portal-field">
+                <span>Velocity</span>
+                <select id="portal-velocity-mode">
+                  <option value="remap">Remap</option>
+                  <option value="world">World</option>
+                </select>
+                <strong class="portal-inline-value"></strong>
+              </label>
+              <label class="portal-field">
+                <span>Speed</span>
+                <input type="range" id="portal-speed-mult" min="0.25" max="3" step="0.05" value="1" />
+                <strong id="portal-speed-value" class="portal-inline-value">1.00x</strong>
+              </label>
+              <label class="portal-field">
+                <span>Size</span>
+                <input type="range" id="portal-size" min="18" max="84" step="1" value="34" />
+                <strong id="portal-size-value" class="portal-inline-value">34</strong>
+              </label>
+              <label class="portal-field">
+                <span>Width</span>
+                <input type="range" id="portal-radius" min="6" max="28" step="1" value="10" />
+                <strong id="portal-radius-value" class="portal-inline-value">10</strong>
+              </label>
+              <div class="portal-checkbox-grid">
+                <label class="tool-option-label">
+                  <input type="checkbox" id="portal-preserve-offset" />
+                  <span>Preserve offset</span>
+                </label>
+                <label class="tool-option-label">
+                  <input type="checkbox" id="portal-front-only" />
+                  <span>Front-face only</span>
+                </label>
+                <label class="tool-option-label">
+                  <input type="checkbox" id="portal-show-link" />
+                  <span>Show pair link</span>
+                </label>
+                <label class="tool-option-label">
+                  <input type="checkbox" id="portal-enabled" checked />
+                  <span>Enabled</span>
+                </label>
+              </div>
+              <label class="portal-field">
+                <span>Cooldown</span>
+                <input type="range" id="portal-cooldown" min="0" max="60" step="1" value="10" />
+                <strong id="portal-cooldown-value" class="portal-inline-value">10f</strong>
+              </label>
+              <label class="portal-field">
+                <span>Playback</span>
+                <select id="portal-visibility">
+                  <option value="subtle">Subtle</option>
+                  <option value="always">Always</option>
+                </select>
+                <strong class="portal-inline-value"></strong>
+              </label>
+            </div>
+          </div>
         </div>
 
         <button id="svg-import-btn">SVG Import</button>
@@ -2037,10 +2238,11 @@
         <div class="hk-row"><kbd>4</kbd><span>Edit tool</span></div>
         <div class="hk-row"><kbd>5</kbd><span>Select tool</span></div>
         <div class="hk-row"><kbd>6</kbd><span>Flag tool</span></div>
+        <div class="hk-row"><kbd>7</kbd><span>Portal tool</span></div>
         <div class="hk-row"><kbd>Ctrl+C</kbd><span>Copy selected lines (Select tool)</span></div>
         <div class="hk-row"><kbd>Ctrl+X</kbd><span>Cut selected lines (Select tool)</span></div>
         <div class="hk-row"><kbd>Ctrl+V</kbd><span>Paste copied lines (Select tool)</span></div>
-        <div class="hk-row"><kbd>Ctrl+D</kbd><span>Duplicate selected lines (Select tool)</span></div>
+        <div class="hk-row"><kbd>Ctrl+D</kbd><span>Duplicate selected lines or portal pair</span></div>
         <div class="hk-row"><kbd>S</kbd><span>Smooth selected lines (Select tool)</span></div>
         <div class="hk-row"><kbd>Delete</kbd><span>Delete selected lines (Select tool)</span></div>
         <div class="hk-row"><kbd>C</kbd><span>Convert to bezier path (Edit tool)</span></div>
@@ -2052,6 +2254,7 @@
         <div class="hk-row"><kbd>W</kbd><span>Accel line type or convert selection to accel</span></div>
         <div class="hk-row"><kbd>E</kbd><span>Scenery line type or convert selection to scenery</span></div>
         <div class="hk-row"><kbd>F</kbd><span>Fit view (non-Edit tools)</span></div>
+        <div class="hk-row"><kbd>T</kbd><span>Toggle one-way / two-way (Portal tool)</span></div>
         <div class="hk-row"><kbd>Ctrl+Z</kbd><span>Undo</span></div>
         <div class="hk-row"><kbd>Ctrl+Shift+Z</kbd><span>Redo</span></div>
         <div class="hk-row"><kbd>Ctrl+S</kbd><span>Save track</span></div>

@@ -11,6 +11,22 @@ import {
   cloneBezierPath,
 } from './BezierPath';
 import { generateSegmentsFromPath } from '../math/bezier-path';
+import {
+  PortalPair,
+  PortalEndpointKey,
+  PortalMode,
+  PortalPhysics,
+  PortalVisual,
+  SerializedPortalPair,
+  clonePortalPair,
+  createPortalEndpoint,
+  serializePortalPair,
+  MIN_PORTAL_LENGTH,
+  MAX_PORTAL_LENGTH,
+  MIN_PORTAL_RADIUS,
+  MAX_PORTAL_RADIUS,
+} from './PortalTypes';
+import { distanceSqToPortalCapsule } from '../portal/portalMath';
 
 export interface SerializedTrackLine {
   id: number;
@@ -61,6 +77,7 @@ export interface SerializedTrack {
   lines: SerializedTrackLine[];
   curveGroups?: SerializedCurveGroup[];
   bezierPaths?: SerializedBezierPath[];
+  portals?: SerializedPortalPair[];
 }
 
 interface TrackSnapshot {
@@ -69,6 +86,7 @@ interface TrackSnapshot {
   layers: TrackLayer[];
   activeLayerId: number;
   bezierPaths: BezierPath[];
+  portals: PortalPair[];
 }
 
 interface NormalizedTrackLine {
@@ -97,6 +115,8 @@ export class TrackStore {
   activeLayerId = 0;
   bezierPaths: BezierPath[] = [];
   nextBezierPathId = 0;
+  portals: PortalPair[] = [];
+  nextPortalId = 0;
 
   /** Fires on every mutation (addLine, removeLines, replaceLine, etc.) */
   onMutation: (() => void) | null = null;
@@ -214,10 +234,28 @@ export class TrackStore {
     return removed;
   }
 
+  removePortalsNear(point: Vec2, radius: number): number {
+    if (this.portals.length === 0 || !this.canEditActiveLayer()) return 0;
+    const toRemove = this.portals.filter(portal => {
+      if (portal.layer !== this.activeLayerId) return false;
+      return (
+        distanceSqToPortalCapsule(point, portal.entry, radius) <= 0 ||
+        distanceSqToPortalCapsule(point, portal.exit, radius) <= 0
+      );
+    });
+    if (toRemove.length === 0) return 0;
+
+    const removeIds = new Set(toRemove.map(portal => portal.id));
+    this.beginMutation();
+    this.portals = this.portals.filter(portal => !removeIds.has(portal.id));
+    return removeIds.size;
+  }
+
   clear(): boolean {
     const mainLayer = this.layers[0];
     const alreadyDefault =
       this.lines.length === 0 &&
+      this.portals.length === 0 &&
       this.layers.length === 1 &&
       mainLayer.id === 0 &&
       mainLayer.name === 'Main' &&
@@ -232,6 +270,8 @@ export class TrackStore {
     this.activeLayerId = 0;
     this.bezierPaths = [];
     this.nextBezierPathId = 0;
+    this.portals = [];
+    this.nextPortalId = 0;
     return true;
   }
 
@@ -323,6 +363,7 @@ export class TrackStore {
     // Remove lines and bezier paths on this layer
     this.lines = this.lines.filter(l => l.layer !== activeId);
     this.bezierPaths = this.bezierPaths.filter(p => p.layer !== activeId);
+    this.portals = this.portals.filter(p => p.layer !== activeId);
 
     // Remove the layer
     this.layers = this.layers.filter(l => l.id !== activeId);
@@ -362,7 +403,7 @@ export class TrackStore {
 
   serialize(): SerializedTrack {
     return {
-      version: '6.2',
+      version: '6.3',
       label: 'Untitled Track',
       creator: 'Rider Reloaded',
       startPosition: {
@@ -397,6 +438,7 @@ export class TrackStore {
         layer: p.layer,
         lineIds: [...p.lineIds],
       })),
+      portals: this.portals.map(serializePortalPair),
     };
   }
 
@@ -480,6 +522,8 @@ export class TrackStore {
       }
     }
 
+    const loadedPortals = this.normalizePortals(candidate.portals, normalizedTrack.layers);
+
     this.beginMutation();
     this.startPosition = normalizedTrack.startPosition;
     this.layers = normalizedTrack.layers;
@@ -487,6 +531,8 @@ export class TrackStore {
     this.lines = loadedLines;
     this.bezierPaths = loadedPaths;
     this.nextBezierPathId = loadedPaths.reduce((max, p) => Math.max(max, p.id + 1), 0);
+    this.portals = loadedPortals;
+    this.nextPortalId = loadedPortals.reduce((max, p) => Math.max(max, p.id + 1), 0);
     return true;
   }
 
@@ -560,6 +606,200 @@ export class TrackStore {
     return this.bezierPaths.find(p => p.lineIds.includes(lineId)) ?? null;
   }
 
+  // Portal methods
+
+  addPortalPair(
+    entryPosition: Vec2,
+    exitPosition: Vec2,
+    options: {
+      entryRotation?: number;
+      exitRotation?: number;
+      mode?: PortalMode;
+    } = {},
+  ): PortalPair | null {
+    if (!this.canEditActiveLayer()) return null;
+    const pair: PortalPair = {
+      id: this.nextPortalId++,
+      layer: this.activeLayerId,
+      name: `Portal ${this.nextPortalId}`,
+      enabled: true,
+      mode: options.mode ?? 'oneWay',
+      entry: createPortalEndpoint(entryPosition, options.entryRotation ?? 0),
+      exit: createPortalEndpoint(exitPosition, options.exitRotation ?? 0),
+      physics: this.createDefaultPortalPhysics(),
+      visual: this.createDefaultPortalVisual(),
+    };
+    this.beginMutation();
+    this.portals = [...this.portals, pair];
+    return pair;
+  }
+
+  getPortalById(id: number): PortalPair | null {
+    return this.portals.find(portal => portal.id === id) ?? null;
+  }
+
+  removePortalPair(id: number): boolean {
+    if (!this.portals.some(portal => portal.id === id)) return false;
+    this.beginMutation();
+    this.portals = this.portals.filter(portal => portal.id !== id);
+    return true;
+  }
+
+  getPortalEndpointAt(
+    point: Vec2,
+    radius: number,
+  ): { portalId: number; endpoint: PortalEndpointKey } | null {
+    const radiusSq = radius * radius;
+    let bestDist = radiusSq;
+    let best: { portalId: number; endpoint: PortalEndpointKey } | null = null;
+    for (const portal of this.portals) {
+      if (portal.layer !== this.activeLayerId) continue;
+      for (const endpointKey of ['entry', 'exit'] as const) {
+        const endpoint = portal[endpointKey];
+        const d = point.distanceToSq(endpoint.position);
+        if (d < bestDist) {
+          bestDist = d;
+          best = { portalId: portal.id, endpoint: endpointKey };
+        }
+      }
+    }
+    return best;
+  }
+
+  getPortalAt(point: Vec2, radius: number): PortalPair | null {
+    let bestPortal: PortalPair | null = null;
+    let bestDist = radius * radius;
+    for (const portal of this.portals) {
+      if (portal.layer !== this.activeLayerId) continue;
+      const entryDist = distanceSqToPortalCapsule(point, portal.entry, radius);
+      if (entryDist <= bestDist) {
+        bestDist = entryDist;
+        bestPortal = portal;
+      }
+      const exitDist = distanceSqToPortalCapsule(point, portal.exit, radius);
+      if (exitDist <= bestDist) {
+        bestDist = exitDist;
+        bestPortal = portal;
+      }
+    }
+    return bestPortal;
+  }
+
+  updatePortalEndpoint(
+    portalId: number,
+    endpointKey: PortalEndpointKey,
+    patch: Partial<{ position: Vec2; rotation: number; length: number; radius: number }>,
+  ): PortalPair | null {
+    const existing = this.getPortalById(portalId);
+    if (!existing) return null;
+    const nextLength = patch.length == null ? existing[endpointKey].length : this.clamp(patch.length, MIN_PORTAL_LENGTH, MAX_PORTAL_LENGTH);
+    const nextRadius = patch.radius == null ? existing[endpointKey].radius : this.clamp(patch.radius, MIN_PORTAL_RADIUS, MAX_PORTAL_RADIUS);
+    this.beginMutation();
+    this.portals = this.portals.map(portal => {
+      if (portal.id !== portalId) return portal;
+      return {
+        ...portal,
+        [endpointKey]: {
+          ...portal[endpointKey],
+          position: patch.position ? patch.position.clone() : portal[endpointKey].position,
+          rotation: patch.rotation ?? portal[endpointKey].rotation,
+          length: nextLength,
+          radius: nextRadius,
+        },
+      };
+    });
+    return this.getPortalById(portalId);
+  }
+
+  movePortalPair(portalId: number, dx: number, dy: number): PortalPair | null {
+    const existing = this.getPortalById(portalId);
+    if (!existing || (dx === 0 && dy === 0)) return existing;
+    const offset = new Vec2(dx, dy);
+    this.beginMutation();
+    this.portals = this.portals.map(portal => {
+      if (portal.id !== portalId) return portal;
+      return {
+        ...portal,
+        entry: {
+          ...portal.entry,
+          position: portal.entry.position.add(offset),
+        },
+        exit: {
+          ...portal.exit,
+          position: portal.exit.position.add(offset),
+        },
+      };
+    });
+    return this.getPortalById(portalId);
+  }
+
+  duplicatePortalPair(portalId: number, dx: number, dy: number): PortalPair | null {
+    const existing = this.getPortalById(portalId);
+    if (!existing || !this.canEditActiveLayer()) return null;
+    const offset = new Vec2(dx, dy);
+    const duplicate: PortalPair = {
+      ...clonePortalPair(existing),
+      id: this.nextPortalId++,
+      layer: this.activeLayerId,
+      name: `Portal ${this.nextPortalId}`,
+      entry: {
+        ...clonePortalPair(existing).entry,
+        position: existing.entry.position.add(offset),
+      },
+      exit: {
+        ...clonePortalPair(existing).exit,
+        position: existing.exit.position.add(offset),
+      },
+    };
+    this.beginMutation();
+    this.portals = [...this.portals, duplicate];
+    return duplicate;
+  }
+
+  setPortalMode(portalId: number, mode: PortalMode): PortalPair | null {
+    const existing = this.getPortalById(portalId);
+    if (!existing || existing.mode === mode) return existing;
+    this.beginMutation();
+    this.portals = this.portals.map(portal => portal.id === portalId ? { ...portal, mode } : portal);
+    return this.getPortalById(portalId);
+  }
+
+  updatePortalPhysics(portalId: number, patch: Partial<PortalPhysics>): PortalPair | null {
+    const existing = this.getPortalById(portalId);
+    if (!existing) return null;
+    const physics: PortalPhysics = {
+      ...existing.physics,
+      ...patch,
+      speedMultiplier: patch.speedMultiplier == null
+        ? existing.physics.speedMultiplier
+        : this.clamp(patch.speedMultiplier, 0.25, 3),
+      cooldownFrames: patch.cooldownFrames == null
+        ? existing.physics.cooldownFrames
+        : Math.round(this.clamp(patch.cooldownFrames, 0, 60)),
+    };
+    this.beginMutation();
+    this.portals = this.portals.map(portal => portal.id === portalId ? { ...portal, physics } : portal);
+    return this.getPortalById(portalId);
+  }
+
+  updatePortalVisual(portalId: number, patch: Partial<PortalVisual>): PortalPair | null {
+    const existing = this.getPortalById(portalId);
+    if (!existing) return null;
+    this.beginMutation();
+    this.portals = this.portals.map(portal => portal.id === portalId
+      ? { ...portal, visual: { ...portal.visual, ...patch } }
+      : portal);
+    return this.getPortalById(portalId);
+  }
+
+  setPortalEnabled(portalId: number, enabled: boolean): PortalPair | null {
+    const existing = this.getPortalById(portalId);
+    if (!existing || existing.enabled === enabled) return existing;
+    this.beginMutation();
+    this.portals = this.portals.map(portal => portal.id === portalId ? { ...portal, enabled } : portal);
+    return this.getPortalById(portalId);
+  }
+
   // ── Transactions & Undo ──
 
   beginTransaction() {
@@ -622,6 +862,7 @@ export class TrackStore {
       layers: this.layers.map(layer => ({ ...layer })),
       activeLayerId: this.activeLayerId,
       bezierPaths: this.bezierPaths.map(cloneBezierPath),
+      portals: this.portals.map(clonePortalPair),
     };
   }
 
@@ -631,6 +872,7 @@ export class TrackStore {
     this.layers = snapshot.layers.map(layer => ({ ...layer }));
     this.activeLayerId = snapshot.activeLayerId;
     this.bezierPaths = snapshot.bezierPaths.map(cloneBezierPath);
+    this.portals = snapshot.portals.map(clonePortalPair);
   }
 
   createLinePublic(p1: Vec2, p2: Vec2, type: LineType, options: LineOptions = {}): Line {
@@ -789,6 +1031,109 @@ export class TrackStore {
     return null;
   }
 
+  private normalizePortals(portals: unknown, layers: TrackLayer[]): PortalPair[] {
+    if (!Array.isArray(portals)) return [];
+    const validLayerIds = new Set(layers.map(layer => layer.id));
+    const fallbackLayerId = this.getPreferredActiveLayerId(layers);
+    const normalized: PortalPair[] = [];
+    for (const raw of portals) {
+      if (!raw || typeof raw !== 'object') continue;
+      const candidate = raw as SerializedPortalPair;
+      const entry = this.normalizePortalEndpoint(candidate.entry);
+      const exit = this.normalizePortalEndpoint(candidate.exit);
+      if (!entry || !exit || typeof candidate.id !== 'number' || !Number.isFinite(candidate.id)) continue;
+      normalized.push({
+        id: candidate.id,
+        layer: typeof candidate.layer === 'number' && validLayerIds.has(candidate.layer)
+          ? candidate.layer
+          : fallbackLayerId,
+        name: typeof candidate.name === 'string' && candidate.name.trim()
+          ? candidate.name.trim()
+          : `Portal ${candidate.id + 1}`,
+        enabled: this.toBoolean(candidate.enabled) ?? true,
+        mode: candidate.mode === 'twoWay' ? 'twoWay' : 'oneWay',
+        entry,
+        exit,
+        physics: {
+          velocityMode: candidate.physics?.velocityMode === 'world' ? 'world' : 'remap',
+          speedMultiplier: this.clamp(
+            typeof candidate.physics?.speedMultiplier === 'number' ? candidate.physics.speedMultiplier : 1,
+            0.25,
+            3,
+          ),
+          preserveLocalOffset: this.toBoolean(candidate.physics?.preserveLocalOffset) ?? false,
+          entryDirectionRule: candidate.physics?.entryDirectionRule === 'frontOnly' ? 'frontOnly' : 'any',
+          cooldownFrames: Math.round(this.clamp(
+            typeof candidate.physics?.cooldownFrames === 'number' ? candidate.physics.cooldownFrames : 10,
+            0,
+            60,
+          )),
+        },
+        visual: {
+          visibility: candidate.visual?.visibility === 'always' ? 'always' : 'subtle',
+          colorTheme: 'violet',
+          showEditorLink: this.toBoolean(candidate.visual?.showEditorLink) ?? false,
+        },
+      });
+    }
+    return normalized;
+  }
+
+  private normalizePortalEndpoint(endpoint: unknown) {
+    if (!endpoint || typeof endpoint !== 'object') return null;
+    const candidate = endpoint as {
+      x?: unknown;
+      y?: unknown;
+      rotation?: unknown;
+      length?: unknown;
+      radius?: unknown;
+    };
+    if (
+      typeof candidate.x !== 'number' ||
+      typeof candidate.y !== 'number' ||
+      !Number.isFinite(candidate.x) ||
+      !Number.isFinite(candidate.y)
+    ) {
+      return null;
+    }
+    return {
+      position: new Vec2(candidate.x, candidate.y),
+      rotation: typeof candidate.rotation === 'number' && Number.isFinite(candidate.rotation) ? candidate.rotation : 0,
+      length: this.clamp(
+        typeof candidate.length === 'number' && Number.isFinite(candidate.length) ? candidate.length : 34,
+        MIN_PORTAL_LENGTH,
+        MAX_PORTAL_LENGTH,
+      ),
+      radius: this.clamp(
+        typeof candidate.radius === 'number' && Number.isFinite(candidate.radius) ? candidate.radius : 10,
+        MIN_PORTAL_RADIUS,
+        MAX_PORTAL_RADIUS,
+      ),
+    };
+  }
+
+  private createDefaultPortalPhysics(): PortalPhysics {
+    return {
+      velocityMode: 'remap',
+      speedMultiplier: 1,
+      preserveLocalOffset: false,
+      entryDirectionRule: 'any',
+      cooldownFrames: 10,
+    };
+  }
+
+  private createDefaultPortalVisual(): PortalVisual {
+    return {
+      visibility: 'subtle',
+      colorTheme: 'violet',
+      showEditorLink: false,
+    };
+  }
+
+  private clamp(value: number, min: number, max: number): number {
+    return Math.max(min, Math.min(max, value));
+  }
+
   private createDefaultLayer(): TrackLayer {
     return {
       id: 0,
@@ -826,7 +1171,12 @@ export class TrackStore {
     return best;
   }
 
-  findNearestEndpoint(point: Vec2, radius: number, excludeLineIds?: Set<number>): Vec2 | null {
+  findNearestEndpoint(
+    point: Vec2,
+    radius: number,
+    excludeLineIds?: Set<number>,
+    excludePortalIds?: Set<number>,
+  ): Vec2 | null {
     let bestDist = radius * radius;
     let best: Vec2 | null = null;
     for (const line of this.lines) {
@@ -836,6 +1186,17 @@ export class TrackStore {
         if (d < bestDist) {
           bestDist = d;
           best = p;
+        }
+      }
+    }
+    for (const portal of this.portals) {
+      if (portal.layer !== this.activeLayerId) continue;
+      if (excludePortalIds?.has(portal.id)) continue;
+      for (const endpoint of [portal.entry, portal.exit]) {
+        const d = point.distanceToSq(endpoint.position);
+        if (d < bestDist) {
+          bestDist = d;
+          best = endpoint.position;
         }
       }
     }
