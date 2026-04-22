@@ -91,6 +91,7 @@ interface TrackSnapshot {
 }
 
 interface NormalizedTrackLine {
+  id?: number;
   type: LineType;
   x1: number;
   y1: number;
@@ -452,6 +453,7 @@ export class TrackStore {
       new Vec2(line.x2, line.y2),
       line.type,
       {
+        id: line.id,
         flipped: line.flipped,
         leftExtended: line.leftExtended,
         rightExtended: line.rightExtended,
@@ -998,6 +1000,10 @@ export class TrackStore {
       const rightExtended = this.toBoolean(line.rightExtended) ?? extended;
 
       normalizedLines.push({
+        id:
+          typeof line.id === 'number' && Number.isFinite(line.id)
+            ? line.id
+            : undefined,
         type,
         x1: line.x1,
         y1: line.y1,
