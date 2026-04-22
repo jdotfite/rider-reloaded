@@ -607,6 +607,21 @@ export class TrackStore {
     return this.bezierPaths.find(p => p.lineIds.includes(lineId)) ?? null;
   }
 
+  getBezierPathsForLineSelection(lineIds: Iterable<number>): BezierPath[] {
+    const selectedIds = lineIds instanceof Set ? lineIds : new Set(lineIds);
+    return this.bezierPaths.filter(path => path.lineIds.some(id => selectedIds.has(id)));
+  }
+
+  expandLineSelectionToWholeBezierPaths(lineIds: Iterable<number>): Set<number> {
+    const expanded = lineIds instanceof Set ? new Set(lineIds) : new Set(lineIds);
+    for (const path of this.getBezierPathsForLineSelection(expanded)) {
+      for (const id of path.lineIds) {
+        expanded.add(id);
+      }
+    }
+    return expanded;
+  }
+
   // Portal methods
 
   addPortalPair(
@@ -1327,14 +1342,15 @@ export class TrackStore {
     this.invalidateBezierPaths(lineIds);
   }
 
-  /** Change the type of the given lines. Partial Bezier selections are invalidated. */
+  /** Change the type of the given lines. Any touched bezier path is upgraded to a full-path change. */
   changeLineTypes(lineIds: Set<number>, newType: LineType) {
-    if (lineIds.size === 0) return;
-    const hasTypeChange = this.lines.some(line => lineIds.has(line.id) && line.type !== newType);
+    const expandedIds = this.expandLineSelectionToWholeBezierPaths(lineIds);
+    if (expandedIds.size === 0) return;
+    const hasTypeChange = this.lines.some(line => expandedIds.has(line.id) && line.type !== newType);
     if (!hasTypeChange) return;
     this.beginMutation();
     this.lines = this.lines.map(line => {
-      if (!lineIds.has(line.id) || line.type === newType) return line;
+      if (!expandedIds.has(line.id) || line.type === newType) return line;
       return this.createLine(line.p1, line.p2, newType, {
         id: line.id,
         flipped: line.flipped,
@@ -1345,16 +1361,10 @@ export class TrackStore {
       });
     });
     this.bezierPaths = this.bezierPaths.filter(path => {
-      const hasSelectedLine = path.lineIds.some(id => lineIds.has(id));
+      const hasSelectedLine = path.lineIds.some(id => expandedIds.has(id));
       if (!hasSelectedLine) return true;
-
-      const allSelected = path.lineIds.every(id => lineIds.has(id));
-      if (allSelected) {
-        path.lineType = newType;
-        return true;
-      }
-
-      return false;
+      path.lineType = newType;
+      return true;
     });
   }
 

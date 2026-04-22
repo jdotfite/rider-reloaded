@@ -1,11 +1,13 @@
 import { Vec2 } from '../../math/Vec2';
 import { Tool } from './Tool';
 import { TrackStore } from '../../store/TrackStore';
+import { BezierAnchor } from '../../store/BezierPath';
 import { LineType } from '../../physics/lines/LineTypes';
 import { AccLine } from '../../physics/lines/AccLine';
-import { SELECT_RADIUS } from '../../constants';
+import { CURVE_FIT_ERROR, SELECT_RADIUS } from '../../constants';
 import { chaikinSmooth } from '../../math/chaikin';
 import { pointsToSegments } from '../../math/smooth';
+import { fitCurve } from '../../math/curve-fit';
 
 type SelectState = 'idle' | 'box-selecting' | 'dragging' | 'smoothing';
 
@@ -17,6 +19,23 @@ interface ClipboardLine {
   leftExtended: boolean;
   rightExtended: boolean;
   multiplier?: number;
+}
+
+interface ClipboardBezierAnchor {
+  position: { x: number; y: number };
+  handleIn: { x: number; y: number };
+  handleOut: { x: number; y: number };
+  smooth: boolean;
+}
+
+interface ClipboardBezierPath {
+  anchors: ClipboardBezierAnchor[];
+  type: LineType;
+}
+
+interface ClipboardSelection {
+  lines: ClipboardLine[];
+  bezierPaths: ClipboardBezierPath[];
 }
 
 interface SmoothChain {
@@ -45,7 +64,7 @@ export class SelectTool implements Tool {
   private smoothAmount = 0;
 
   // Clipboard for copy/paste
-  private clipboard: ClipboardLine[] = [];
+  private clipboard: ClipboardSelection = { lines: [], bezierPaths: [] };
   private pasteOffset = 0; // increases with each paste so successive pastes don't stack
 
   // Callback when S key requests smooth (so toolbar can show slider)
@@ -84,7 +103,7 @@ export class SelectTool implements Tool {
       this.deleteSelected();
     }
     // Paste
-    if (primaryModifier && !e.altKey && e.code === 'KeyV' && this.state === 'idle' && this.clipboard.length > 0) {
+    if (primaryModifier && !e.altKey && e.code === 'KeyV' && this.state === 'idle' && this.hasClipboardContent()) {
       e.preventDefault();
       this.pasteClipboard();
     }
@@ -128,7 +147,7 @@ export class SelectTool implements Tool {
     // Try single-click select
     const hit = this.store.getLineAt(worldPos, SELECT_RADIUS);
     if (hit) {
-      this.selectedIds = new Set([hit.id]);
+      this.selectedIds = this.expandSelection(new Set([hit.id]));
       this.state = 'idle';
       return;
     }
@@ -148,11 +167,12 @@ export class SelectTool implements Tool {
       const maxX = Math.max(this.boxStart.x, this.boxEnd.x);
       const maxY = Math.max(this.boxStart.y, this.boxEnd.y);
       const lines = this.store.getLinesInRect(minX, minY, maxX, maxY);
-      this.selectedIds = new Set(lines.map(l => l.id));
+      this.selectedIds = this.expandSelection(new Set(lines.map(l => l.id)));
       return;
     }
 
     if (this.state === 'dragging') {
+      this.selectedIds = this.expandSelection(this.selectedIds);
       const dx = worldPos.x - this.dragCurrent.x;
       const dy = worldPos.y - this.dragCurrent.y;
       if (dx !== 0 || dy !== 0) {
@@ -167,17 +187,6 @@ export class SelectTool implements Tool {
             }
             movedPaths.add(path.id);
           }
-        }
-        // Invalidate paths where only some lines are selected
-        const partialPaths: number[] = [];
-        for (const path of this.store.bezierPaths) {
-          if (movedPaths.has(path.id)) continue;
-          if (path.lineIds.some(id => this.selectedIds.has(id))) {
-            partialPaths.push(path.id);
-          }
-        }
-        for (const pathId of partialPaths) {
-          this.store.bezierPaths = this.store.bezierPaths.filter(p => p.id !== pathId);
         }
 
         this.store.moveLines(this.selectedIds, dx, dy);
@@ -224,51 +233,35 @@ export class SelectTool implements Tool {
   /** Copy selected lines to internal clipboard */
   copySelected() {
     if (this.selectedIds.size === 0) return;
-    const selected = this.store.lines.filter(l => this.selectedIds.has(l.id));
-    this.clipboard = selected.map(line => ({
-      p1: { x: line.p1.x, y: line.p1.y },
-      p2: { x: line.p2.x, y: line.p2.y },
-      type: line.type,
-      flipped: line.flipped,
-      leftExtended: line.leftExtended,
-      rightExtended: line.rightExtended,
-      multiplier: line instanceof AccLine ? line.multiplier : undefined,
-    }));
+    this.selectedIds = this.expandSelection(this.selectedIds);
+    this.clipboard = this.captureSelection(this.selectedIds);
     this.pasteOffset = 0;
   }
 
   /** Paste clipboard lines with a small offset */
   pasteClipboard() {
-    if (this.clipboard.length === 0) return;
+    if (!this.hasClipboardContent()) return;
     const nextOffset = this.pasteOffset + 20;
-    const dx = nextOffset;
-    const dy = nextOffset;
-
-    const added = this.store.pasteLines(this.clipboard.map(cl => ({
-      p1: new Vec2(cl.p1.x + dx, cl.p1.y + dy),
-      p2: new Vec2(cl.p2.x + dx, cl.p2.y + dy),
-      type: cl.type,
-      flipped: cl.flipped,
-      leftExtended: cl.leftExtended,
-      rightExtended: cl.rightExtended,
-      multiplier: cl.multiplier,
-    })));
-    if (added.length === 0) return;
+    const newIds = this.pasteSelection(this.clipboard, nextOffset, nextOffset);
+    if (newIds.size === 0) return;
     this.pasteOffset = nextOffset;
-    this.selectedIds = new Set(added.map(l => l.id));
+    this.selectedIds = newIds;
   }
 
   /** Duplicate selected lines in-place with offset */
   duplicateSelected() {
     if (this.selectedIds.size === 0) return;
-    const added = this.store.duplicateLines(this.selectedIds, 20, 20);
-    if (added.length === 0) return;
-    this.selectedIds = new Set(added.map(l => l.id));
+    this.selectedIds = this.expandSelection(this.selectedIds);
+    const captured = this.captureSelection(this.selectedIds);
+    const newIds = this.pasteSelection(captured, 20, 20);
+    if (newIds.size === 0) return;
+    this.selectedIds = newIds;
   }
 
   /** Change the type of all selected lines */
   changeSelectedType(newType: LineType) {
     if (this.selectedIds.size === 0 || this.state !== 'idle') return;
+    this.selectedIds = this.expandSelection(this.selectedIds);
     this.store.changeLineTypes(this.selectedIds, newType);
   }
 
@@ -503,9 +496,23 @@ export class SelectTool implements Tool {
       for (let ci = 0; ci < this.smoothOriginalChains.length; ci++) {
         const chain = this.smoothOriginalChains[ci];
         const smoothed = this.smoothPreviewPoints[ci];
+        const anchors = this.fitBezierAnchors(smoothed);
+        if (anchors) {
+          const addedPath = this.store.addBezierPath(anchors, chain.type, chain.layer);
+          for (const id of addedPath.lineIds) newIds.add(id);
+          continue;
+        }
+
         const segments = pointsToSegments(smoothed);
         if (segments.length > 0) {
-          const added = this.store.addLines(segments, chain.type);
+          const added = this.store.pasteLines(segments.map((segment, index) => ({
+            p1: segment.p1,
+            p2: segment.p2,
+            type: chain.type,
+            leftExtended: index > 0,
+            rightExtended: index < segments.length - 1,
+            layer: chain.layer,
+          })));
           for (const line of added) newIds.add(line.id);
         }
       }
@@ -517,5 +524,121 @@ export class SelectTool implements Tool {
     this.smoothOriginalChains = [];
     this.smoothPreviewPoints = [];
     this.smoothAmount = 0;
+  }
+
+  private expandSelection(lineIds: Set<number>): Set<number> {
+    return this.store.expandLineSelectionToWholeBezierPaths(lineIds);
+  }
+
+  private hasClipboardContent(): boolean {
+    return this.clipboard.lines.length > 0 || this.clipboard.bezierPaths.length > 0;
+  }
+
+  private captureSelection(lineIds: Set<number>): ClipboardSelection {
+    const selectedPaths = this.store.getBezierPathsForLineSelection(lineIds);
+    const pathLineIds = new Set<number>();
+    for (const path of selectedPaths) {
+      for (const id of path.lineIds) {
+        pathLineIds.add(id);
+      }
+    }
+
+    return {
+      lines: this.store.lines
+        .filter(line => lineIds.has(line.id) && !pathLineIds.has(line.id))
+        .map(line => ({
+          p1: { x: line.p1.x, y: line.p1.y },
+          p2: { x: line.p2.x, y: line.p2.y },
+          type: line.type,
+          flipped: line.flipped,
+          leftExtended: line.leftExtended,
+          rightExtended: line.rightExtended,
+          multiplier: line instanceof AccLine ? line.multiplier : undefined,
+        })),
+      bezierPaths: selectedPaths.map(path => ({
+        anchors: path.anchors.map(anchor => ({
+          position: { x: anchor.position.x, y: anchor.position.y },
+          handleIn: { x: anchor.handleIn.x, y: anchor.handleIn.y },
+          handleOut: { x: anchor.handleOut.x, y: anchor.handleOut.y },
+          smooth: anchor.smooth,
+        })),
+        type: path.lineType,
+      })),
+    };
+  }
+
+  private pasteSelection(selection: ClipboardSelection, dx: number, dy: number): Set<number> {
+    const newIds = new Set<number>();
+    if (selection.lines.length === 0 && selection.bezierPaths.length === 0) {
+      return newIds;
+    }
+
+    this.store.beginTransaction();
+    const addedLines = this.store.pasteLines(selection.lines.map(line => ({
+      p1: new Vec2(line.p1.x + dx, line.p1.y + dy),
+      p2: new Vec2(line.p2.x + dx, line.p2.y + dy),
+      type: line.type,
+      flipped: line.flipped,
+      leftExtended: line.leftExtended,
+      rightExtended: line.rightExtended,
+      multiplier: line.multiplier,
+    })));
+    for (const line of addedLines) {
+      newIds.add(line.id);
+    }
+
+    for (const path of selection.bezierPaths) {
+      const anchors = path.anchors.map(anchor => this.createClipboardAnchor(anchor, dx, dy));
+      const addedPath = this.store.addBezierPath(anchors, path.type, this.store.activeLayerId);
+      for (const id of addedPath.lineIds) {
+        newIds.add(id);
+      }
+    }
+    this.store.endTransaction();
+    return newIds;
+  }
+
+  private createClipboardAnchor(anchor: ClipboardBezierAnchor, dx: number, dy: number): BezierAnchor {
+    return {
+      position: new Vec2(anchor.position.x + dx, anchor.position.y + dy),
+      handleIn: new Vec2(anchor.handleIn.x, anchor.handleIn.y),
+      handleOut: new Vec2(anchor.handleOut.x, anchor.handleOut.y),
+      smooth: anchor.smooth,
+    };
+  }
+
+  private fitBezierAnchors(points: Vec2[]): BezierAnchor[] | null {
+    if (points.length < 3) return null;
+    const beziers = fitCurve(points, CURVE_FIT_ERROR);
+    if (beziers.length === 0) return null;
+
+    const anchors: BezierAnchor[] = [
+      {
+        position: beziers[0].start.clone(),
+        handleIn: new Vec2(0, 0),
+        handleOut: beziers[0].cp1.sub(beziers[0].start),
+        smooth: true,
+      },
+    ];
+
+    for (let i = 1; i < beziers.length; i++) {
+      const previous = beziers[i - 1];
+      const current = beziers[i];
+      anchors.push({
+        position: current.start.clone(),
+        handleIn: previous.cp2.sub(previous.end),
+        handleOut: current.cp1.sub(current.start),
+        smooth: true,
+      });
+    }
+
+    const last = beziers[beziers.length - 1];
+    anchors.push({
+      position: last.end.clone(),
+      handleIn: last.cp2.sub(last.end),
+      handleOut: new Vec2(0, 0),
+      smooth: true,
+    });
+    return anchors;
   }
 }
