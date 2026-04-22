@@ -86,7 +86,7 @@
 
       /* — layout — */
       --sidebar-left-w: 240px;
-      --sidebar-right-w: 220px;
+      --sidebar-right-w: 248px;
       --topbar-h: 48px;
     }
 
@@ -207,7 +207,7 @@
        ══════════════════════════════════════════════ */
     #main {
       display: grid;
-      grid-template-columns: var(--sidebar-left-w) 1fr var(--sidebar-right-w);
+      grid-template-columns: 1fr var(--sidebar-right-w);
       min-height: 0;
       overflow: hidden;
     }
@@ -277,16 +277,6 @@
     /* ══════════════════════════════════════════════
        LEFT SIDEBAR
        ══════════════════════════════════════════════ */
-    #sidebar-left {
-      display: flex;
-      flex-direction: column;
-      background: var(--bg);
-      border-right: 1px solid var(--border);
-      overflow-y: auto;
-      scrollbar-width: thin;
-      scrollbar-color: var(--color-gray-300) transparent;
-    }
-
     /* — File actions bar (top of left sidebar) — */
     #file-actions {
       display: flex;
@@ -392,21 +382,6 @@
     }
 
     /* — Left sidebar footer — */
-    #sidebar-left-footer {
-      margin-top: auto;
-      display: flex;
-      align-items: center;
-      gap: 2px;
-      padding: var(--sp-2) var(--sp-3);
-      border-top: 1px solid var(--border-light);
-    }
-    #sidebar-left-footer .btn-icon {
-      flex: 1;
-    }
-    #mobile-actions-host {
-      display: none;
-    }
-
     /* ══════════════════════════════════════════════
        CANVAS
        ══════════════════════════════════════════════ */
@@ -464,21 +439,7 @@
       overflow-y: auto;
       scrollbar-width: thin;
       scrollbar-color: var(--color-gray-300) transparent;
-    }
-
-    /* — Draw / Ride toggle — */
-    #draw-ride-toggle {
-      display: flex;
-      gap: var(--sp-1);
-      padding: var(--sp-3) var(--sp-3) var(--sp-2);
-    }
-    #draw-ride-toggle button {
-      flex: 1;
-      min-height: var(--control-h-lg);
-      font: 700 var(--text-sm)/1 var(--font);
-      letter-spacing: 0.08em;
-      text-transform: uppercase;
-      border-radius: var(--radius-md);
+      min-width: 0;
     }
 
     /* — Tool grid — */
@@ -550,6 +511,74 @@
     #tool-options {
       padding: var(--sp-1) var(--sp-3);
       border-top: 1px solid var(--border-light);
+    }
+
+    #vehicle-panel,
+    #layers-panel {
+      border-top: 1px solid var(--border-light);
+    }
+    #layers-panel {
+      margin-top: auto;
+      padding-bottom: var(--sp-2);
+    }
+    #vehicle-panel {
+      padding: var(--sp-1) 0 var(--sp-2);
+    }
+    #vehicle-picker-btn {
+      width: calc(100% - var(--sp-6));
+      margin: 0 var(--sp-3);
+      padding: var(--sp-2) var(--sp-3);
+      min-height: 56px;
+      justify-content: space-between;
+      align-items: center;
+      border-radius: var(--radius-lg);
+      background: linear-gradient(180deg, var(--surface), var(--bg-alt));
+    }
+    #vehicle-picker-current {
+      display: flex;
+      flex-direction: column;
+      align-items: flex-start;
+      gap: 3px;
+      flex: 1;
+      min-width: 0;
+      text-align: left;
+    }
+    #vehicle-picker-current strong {
+      font: 700 var(--text-sm)/1 var(--font);
+      color: var(--ink);
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      max-width: 100%;
+    }
+    #vehicle-picker-current span {
+      font: 500 var(--text-xs)/1.2 var(--font);
+      color: var(--ink-muted);
+      letter-spacing: 0.04em;
+    }
+    #vehicle-picker-current-icon {
+      width: 34px;
+      height: 34px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: 10px;
+      background: rgba(17,17,17,0.04);
+      color: var(--ink);
+      flex-shrink: 0;
+    }
+    #vehicle-picker-current-icon svg {
+      width: 22px;
+      height: 22px;
+    }
+    .vehicle-picker-chevron {
+      font: 700 var(--text-xs)/1 var(--font);
+      color: var(--ink-muted);
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      flex-shrink: 0;
     }
     .tool-option-label {
       display: flex;
@@ -754,63 +783,84 @@
       cursor: not-allowed;
     }
 
-    /* — SVG import/export — */
-    #svg-import-btn, #svg-export-btn {
-      margin: var(--sp-1) var(--sp-3);
-      width: calc(100% - var(--sp-6));
-      min-height: var(--control-h);
-      padding: 6px var(--sp-3);
-      font-size: var(--text-xs);
-      letter-spacing: 0.08em;
-      text-transform: uppercase;
-      border-radius: var(--radius-md);
+    .vehicle-modal {
+      width: min(640px, calc(100vw - 32px));
+      gap: var(--sp-3);
     }
-    #svg-export-btn {
+    .vehicle-modal-header {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: var(--sp-3);
+    }
+    .vehicle-modal-header button {
+      min-width: var(--control-h);
+      min-height: var(--control-h);
+      padding: 0;
+    }
+    #vehicle-picker-list {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      gap: var(--sp-2);
+    }
+    .vehicle-card {
+      padding: var(--sp-3);
+      min-height: 90px;
+      align-items: flex-start;
+      justify-content: flex-start;
+      text-align: left;
+      border-radius: var(--radius-lg);
+      background: linear-gradient(180deg, var(--surface), var(--bg-alt));
+      position: relative;
+    }
+    .vehicle-card.active {
       background: var(--bg-active);
       border-color: var(--bg-active);
       color: var(--ink-inverse);
     }
-    #svg-export-btn:hover {
-      background: var(--color-gray-800);
-      border-color: var(--color-gray-800);
+    .vehicle-card.active .vehicle-card-copy strong,
+    .vehicle-card.active .vehicle-card-copy span,
+    .vehicle-card.active .vehicle-card-lock {
+      color: var(--ink-inverse);
     }
-
-    /* — Rider customization — */
-    #rider-customization {
-      display: grid;
-      grid-template-columns: repeat(4, 1fr);
-      gap: var(--sp-1);
-      padding: var(--sp-2) var(--sp-3);
+    .vehicle-card.locked {
+      opacity: 0.55;
+      cursor: not-allowed;
     }
-    .rider-slot {
-      width: 100%;
-      aspect-ratio: 1;
-      border-radius: var(--radius-md);
-      background: var(--bg-alt);
-      border: 1px solid var(--border-light);
-      display: flex;
+    .vehicle-card-icon {
+      width: 36px;
+      height: 36px;
+      display: inline-flex;
       align-items: center;
       justify-content: center;
-      font-size: 14px;
+      border-radius: 10px;
+      background: rgba(17,17,17,0.05);
+      margin-bottom: var(--sp-2);
+      color: inherit;
+    }
+    .vehicle-card-copy {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+    .vehicle-card-copy strong {
+      font: 700 var(--text-sm)/1.1 var(--font);
+      color: var(--ink);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+    .vehicle-card-copy span {
+      font: 500 var(--text-xs)/1.35 var(--font);
       color: var(--ink-muted);
-      cursor: pointer;
-      transition: background var(--transition-fast);
     }
-    .rider-slot:hover {
-      background: var(--bg-hover);
-      border-color: var(--color-gray-400);
-    }
-    .rider-slot.active {
-      border-color: var(--ink);
-      background: var(--bg-alt);
-    }
-    .rider-slot.locked {
-      opacity: 0.35;
-      cursor: default;
-    }
-    .rider-slot.locked:hover {
-      background: var(--bg-alt);
-      border-color: var(--border-light);
+    .vehicle-card-lock {
+      position: absolute;
+      top: var(--sp-3);
+      right: var(--sp-3);
+      font: 700 10px/1 var(--font);
+      color: var(--ink-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.12em;
     }
 
     /* ══════════════════════════════════════════════
@@ -1300,6 +1350,7 @@
       justify-content: center;
     }
     .modal-overlay.open { display: flex; }
+    body.vehicle-picker-open #vehicle-picker-overlay { display: flex; }
     .modal-box {
       width: 340px;
       background: var(--bg);
@@ -1343,52 +1394,44 @@
        RESPONSIVE: 900–1199 px
        ══════════════════════════════════════════════ */
     @media (max-width: 1199px) {
-      #main { grid-template-columns: 48px 1fr 48px; }
-      #sidebar-left { overflow: visible; }
-      #file-actions,
-      #layers-panel,
-      .section-label:not(#sidebar-right .section-label) { display: none; }
-      #track-type-panel .section-label { display: none; }
-      #line-type-strip { padding: 2px var(--sp-1); }
-      #line-type-strip button { min-height: 28px; font-size: 9px; }
-      #sidebar-left-footer {
-        flex-direction: column;
-        padding: var(--sp-2) var(--sp-1);
-        gap: 2px;
-      }
-      #sidebar-left-footer .btn-icon { width: var(--control-h-lg); height: var(--control-h-lg); }
-      #draw-ride-toggle {
-        flex-direction: column;
-        padding: var(--sp-2) var(--sp-1) var(--sp-1);
-      }
-      #draw-ride-toggle button { font-size: 9px; padding: var(--sp-1) 2px; min-height: 28px; }
+      #main { grid-template-columns: 1fr 212px; }
+      #sidebar-right { width: 212px; }
       #tool-grid {
         grid-template-columns: 1fr;
-        padding: var(--sp-1);
-        gap: 2px;
+        padding: var(--sp-1) var(--sp-2);
       }
-      #tool-grid button { padding: var(--sp-2) var(--sp-1); min-height: 40px; }
-      .tool-label { display: none; }
-      #svg-import-btn, #svg-export-btn {
-        margin: 2px var(--sp-1);
-        width: calc(100% - var(--sp-2));
-        font-size: 0;
-        padding: var(--sp-1);
-        min-height: 28px;
+      #tool-grid button {
+        min-height: 46px;
+        padding: var(--sp-2);
       }
-      #svg-import-btn::after { content: "Import"; font-size: var(--text-xs); }
-      #svg-export-btn::after { content: "Export"; font-size: var(--text-xs); }
-      #rider-customization, #sidebar-right .section-label { display: none; }
+      .tool-label { font-size: 10px; }
+      #file-actions,
+      #track-type-panel,
+      #tool-options,
+      #vehicle-panel,
+      #layers-panel {
+        border-top-color: var(--border-light);
+      }
+      #vehicle-picker-btn {
+        width: calc(100% - var(--sp-4));
+        margin: 0 var(--sp-2);
+      }
+      #line-type-strip,
+      #layer-list,
+      #layer-controls {
+        padding-left: var(--sp-2);
+        padding-right: var(--sp-2);
+      }
     }
 
     @media (min-width: 900px) {
       body.desktop-top-tools #main {
-        grid-template-columns: var(--sidebar-left-w) 1fr;
+        grid-template-columns: 1fr;
       }
       body.desktop-top-tools #sidebar-right {
         position: fixed;
         top: calc(var(--topbar-h) + 12px);
-        left: calc(var(--sidebar-left-w) + 18px);
+        left: 18px;
         right: 18px;
         z-index: 26;
         display: flex;
@@ -1406,19 +1449,13 @@
         box-shadow: 0 14px 30px rgba(17,17,17,0.08);
         backdrop-filter: blur(16px);
       }
-      body.desktop-top-tools #sidebar-right .section-label,
-      body.desktop-top-tools #svg-import-btn,
-      body.desktop-top-tools #svg-export-btn {
+      body.desktop-top-tools #sidebar-right .section-label {
         display: none;
       }
-      body.desktop-top-tools #draw-ride-toggle {
+      body.desktop-top-tools #file-actions {
         padding: 4px;
         gap: 4px;
-        border-radius: 999px;
-      }
-      body.desktop-top-tools #draw-ride-toggle button {
-        min-height: 34px;
-        padding: 0 14px;
+        border: none;
         border-radius: 999px;
       }
       body.desktop-top-tools #tool-grid {
@@ -1465,6 +1502,15 @@
         padding: 0 14px;
         border-radius: 999px;
       }
+      body.desktop-top-tools #vehicle-panel {
+        padding: 4px;
+        border-radius: 18px;
+      }
+      body.desktop-top-tools #vehicle-picker-btn {
+        width: auto;
+        min-width: 220px;
+        margin: 0;
+      }
       body.desktop-top-tools #tool-options {
         width: 100%;
         order: 10;
@@ -1500,16 +1546,11 @@
         box-shadow: 0 14px 30px rgba(17,17,17,0.08);
         backdrop-filter: blur(16px);
       }
-      body.desktop-top-tools #rider-customization {
-        display: flex;
-        gap: 4px;
-        padding: 4px;
+      body.desktop-top-tools #layers-panel {
+        min-width: 250px;
+        margin-left: auto;
+        padding-bottom: 0;
         border-radius: 18px;
-      }
-      body.desktop-top-tools .rider-slot {
-        width: 40px;
-        min-width: 40px;
-        aspect-ratio: 1;
       }
       body.desktop-top-tools #canvas-hud {
         top: 112px;
@@ -1546,6 +1587,10 @@
       }
       #topbar-actions {
         display: flex;
+        position: fixed;
+        top: max(10px, calc(env(safe-area-inset-top) + 10px));
+        right: max(10px, calc(env(safe-area-inset-right) + 10px));
+        z-index: 36;
         flex-direction: column;
         gap: 6px;
       }
@@ -1560,7 +1605,7 @@
         box-shadow: 0 10px 22px rgba(17,17,17,0.08);
         backdrop-filter: blur(14px);
       }
-      #mobile-actions-host #topbar-actions button:hover {
+      #topbar-actions button:hover {
         background: rgba(255,255,255,0.96);
       }
       #btn-desktop-layout {
@@ -1568,10 +1613,6 @@
       }
       #btn-mobile-dock {
         display: inline-flex;
-        position: fixed;
-        top: max(10px, calc(env(safe-area-inset-top) + 10px));
-        right: max(10px, calc(env(safe-area-inset-right) + 10px));
-        z-index: 36;
       }
       body.mobile-dock-edge #btn-mobile-dock {
         background: var(--ink);
@@ -1579,7 +1620,6 @@
         color: var(--ink-inverse);
       }
 
-      #sidebar-left,
       #sidebar-right {
         display: flex;
         position: fixed;
@@ -1590,47 +1630,13 @@
         pointer-events: none;
         scrollbar-width: none;
       }
-      #sidebar-left > *,
       #sidebar-right > * {
-        pointer-events: auto;
-      }
-
-      #sidebar-left {
-        left: max(10px, calc(env(safe-area-inset-left) + 8px));
-        top: calc(env(safe-area-inset-top) + 96px);
-        flex-direction: column;
-        align-items: flex-start;
-        gap: 4px;
-      }
-      body.mobile-dock-edge #sidebar-left {
-        top: max(10px, calc(env(safe-area-inset-top) + 10px));
-      }
-      #layers-panel {
-        display: none;
-      }
-      #file-actions,
-      #sidebar-left-footer,
-      #mobile-actions-host {
-        display: flex;
-        flex-direction: column;
-        gap: 4px;
-        margin: 0;
-        padding: 5px 4px;
-        border: 1px solid rgba(17,17,17,0.08);
-        border-radius: 16px;
-        background: rgba(255,255,255,0.82);
-        box-shadow: 0 10px 20px rgba(17,17,17,0.08);
-        backdrop-filter: blur(14px);
-      }
-      #mobile-actions-host {
         pointer-events: auto;
       }
       #file-actions .separator {
         display: none;
       }
-      #file-actions .btn-icon,
-      #sidebar-left-footer .btn-icon,
-      #mobile-actions-host .btn-icon {
+      #file-actions .btn-icon {
         flex: none;
         width: 32px;
         height: 32px;
@@ -1642,13 +1648,15 @@
         top: max(8px, calc(env(safe-area-inset-top) + 8px));
         left: 50%;
         transform: translateX(-50%);
-        width: min(312px, calc(100vw - 24px));
+        width: min(320px, calc(100vw - 24px));
         display: grid;
-        grid-template-columns: minmax(0, 108px) minmax(0, 1fr);
+        grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
         grid-template-areas:
-          "mode types"
+          "actions actions"
+          "types vehicle"
           "tools tools"
-          "options options";
+          "options options"
+          "layers layers";
         gap: 4px 6px;
         align-items: stretch;
         padding: 6px;
@@ -1664,46 +1672,26 @@
         transform: none;
         width: min(280px, calc(100vw - 18px));
       }
-      #sidebar-right .section-label,
-      #svg-import-btn,
-      #svg-export-btn,
-      #rider-customization {
+      #sidebar-right .section-label {
         display: none;
       }
 
-      #draw-ride-toggle,
+      #file-actions,
       #tool-grid,
-      #track-type-panel {
+      #track-type-panel,
+      #vehicle-panel,
+      #layers-panel {
         background: transparent;
         border: none;
         box-shadow: none;
         backdrop-filter: none;
       }
-      #draw-ride-toggle {
-        grid-area: mode;
-        width: auto;
-        margin: 0;
-        padding: 2px;
-        gap: 2px;
-        border-radius: 999px;
+      #file-actions {
+        grid-area: actions;
         display: grid;
-        grid-template-columns: 1fr 1fr;
-        background: rgba(17,17,17,0.05);
-      }
-      #draw-ride-toggle button {
-        min-height: 32px;
-        padding: 0 6px;
-        border-radius: 999px;
-        border: 1px solid transparent;
-        background: transparent;
-        font-size: 10px;
-        letter-spacing: 0.12em;
-      }
-      #draw-ride-toggle button.active {
-        background: var(--ink);
-        border-color: var(--ink);
-        color: var(--ink-inverse);
-        box-shadow: 0 6px 14px rgba(17,17,17,0.16);
+        grid-template-columns: repeat(5, minmax(0, 1fr));
+        gap: 4px;
+        padding: 0;
       }
 
       #tool-grid {
@@ -1773,6 +1761,33 @@
         background: rgba(17,17,17,0.94);
         border-color: rgba(17,17,17,0.94);
         color: var(--ink-inverse);
+      }
+
+      #vehicle-panel {
+        grid-area: vehicle;
+        padding: 0;
+      }
+      #vehicle-picker-btn {
+        width: 100%;
+        margin: 0;
+        min-height: 36px;
+        padding: 8px 10px;
+        border-radius: 18px;
+        border: 1px solid rgba(17,17,17,0.08);
+        background: rgba(255,255,255,0.84);
+        box-shadow: 0 10px 22px rgba(17,17,17,0.08);
+      }
+      #vehicle-picker-current-icon {
+        width: 28px;
+        height: 28px;
+        border-radius: 9px;
+      }
+      #vehicle-picker-current strong {
+        font-size: 10px;
+      }
+      #vehicle-picker-current span,
+      .vehicle-picker-chevron {
+        font-size: 9px;
       }
 
       #tool-options {
@@ -1861,6 +1876,28 @@
       }
       .portal-checkbox-grid {
         grid-template-columns: 1fr;
+      }
+
+      #layers-panel {
+        grid-area: layers;
+        display: block;
+        margin-top: 0;
+        padding: 8px;
+        border-radius: 16px;
+        border: 1px solid rgba(17,17,17,0.08);
+        background: linear-gradient(180deg, rgba(255,255,255,0.9), rgba(248,248,248,0.86));
+        box-shadow: 0 10px 22px rgba(17,17,17,0.08);
+      }
+      #layer-list {
+        max-height: 92px;
+        overflow-y: auto;
+        padding: 0;
+      }
+      #layer-controls {
+        padding: 6px 0 0;
+      }
+      .layer-row {
+        padding: 6px 8px;
       }
 
       #canvas-hud {
@@ -1990,31 +2027,11 @@
         <button id="btn-mobile-dock" class="btn-icon" title="Dock tools" aria-label="Dock tools">
           <svg class="icon" viewBox="0 0 24 24"><rect x="4" y="5" width="16" height="10" rx="2"/><path d="M10 19h4"/><path d="M12 15v4"/></svg>
         </button>
-        <button id="btn-effects" class="btn-icon" title="Effects" aria-label="Visual effects">
-          <svg class="icon" viewBox="0 0 24 24"><path d="M12 2l2.4 7.4H22l-6.2 4.5 2.4 7.4L12 16.8l-6.2 4.5 2.4-7.4L2 9.4h7.6z"/></svg>
-        </button>
-        <button id="btn-settings" class="btn-icon" title="Keyboard Shortcuts" aria-label="Keyboard shortcuts">
-          <svg class="icon" viewBox="0 0 24 24"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg>
-        </button>
       </div>
     </header>
 
     <!-- MAIN AREA -->
     <div id="main">
-      <!-- LEFT SIDEBAR -->
-      <aside id="sidebar-left">
-        <div id="file-actions"></div>
-
-        <div id="layers-panel">
-          <div class="section-label">LAYERS</div>
-          <div id="layer-list"></div>
-          <div id="layer-controls"></div>
-        </div>
-
-        <div id="sidebar-left-footer"></div>
-        <div id="mobile-actions-host"></div>
-      </aside>
-
       <!-- CANVAS -->
       <div id="canvas-container">
         <canvas id="canvas"></canvas>
@@ -2028,10 +2045,7 @@
 
       <!-- RIGHT SIDEBAR -->
       <aside id="sidebar-right">
-        <div id="draw-ride-toggle">
-          <button id="draw-btn" class="active">DRAW</button>
-          <button id="ride-btn">RIDE</button>
-        </div>
+        <div id="file-actions"></div>
 
         <div id="tool-grid"></div>
 
@@ -2185,12 +2199,23 @@
           </div>
         </div>
 
-        <button id="svg-import-btn">SVG Import</button>
+        <div id="vehicle-panel">
+          <div class="section-label">VEHICLE</div>
+          <button id="vehicle-picker-btn" type="button">
+            <span id="vehicle-picker-current-icon"></span>
+            <span id="vehicle-picker-current">
+              <strong id="vehicle-picker-current-name">Classic Sled</strong>
+              <span id="vehicle-picker-current-hint">Choose vehicle</span>
+            </span>
+            <span class="vehicle-picker-chevron">Pick</span>
+          </button>
+        </div>
 
-        <div class="section-label">VEHICLE</div>
-        <div id="rider-customization"></div>
-
-        <button id="svg-export-btn">Export SVG</button>
+        <div id="layers-panel">
+          <div class="section-label">LAYERS</div>
+          <div id="layer-list"></div>
+          <div id="layer-controls"></div>
+        </div>
       </aside>
     </div>
 
@@ -2238,9 +2263,6 @@
           </div>
         </div>
         <div id="transport-right">
-          <button id="btn-transport-settings" class="btn-icon subtle" title="Settings" aria-label="Transport settings">
-            <svg class="icon icon-sm" viewBox="0 0 24 24"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg>
-          </button>
           <button id="btn-zoom" class="btn-icon subtle" title="Fit View" aria-label="Fit view">
             <svg class="icon icon-sm" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
           </button>
@@ -2391,6 +2413,21 @@
           <button id="confirm-new-discard" class="btn-danger">Discard</button>
           <button id="confirm-new-save">Save &amp; New</button>
         </div>
+      </div>
+    </div>
+
+    <div id="vehicle-picker-overlay" class="modal-overlay" role="dialog" aria-label="Choose vehicle">
+      <div class="modal-box vehicle-modal">
+        <div class="vehicle-modal-header">
+          <div>
+            <h3>Choose Vehicle</h3>
+            <p>Compact picker now, unlock system later.</p>
+          </div>
+          <button id="vehicle-picker-close" class="subtle" type="button" aria-label="Close vehicle picker">
+            <svg class="icon icon-sm" viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+          </button>
+        </div>
+        <div id="vehicle-picker-list"></div>
       </div>
     </div>
   </div>

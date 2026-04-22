@@ -10,6 +10,8 @@ export interface VehicleManifest {
   id: string;
   name: string;
   iconSvg: string;
+  available?: boolean;
+  unlockHint?: string;
   physics: VehicleDef;
   createRenderer: () => VehicleRenderer;
 }

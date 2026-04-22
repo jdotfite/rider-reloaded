@@ -22,7 +22,6 @@ import { Toolbar } from './ui/Toolbar';
 import { LineType } from './physics/lines/LineTypes';
 import { Tool } from './input/tools/Tool';
 import { ERASER_RADIUS, TIMESTEP } from './constants';
-import { exportTrackAsSvg } from './export/svgExport';
 import { TriggerStore } from './store/TriggerStore';
 import { TriggerRenderer } from './rendering/TriggerRenderer';
 import { PortalRenderer, PortalRenderEvent } from './rendering/PortalRenderer';
@@ -131,16 +130,15 @@ function resetVehicleRenderers() {
 
 function setVehicle(id: string) {
   const vehicle = getVehicleManifest(id);
+  if (vehicle.available === false) return;
   activeVehicle = vehicle;
   resetVehicleRenderers();
   rider.setVehicle(vehicle.physics);
   // Update topbar sled info
   const sledInfo = document.querySelector('#sled-info span');
   if (sledInfo) sledInfo.textContent = vehicle.name;
-  // Update vehicle slot active states
-  document.querySelectorAll('.rider-slot').forEach(slot => {
-    slot.classList.toggle('active', (slot as HTMLElement).dataset.vehicle === vehicle.id);
-  });
+  updateVehiclePickerSummary();
+  updateVehiclePickerSelection();
 }
 
 function renderVehicle(ctx: CanvasRenderingContext2D, data: import('./rendering/RiderRenderer').RiderRenderData) {
@@ -486,32 +484,6 @@ toolbar.onTimelineSeek = (frame) => {
   audioSeekFrame(snappedFrame);
 };
 
-// Draw/Ride toggle — split behavior
-toolbar.onDrawClick = () => {
-  if (gameLoop.state === GameState.PLAYING) {
-    gameLoop.pause();
-    audioPause();
-  }
-};
-toolbar.onRideClick = () => {
-  if (gameLoop.state === GameState.EDITING) {
-    startPlayback();
-  } else if (gameLoop.state === GameState.PAUSED) {
-    ensureGridFresh();
-    gameLoop.play();
-    audioPlay();
-  }
-};
-
-// Screenshot
-toolbar.onScreenshot = () => {
-  const dataUrl = canvas.toDataURL('image/png');
-  const anchor = document.createElement('a');
-  anchor.href = dataUrl;
-  anchor.download = 'line-rider-screenshot.png';
-  anchor.click();
-};
-
 // Step forward — enter playback if needed, then advance one frame
 toolbar.onStepForward = () => {
   if (gameLoop.state === GameState.EDITING) {
@@ -546,36 +518,85 @@ toolbar.onStepBack = () => {
   }
 };
 
-// SVG export
-toolbar.onSvgExport = () => {
-  const svg = exportTrackAsSvg(store.lines, store.layers, store.startPosition, store.portals);
-  const blob = new Blob([svg], { type: 'image/svg+xml' });
-  const url = URL.createObjectURL(blob);
-  const anchor = document.createElement('a');
-  anchor.href = url;
-  anchor.download = 'line-rider-track.svg';
-  anchor.click();
-  setTimeout(() => URL.revokeObjectURL(url), 0);
-};
+const vehiclePickerOverlay = document.getElementById('vehicle-picker-overlay') as HTMLElement | null;
+const vehiclePickerClose = document.getElementById('vehicle-picker-close') as HTMLButtonElement | null;
+const vehiclePickerButton = document.getElementById('vehicle-picker-btn') as HTMLButtonElement | null;
+const vehiclePickerCurrent = document.getElementById('vehicle-picker-current') as HTMLElement | null;
+const vehiclePickerCurrentIcon = document.getElementById('vehicle-picker-current-icon') as HTMLElement | null;
+const vehiclePickerCurrentName = document.getElementById('vehicle-picker-current-name') as HTMLElement | null;
+const vehiclePickerCurrentHint = document.getElementById('vehicle-picker-current-hint') as HTMLElement | null;
+const vehiclePickerList = document.getElementById('vehicle-picker-list') as HTMLElement | null;
+
+function openVehiclePicker() {
+  if (!vehiclePickerOverlay) return;
+  document.body.classList.add('vehicle-picker-open');
+}
+
+function closeVehiclePicker() {
+  document.body.classList.remove('vehicle-picker-open');
+}
+
+function updateVehiclePickerSummary() {
+  if (!vehiclePickerCurrent || !vehiclePickerCurrentIcon || !vehiclePickerCurrentName || !vehiclePickerCurrentHint) return;
+  vehiclePickerCurrentIcon.innerHTML = activeVehicle.iconSvg;
+  vehiclePickerCurrentName.textContent = activeVehicle.name;
+  vehiclePickerCurrentHint.textContent = activeVehicle.available === false
+    ? (activeVehicle.unlockHint ?? 'Locked')
+    : 'Choose vehicle';
+}
+
+function updateVehiclePickerSelection() {
+  if (!vehiclePickerList) return;
+  vehiclePickerList.querySelectorAll<HTMLElement>('.vehicle-card').forEach(card => {
+    card.classList.toggle('active', card.dataset.vehicle === activeVehicle.id);
+  });
+}
 
 function buildVehiclePicker() {
-  const vehiclePicker = document.getElementById('rider-customization');
-  if (!vehiclePicker) return;
+  if (!vehiclePickerList) return;
 
-  vehiclePicker.innerHTML = '';
+  vehiclePickerList.innerHTML = '';
   for (const vehicle of VEHICLE_MANIFESTS) {
-    const slot = document.createElement('div');
-    slot.className = 'rider-slot';
-    slot.dataset.vehicle = vehicle.id;
-    slot.title = vehicle.name;
-    slot.innerHTML = vehicle.iconSvg;
-    slot.addEventListener('click', () => {
+    const card = document.createElement('button');
+    const available = vehicle.available !== false;
+    card.type = 'button';
+    card.className = `vehicle-card${available ? '' : ' locked'}`;
+    card.dataset.vehicle = vehicle.id;
+    card.innerHTML = `
+      <span class="vehicle-card-icon">${vehicle.iconSvg}</span>
+      <span class="vehicle-card-copy">
+        <strong>${vehicle.name}</strong>
+        <span>${available ? 'Available now' : (vehicle.unlockHint ?? 'Locked')}</span>
+      </span>
+      ${available ? '' : '<span class="vehicle-card-lock">Locked</span>'}
+    `;
+    card.disabled = !available;
+    card.addEventListener('click', () => {
       if (gameLoop.state !== GameState.EDITING) return;
+      if (!available) return;
       setVehicle(vehicle.id);
+      closeVehiclePicker();
     });
-    vehiclePicker.appendChild(slot);
+    vehiclePickerList.appendChild(card);
   }
+  updateVehiclePickerSelection();
 }
+
+vehiclePickerButton?.addEventListener('click', () => {
+  if (gameLoop.state !== GameState.EDITING) return;
+  openVehiclePicker();
+});
+vehiclePickerClose?.addEventListener('click', closeVehiclePicker);
+vehiclePickerOverlay?.addEventListener('click', (event) => {
+  if (event.target === vehiclePickerOverlay) {
+    closeVehiclePicker();
+  }
+});
+window.addEventListener('keydown', (event) => {
+  if (event.code === 'Escape' && document.body.classList.contains('vehicle-picker-open')) {
+    closeVehiclePicker();
+  }
+});
 
 buildVehiclePicker();
 setVehicle(activeVehicle.id);

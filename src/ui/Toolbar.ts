@@ -12,16 +12,11 @@ import type {
 } from '../store/PortalTypes';
 
 export class Toolbar {
-  // Left sidebar
+  // Sidebar
   private fileActions: HTMLElement;
   private layerList: HTMLElement;
   private layerControls: HTMLElement;
   private lineTypeStrip: HTMLElement;
-  private sidebarLeftFooter: HTMLElement;
-
-  // Right sidebar
-  private drawBtn: HTMLButtonElement;
-  private rideBtn: HTMLButtonElement;
   private toolGrid: HTMLElement;
 
   // Bottom bar
@@ -61,13 +56,7 @@ export class Toolbar {
   onLayerReorder: ((fromIndex: number, toIndex: number) => void) | null = null;
   onSpeedChange: ((speed: number) => void) | null = null;
   onTimelineSeek: ((frame: number) => void) | null = null;
-  onDrawRideToggle: (() => void) | null = null;
-  onDrawClick: (() => void) | null = null;
-  onRideClick: (() => void) | null = null;
-  onSvgImport: (() => void) | null = null;
-  onSvgExport: (() => void) | null = null;
   onOnionSkinToggle: ((enabled: boolean) => void) | null = null;
-  onScreenshot: (() => void) | null = null;
   onStepForward: (() => void) | null = null;
   onStepBack: (() => void) | null = null;
   onSnapToggle: ((enabled: boolean) => void) | null = null;
@@ -141,16 +130,13 @@ export class Toolbar {
   private lastLayerFingerprint = '';
 
   constructor() {
-    // Left sidebar elements
+    // Sidebar elements
     this.fileActions = this.requireElement('file-actions');
     this.layerList = this.requireElement('layer-list');
     this.layerControls = this.requireElement('layer-controls');
     this.lineTypeStrip = this.requireElement('line-type-strip');
-    this.sidebarLeftFooter = this.requireElement('sidebar-left-footer');
 
-    // Right sidebar elements
-    this.drawBtn = this.requireElement('draw-btn') as HTMLButtonElement;
-    this.rideBtn = this.requireElement('ride-btn') as HTMLButtonElement;
+    // Tool rail
     this.toolGrid = this.requireElement('tool-grid');
 
     // Bottom bar
@@ -171,10 +157,6 @@ export class Toolbar {
   }
 
   private build() {
-    // Draw/Ride toggle
-    this.drawBtn.addEventListener('click', () => this.onDrawClick?.());
-    this.rideBtn.addEventListener('click', () => this.onRideClick?.());
-
     // File actions bar: New | Open | Save | separator | Undo | Redo
     this.addIconBtn(this.fileActions, ICONS.newFile, 'New track', () => this.onClear?.());
     this.addIconBtn(this.fileActions, ICONS.open, 'Open track', () => this.onLoad?.());
@@ -430,12 +412,6 @@ export class Toolbar {
     this.playBtn.addEventListener('click', () => this.onPlay?.());
     this.stopBtn.addEventListener('click', () => this.onStop?.());
     fitBtn.addEventListener('click', () => this.onFit?.());
-
-    // Sidebar footer icons
-    this.addFooterIconBtn(ICONS.screenshot, 'Screenshot', () => this.onScreenshot?.());
-    this.addFooterIconBtn(ICONS.download, 'Export', () => alert('Export coming soon'));
-    this.addFooterIconBtn(ICONS.cloud, 'Cloud', () => alert('Cloud save coming soon'));
-    this.addFooterIconBtn(ICONS.settings, 'Settings', () => alert('Settings coming soon'));
   }
 
   private addToolGridBtn(name: string, iconSvg: string, label: string) {
@@ -475,16 +451,6 @@ export class Toolbar {
     btn.addEventListener('click', onClick);
     container.appendChild(btn);
     return btn;
-  }
-
-  private addFooterIconBtn(iconSvg: string, title: string, onClick: () => void) {
-    const btn = document.createElement('button');
-    btn.className = 'btn-icon';
-    btn.innerHTML = iconSvg;
-    btn.title = title;
-    btn.setAttribute('aria-label', title);
-    btn.addEventListener('click', onClick);
-    this.sidebarLeftFooter.appendChild(btn);
   }
 
   private requireElement(id: string): HTMLElement {
@@ -549,15 +515,8 @@ export class Toolbar {
   }
 
   private setupPlaceholders() {
-    const topbar = document.getElementById('topbar');
-    const topbarActions = document.getElementById('topbar-actions');
-    const mobileActionsHost = document.getElementById('mobile-actions-host');
-    const btnSound = document.getElementById('btn-sound');
     const btnDesktopLayout = document.getElementById('btn-desktop-layout') as HTMLButtonElement | null;
     const btnMobileDock = document.getElementById('btn-mobile-dock') as HTMLButtonElement | null;
-    const btnEffects = document.getElementById('btn-effects');
-    const btnSettings = document.getElementById('btn-settings');
-    const hotkeysClose = document.getElementById('hotkeys-close');
 
     const desktopLayoutKey = 'line-rider-desktop-tools-layout';
     const applyDesktopLayoutMode = (mode: 'sidebar' | 'top') => {
@@ -610,41 +569,6 @@ export class Toolbar {
         window.localStorage.setItem(mobileDockKey, mobileDockMode);
       } catch {}
     });
-
-    const syncActionMount = () => {
-      if (!topbar || !topbarActions || !mobileActionsHost) return;
-      if (window.innerWidth <= 899) {
-        if (topbarActions.parentElement !== mobileActionsHost) {
-          mobileActionsHost.appendChild(topbarActions);
-        }
-      } else if (topbarActions.parentElement !== topbar) {
-        topbar.appendChild(topbarActions);
-      }
-    };
-    syncActionMount();
-    window.addEventListener('resize', syncActionMount);
-
-    // Sound button is handled directly in main.ts (opens audio panel)
-    btnEffects?.addEventListener('click', () => alert('Effects coming soon'));
-    btnSettings?.addEventListener('click', () => {
-      document.body.classList.toggle('hotkeys-open');
-    });
-    hotkeysClose?.addEventListener('click', () => {
-      document.body.classList.remove('hotkeys-open');
-    });
-    window.addEventListener('keydown', (e) => {
-      if (e.code === 'Escape' && document.body.classList.contains('hotkeys-open')) {
-        document.body.classList.remove('hotkeys-open');
-      }
-    });
-
-    const svgImport = document.getElementById('svg-import-btn');
-    const svgExport = document.getElementById('svg-export-btn');
-    svgImport?.addEventListener('click', () => {
-      this.onSvgImport?.();
-      if (!this.onSvgImport) alert('SVG Import coming soon');
-    });
-    svgExport?.addEventListener('click', () => this.onSvgExport?.());
 
     const stepFwd = document.getElementById('step-fwd-btn');
     const stepBack = document.getElementById('step-back-btn');
@@ -801,9 +725,6 @@ export class Toolbar {
     this.pauseBtn.disabled = state !== GameState.PLAYING;
     this.stopBtn.disabled = state === GameState.EDITING;
     this.pauseBtn.classList.toggle('active', state === GameState.PAUSED);
-
-    this.drawBtn.classList.toggle('active', state !== GameState.PLAYING);
-    this.rideBtn.classList.toggle('active', state === GameState.PLAYING);
   }
 
   setLayerState(layers: Array<{ id: number; name: string; visible: boolean; editable: boolean }>, activeIndex: number) {
