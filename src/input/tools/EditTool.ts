@@ -39,6 +39,7 @@ export class EditTool implements Tool {
 
   // Line body dragging
   private dragLineId: number | null = null;
+  private dragPathId: number | null = null;
   private dragLineStart = new Vec2();
 
   // BezierPath anchor dragging
@@ -193,7 +194,8 @@ export class EditTool implements Tool {
       this.activePathId = path ? path.id : null;
 
       this.state = 'dragging-line';
-      this.dragLineId = line.id;
+      this.dragPathId = path ? path.id : null;
+      this.dragLineId = path ? null : line.id;
       this.dragLineStart = worldPos.clone();
       this.dragCurrent = worldPos.clone();
       if (!path) this.store.beginTransaction();
@@ -239,19 +241,20 @@ export class EditTool implements Tool {
       return;
     }
 
-    if (this.state === 'dragging-line' && this.dragLineId !== null) {
+    if (this.state === 'dragging-line' && (this.dragPathId !== null || this.dragLineId !== null)) {
       const dx = worldPos.x - this.dragCurrent.x;
       const dy = worldPos.y - this.dragCurrent.y;
       if (dx !== 0 || dy !== 0) {
-        // If the line belongs to a bezier path, move all anchors and regenerate
-        const path = this.store.findBezierPathForLine(this.dragLineId);
+        const path = this.dragPathId !== null
+          ? this.store.bezierPaths.find(candidate => candidate.id === this.dragPathId) ?? null
+          : null;
         if (path) {
           const offset = new Vec2(dx, dy);
           for (const anchor of path.anchors) {
             anchor.position = anchor.position.add(offset);
           }
           this.store.regenerateBezierPathLines(path.id);
-        } else {
+        } else if (this.dragLineId !== null) {
           this.store.moveLines(new Set([this.dragLineId]), dx, dy);
         }
         this.dragCurrent = worldPos.clone();
@@ -298,6 +301,7 @@ export class EditTool implements Tool {
     this.dragHandle = null;
     this.dragConnected = [];
     this.dragLineId = null;
+    this.dragPathId = null;
     this.dragAnchorHit = null;
     this.dragBezierHandle = null;
   }
