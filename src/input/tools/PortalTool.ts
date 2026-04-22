@@ -4,7 +4,6 @@ import { TrackStore } from '../../store/TrackStore';
 import { SNAP_RADIUS } from '../../constants';
 import { LineType } from '../../physics/lines/LineTypes';
 import {
-  DEFAULT_PORTAL_LENGTH,
   DEFAULT_PORTAL_RADIUS,
   PortalColorTheme,
   PortalEndpointKey,

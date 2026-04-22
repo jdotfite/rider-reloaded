@@ -29,6 +29,7 @@ import { PortalRenderer, PortalRenderEvent } from './rendering/PortalRenderer';
 import { VEHICLE_MANIFESTS, getVehicleManifest } from './vehicles';
 import type { VehicleRenderer } from './vehicles';
 import { AudioPlayer } from './audio/AudioPlayer';
+import { PortalAudio } from './audio/PortalAudio';
 import { WaveformRenderer } from './audio/WaveformRenderer';
 import { parseYouTubeId, YouTubePlayer } from './audio/youtube';
 
@@ -46,6 +47,7 @@ const triggerStore = new TriggerStore();
 const triggerRenderer = new TriggerRenderer();
 const portalRenderer = new PortalRenderer();
 const audioPlayer = new AudioPlayer();
+const portalAudio = new PortalAudio();
 const ytPlayer = new YouTubePlayer();
 const waveformCanvas = document.getElementById('waveform-canvas') as HTMLCanvasElement;
 const waveformRenderer = new WaveformRenderer(waveformCanvas);
@@ -102,6 +104,7 @@ physics.onPortalTeleport = (event) => {
     exitPosition: { x: event.exitPosition.x, y: event.exitPosition.y },
     startedAt: performance.now(),
   });
+  portalAudio.playTeleport(event.theme, event.speed);
   portalCameraBias = {
     target: event.exitPosition.clone(),
     strength: 0.42,
@@ -156,6 +159,15 @@ const selectTool = new SelectTool(store);
 let snapEnabled = true;
 const editTool = new EditTool(store, () => camera.zoom, () => snapEnabled);
 const portalTool = new PortalTool(store, () => camera.zoom, () => snapEnabled);
+portalTool.onPortalCreated = (portal) => {
+  portalFxEvents.push({
+    pairId: portal.id,
+    entryPosition: { x: portal.entry.position.x, y: portal.entry.position.y },
+    exitPosition: { x: portal.exit.position.x, y: portal.exit.position.y },
+    startedAt: performance.now(),
+  });
+  portalAudio.playPlacement(portal.visual.colorTheme);
+};
 const flagTool = new FlagTool((position) => {
   if (!store.setStartPosition(position)) return;
   rider.setStartPosition(store.startPosition);
@@ -687,6 +699,7 @@ interface AudioState {
   type: 'youtube' | 'none';
   youtubeId?: string;
   volume: number;
+  portalFxVolume: number;
   offset: number;
   bpm: number;
   beatSnap: number;
@@ -698,6 +711,7 @@ function saveAudioState() {
       type: ytPlayer.loaded ? 'youtube' : 'none',
       youtubeId: ytPlayer.videoId || undefined,
       volume: parseInt((document.getElementById('audio-volume') as HTMLInputElement)?.value || '80', 10),
+      portalFxVolume: parseInt((document.getElementById('portal-fx-volume') as HTMLInputElement)?.value || '55', 10),
       offset: parseFloat((document.getElementById('audio-offset') as HTMLInputElement)?.value || '0'),
       bpm: waveformRenderer.bpm,
       beatSnap: waveformRenderer.beatSnap,
@@ -715,12 +729,20 @@ async function restoreAudioState() {
     // Restore volume/offset/bpm controls
     const volSlider = document.getElementById('audio-volume') as HTMLInputElement;
     const volLabel = document.getElementById('audio-volume-label')!;
+    const portalFxSlider = document.getElementById('portal-fx-volume') as HTMLInputElement;
+    const portalFxLabel = document.getElementById('portal-fx-label')!;
     const offsetInput = document.getElementById('audio-offset') as HTMLInputElement;
     const bpmInput = document.getElementById('audio-bpm') as HTMLInputElement;
     const snapSelect = document.getElementById('audio-beat-snap') as HTMLSelectElement;
     const bpmInfo = document.getElementById('audio-bpm-info')!;
 
     if (volSlider) { volSlider.value = String(state.volume); volLabel.textContent = `${state.volume}%`; }
+    if (portalFxSlider) {
+      const fxVolume = state.portalFxVolume ?? 55;
+      portalFxSlider.value = String(fxVolume);
+      portalFxLabel.textContent = `${fxVolume}%`;
+      portalAudio.volume = fxVolume / 100;
+    }
     if (offsetInput) { offsetInput.value = String(state.offset); }
     audioPlayer.volume = state.volume / 100;
     audioPlayer.offset = state.offset;
@@ -1180,6 +1202,8 @@ renderer.addRenderCallback((ctx) => {
   const audioControls = document.getElementById('audio-controls')!;
   const audioVolumeSlider = document.getElementById('audio-volume') as HTMLInputElement;
   const audioVolumeLabel = document.getElementById('audio-volume-label')!;
+  const portalFxSlider = document.getElementById('portal-fx-volume') as HTMLInputElement;
+  const portalFxLabel = document.getElementById('portal-fx-label')!;
   const audioOffsetInput = document.getElementById('audio-offset') as HTMLInputElement;
   const audioRemoveBtn = document.getElementById('audio-remove-btn')!;
   const audioStatus = document.getElementById('audio-status')!;
@@ -1326,6 +1350,14 @@ renderer.addRenderCallback((ctx) => {
     audioPlayer.volume = v / 100;
     ytPlayer.volume = v;
     audioVolumeLabel.textContent = `${v}%`;
+    saveAudioState();
+  });
+
+  portalAudio.volume = parseInt(portalFxSlider?.value || '55', 10) / 100;
+  portalFxSlider?.addEventListener('input', () => {
+    const v = parseInt(portalFxSlider.value, 10);
+    portalAudio.volume = v / 100;
+    portalFxLabel.textContent = `${v}%`;
     saveAudioState();
   });
 

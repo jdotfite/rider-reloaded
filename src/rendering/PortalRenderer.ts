@@ -1,6 +1,5 @@
 import type { TrackLayer } from '../store/TrackStore';
 import type { PortalEndpointKey, PortalPair } from '../store/PortalTypes';
-import { portalLocalToWorld, portalNormal, portalTangent } from '../portal/portalMath';
 import { getPortalThemePalette } from '../portal/portalTheme';
 
 export interface PortalRenderEvent {
