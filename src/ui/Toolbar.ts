@@ -722,6 +722,9 @@ export class Toolbar {
     this.portalEmptyHint.textContent = placing
       ? 'Click a second point to place the exit portal.'
       : 'Click once to place the entry portal, then click again to place the exit. Select a portal to rotate or stretch its endpoints.';
+    if (hasPortal && !placing) {
+      this.portalSelectionStatus.textContent = `${portal!.name}: ${activeEndpoint === 'exit' ? 'Exit' : 'Entry'}`;
+    }
     this.portalSettingsFields.style.display = hasPortal ? '' : 'none';
     const warningMessages = diagnostics?.messages ?? [];
     this.portalWarningBox.style.display = warningMessages.length > 0 ? '' : 'none';

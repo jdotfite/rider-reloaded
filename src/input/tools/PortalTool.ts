@@ -30,11 +30,12 @@ type PortalToolState = 'idle' | 'placing' | 'dragging-position' | 'dragging-rota
 interface HandleHit {
   portalId: number;
   endpoint: PortalEndpointKey;
-  handle: 'position' | 'rotation' | 'length' | 'pair';
+  handle: 'position' | 'rotation' | 'length' | 'pair' | 'pair-rotate';
 }
 
 const HANDLE_RADIUS_PX = 9;
 const BODY_HIT_PADDING_PX = 8;
+const PORTAL_NUDGE = 2;
 
 export class PortalTool implements Tool {
   name = 'portal';
@@ -51,6 +52,7 @@ export class PortalTool implements Tool {
   private dragHandle: HandleHit | null = null;
   private hoveredHandle: HandleHit | null = null;
   private dragCurrent = new Vec2();
+  private pairRotateAngle = 0;
 
   constructor(store: TrackStore, getZoom: () => number, getSnapEnabled: () => boolean) {
     this.store = store;
@@ -87,7 +89,13 @@ export class PortalTool implements Tool {
       this.selectPortal(pairHit.portalId, pairHit.endpoint);
       this.dragHandle = pairHit;
       this.dragCurrent = worldPos.clone();
-      this.state = 'idle';
+      this.state = pairHit.handle === 'pair-rotate' ? 'dragging-rotation' : 'idle';
+      if (pairHit.handle === 'pair-rotate') {
+        const portal = this.store.getPortalById(pairHit.portalId);
+        if (portal) {
+          this.pairRotateAngle = this.getPairRotationAngle(portal, worldPos);
+        }
+      }
       this.store.beginTransaction();
       return;
     }
@@ -178,6 +186,75 @@ export class PortalTool implements Tool {
         this.store.setPortalMode(portal.id, portal.mode === 'oneWay' ? 'twoWay' : 'oneWay');
       }
     }
+
+    if (this.selectedPortalId === null || this.state !== 'idle') return;
+
+    if (e.code === 'Tab') {
+      e.preventDefault();
+      this.activeEndpoint = this.activeEndpoint === 'entry' ? 'exit' : 'entry';
+      return;
+    }
+
+    if (!primaryModifier && !e.altKey && e.code === 'KeyX') {
+      e.preventDefault();
+      const swapped = this.store.swapPortalEndpoints(this.selectedPortalId);
+      if (swapped) {
+        this.activeEndpoint = this.activeEndpoint === 'entry' ? 'exit' : 'entry';
+      }
+      return;
+    }
+
+    const step = e.shiftKey ? PORTAL_NUDGE * 5 : PORTAL_NUDGE;
+    if (e.code === 'ArrowLeft' || e.code === 'ArrowRight' || e.code === 'ArrowUp' || e.code === 'ArrowDown') {
+      e.preventDefault();
+      const delta = new Vec2(
+        e.code === 'ArrowLeft' ? -step : e.code === 'ArrowRight' ? step : 0,
+        e.code === 'ArrowUp' ? -step : e.code === 'ArrowDown' ? step : 0,
+      );
+      if (e.altKey) {
+        this.store.movePortalPair(this.selectedPortalId, delta.x, delta.y);
+      } else {
+        const portal = this.getSelectedPortal();
+        if (!portal) return;
+        this.store.updatePortalEndpoint(
+          portal.id,
+          this.activeEndpoint,
+          { position: portal[this.activeEndpoint].position.add(delta) },
+        );
+      }
+      return;
+    }
+
+    const rotateStep = e.shiftKey ? Math.PI / 36 : Math.PI / 12;
+    if (e.code === 'BracketLeft' || e.code === 'BracketRight') {
+      e.preventDefault();
+      const direction = e.code === 'BracketLeft' ? -1 : 1;
+      if (e.altKey) {
+        this.store.rotatePortalPair(this.selectedPortalId, rotateStep * direction);
+      } else {
+        const portal = this.getSelectedPortal();
+        if (!portal) return;
+        const endpoint = portal[this.activeEndpoint];
+        this.store.updatePortalEndpoint(portal.id, this.activeEndpoint, {
+          rotation: endpoint.rotation + rotateStep * direction,
+        });
+      }
+      return;
+    }
+
+    if (e.code === 'Equal' || e.code === 'Minus') {
+      e.preventDefault();
+      const direction = e.code === 'Equal' ? 1 : -1;
+      if (e.shiftKey) {
+        const portal = this.getSelectedPortal();
+        if (!portal) return;
+        this.setSelectedPortalRadius(((portal.entry.radius + portal.exit.radius) / 2) + direction);
+      } else {
+        const portal = this.getSelectedPortal();
+        if (!portal) return;
+        this.setSelectedPortalSize(((portal.entry.length + portal.exit.length) / 2) + direction * 2);
+      }
+    }
   }
 
   render(ctx: CanvasRenderingContext2D) {
@@ -217,12 +294,25 @@ export class PortalTool implements Tool {
       this.drawHandle(ctx, lengthHandle, active ? '#36d1ff' : '#7ab8d0', 5.5 / this.getZoom());
       ctx.restore();
     }
+
+    const pairMid = portal.entry.position.lerp(portal.exit.position, 0.5);
+    const pairRotateHandle = this.getPairRotationHandle(portal);
+    ctx.save();
+    ctx.lineWidth = 1.5 / this.getZoom();
+    ctx.strokeStyle = 'rgba(44,44,44,0.34)';
+    ctx.beginPath();
+    ctx.moveTo(pairMid.x, pairMid.y);
+    ctx.lineTo(pairRotateHandle.x, pairRotateHandle.y);
+    ctx.stroke();
+    this.drawHandle(ctx, pairMid, '#5e6475', 4.8 / this.getZoom());
+    this.drawHandle(ctx, pairRotateHandle, '#f29d38', 5.5 / this.getZoom());
+    ctx.restore();
   }
 
   getCursor(): string | null {
     if (this.pendingEntry) return 'crosshair';
     if (!this.hoveredHandle) return null;
-    if (this.hoveredHandle.handle === 'rotation') return 'crosshair';
+    if (this.hoveredHandle.handle === 'rotation' || this.hoveredHandle.handle === 'pair-rotate') return 'crosshair';
     if (this.hoveredHandle.handle === 'length') return 'ew-resize';
     if (this.hoveredHandle.handle === 'pair') return 'move';
     return 'move';
@@ -411,6 +501,16 @@ export class PortalTool implements Tool {
       this.dragCurrent = worldPos.clone();
       return;
     }
+    if (handle.handle === 'pair-rotate') {
+      const angle = this.getPairRotationAngle(portal, worldPos);
+      const delta = this.normalizeAngleDelta(angle - this.pairRotateAngle);
+      if (Math.abs(delta) > 0.0001) {
+        this.store.rotatePortalPair(portal.id, delta);
+        this.pairRotateAngle = angle;
+      }
+      this.dragCurrent = worldPos.clone();
+      return;
+    }
     const endpoint = portal[handle.endpoint];
     if (handle.handle === 'position') {
       const snapped = this.applySnap(worldPos, new Set([portal.id]));
@@ -471,6 +571,15 @@ export class PortalTool implements Tool {
     for (const portal of portals) {
       if (portal.layer !== this.store.activeLayerId) continue;
       if (!portal.visual.showEditorLink && portal.id !== this.selectedPortalId) continue;
+      const rotateHandle = this.getPairRotationHandle(portal);
+      const rotateDist = worldPos.distanceToSq(rotateHandle);
+      if (rotateDist <= maxDistSq) {
+        return {
+          portalId: portal.id,
+          endpoint: this.pickNearestEndpoint(portal, worldPos),
+          handle: 'pair-rotate',
+        };
+      }
       const distSq = this.distanceSqToSegment(worldPos, portal.entry.position, portal.exit.position);
       if (distSq <= bestDist) {
         bestDist = distSq;
@@ -563,8 +672,8 @@ export class PortalTool implements Tool {
   }
 
   private collectDiagnostics(
-    entry: { position: Vec2; radius: number },
-    exit: { position: Vec2; radius: number },
+    entry: { position: Vec2; radius: number; rotation?: number },
+    exit: { position: Vec2; radius: number; rotation?: number },
     portal?: PortalPair,
   ) {
     const messages: string[] = [];
@@ -576,6 +685,18 @@ export class PortalTool implements Tool {
     }
     if (this.endpointTouchesCollision(exit.position, exit.radius)) {
       messages.push('Exit overlaps solid track geometry.');
+      warningEndpoints.exit = true;
+    }
+    if (typeof exit.rotation === 'number' && this.exitLaneBlocked(exit.position, exit.rotation, exit.radius)) {
+      messages.push('Exit lane is blocked; the rider may emerge into nearby geometry.');
+      warningEndpoints.exit = true;
+    }
+    if (this.endpointTouchesOtherPortal(entry.position, entry.radius, portal?.id)) {
+      messages.push('Entry overlaps another portal endpoint.');
+      warningEndpoints.entry = true;
+    }
+    if (this.endpointTouchesOtherPortal(exit.position, exit.radius, portal?.id)) {
+      messages.push('Exit overlaps another portal endpoint.');
       warningEndpoints.exit = true;
     }
 
@@ -600,10 +721,51 @@ export class PortalTool implements Tool {
     return false;
   }
 
+  private endpointTouchesOtherPortal(position: Vec2, radius: number, excludePortalId?: number): boolean {
+    const thresholdSq = Math.pow(radius + DEFAULT_PORTAL_RADIUS * 0.7, 2);
+    for (const portal of this.store.portals) {
+      if (portal.id === excludePortalId) continue;
+      if (portal.entry.position.distanceToSq(position) <= thresholdSq) return true;
+      if (portal.exit.position.distanceToSq(position) <= thresholdSq) return true;
+    }
+    return false;
+  }
+
+  private exitLaneBlocked(position: Vec2, rotation: number, radius: number): boolean {
+    const normal = portalNormal(rotation);
+    for (let i = 1; i <= 4; i++) {
+      const sample = position.add(normal.scale(radius + i * 4));
+      if (this.endpointTouchesCollision(sample, radius * 0.45)) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  private getPairRotationHandle(portal: PortalPair): Vec2 {
+    const mid = portal.entry.position.lerp(portal.exit.position, 0.5);
+    const axis = portal.exit.position.sub(portal.entry.position);
+    const tangent = axis.lengthSq() > 0.001 ? axis.normalize() : portalTangent(portal.entry.rotation);
+    const normal = tangent.perpCCW();
+    return mid.add(normal.scale(28 / this.getZoom()));
+  }
+
+  private getPairRotationAngle(portal: PortalPair, worldPos: Vec2): number {
+    const mid = portal.entry.position.lerp(portal.exit.position, 0.5);
+    return this.quantizeAngle(Math.atan2(worldPos.y - mid.y, worldPos.x - mid.x));
+  }
+
   private quantizeAngle(angle: number): number {
     if (!this.shiftHeld) return angle;
     const step = Math.PI / 12;
     return Math.round(angle / step) * step;
+  }
+
+  private normalizeAngleDelta(angle: number): number {
+    let normalized = angle;
+    while (normalized > Math.PI) normalized -= Math.PI * 2;
+    while (normalized < -Math.PI) normalized += Math.PI * 2;
+    return normalized;
   }
 
   private onWindowKeyDown = (e: KeyboardEvent) => {

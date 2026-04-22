@@ -193,7 +193,7 @@ export class PhysicsEngine {
     const local = worldToPortalLocal(triggerPoint, source);
     const mappedLocal = pair.physics.preserveLocalOffset ? local : new Vec2(0, 0);
     const exitLocal = new Vec2(mappedLocal.x, destination.radius + pair.physics.exitOffset);
-    const nextCenter = portalLocalToWorld(exitLocal, destination);
+    const nextCenter = this.resolveSafeExitPoint(destination, portalLocalToWorld(exitLocal, destination));
     const rotationDelta = destination.rotation - source.rotation;
     const sourceTangent = portalTangent(source.rotation);
     const sourceNormal = portalNormal(source.rotation);
@@ -224,5 +224,22 @@ export class PhysicsEngine {
       speed: entrySpeed * pair.physics.speedMultiplier,
       theme: pair.visual.colorTheme,
     });
+  }
+
+  private resolveSafeExitPoint(destination: PortalEndpoint, candidate: Vec2): Vec2 {
+    const normal = portalNormal(destination.rotation);
+    const clearance = Math.max(4, destination.radius * 0.45);
+    let resolved = candidate;
+    for (let i = 0; i < 12; i++) {
+      const nearbyLines = this.grid.queryPoint(resolved.x, resolved.y);
+      const blocked = nearbyLines.some(line =>
+        line.type !== LineType.SCENERY && line.distanceToPointSq(resolved) <= clearance * clearance,
+      );
+      if (!blocked) {
+        return resolved;
+      }
+      resolved = resolved.add(normal.scale(Math.max(3, clearance * 0.8)));
+    }
+    return resolved;
   }
 }

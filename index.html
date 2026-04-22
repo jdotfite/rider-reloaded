@@ -670,6 +670,25 @@
       color: #9b2d2d;
       font: 600 var(--text-xs)/1.45 var(--font);
     }
+    .portal-shortcuts {
+      margin-top: var(--sp-2);
+      color: var(--ink-muted);
+      font: 500 var(--text-xs)/1.45 var(--font);
+    }
+    .portal-shortcuts kbd {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-width: 18px;
+      padding: 0 4px;
+      border: 1px solid rgba(17,17,17,0.12);
+      border-bottom-width: 2px;
+      border-radius: 6px;
+      background: rgba(255,255,255,0.86);
+      color: var(--ink-secondary);
+      font: 600 10px/18px var(--font-mono);
+      vertical-align: middle;
+    }
     #portal-settings-fields {
       display: grid;
       gap: var(--sp-2);
@@ -1822,6 +1841,7 @@
       .portal-panel-title,
       #portal-selection-status,
       #portal-empty-hint,
+      .portal-shortcuts,
       #portal-warning-box {
         font-size: 10px;
       }
@@ -2065,6 +2085,7 @@
             </div>
             <div id="portal-empty-hint">Click once to place the entry portal, then click again to place the exit. Select a portal to rotate or stretch its endpoints.</div>
             <div id="portal-warning-box" style="display:none;"></div>
+            <div class="portal-shortcuts">Portal keys: <kbd>Tab</kbd> switch end, <kbd>Arrows</kbd> nudge, <kbd>Alt</kbd>+<kbd>Arrows</kbd> move pair, <kbd>[</kbd>/<kbd>]</kbd> rotate, <kbd>X</kbd> swap ends.</div>
             <div id="portal-settings-fields">
               <div class="portal-segmented">
                 <button id="portal-mode-oneway" type="button">One Way</button>
@@ -2336,6 +2357,12 @@
         <div class="hk-row"><kbd>E</kbd><span>Scenery line type or convert selection to scenery</span></div>
         <div class="hk-row"><kbd>F</kbd><span>Fit view (non-Edit tools)</span></div>
         <div class="hk-row"><kbd>T</kbd><span>Toggle one-way / two-way (Portal tool)</span></div>
+        <div class="hk-row"><kbd>Tab</kbd><span>Switch active portal endpoint</span></div>
+        <div class="hk-row"><kbd>Arrows</kbd><span>Nudge active portal endpoint</span></div>
+        <div class="hk-row"><kbd>Alt</kbd> + <kbd>Arrows</kbd><span>Nudge entire portal pair</span></div>
+        <div class="hk-row"><kbd>[</kbd> / <kbd>]</kbd><span>Rotate active portal endpoint</span></div>
+        <div class="hk-row"><kbd>Alt</kbd> + <kbd>[</kbd> / <kbd>]</kbd><span>Rotate entire portal pair</span></div>
+        <div class="hk-row"><kbd>X</kbd><span>Swap entry and exit endpoints</span></div>
         <div class="hk-row"><kbd>Ctrl+Z</kbd><span>Undo</span></div>
         <div class="hk-row"><kbd>Ctrl+Shift+Z</kbd><span>Redo</span></div>
         <div class="hk-row"><kbd>Ctrl+S</kbd><span>Save track</span></div>

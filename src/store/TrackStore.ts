@@ -19,6 +19,7 @@ import {
   PortalVisual,
   SerializedPortalPair,
   clonePortalPair,
+  clonePortalEndpoint,
   createPortalEndpoint,
   serializePortalPair,
   MIN_PORTAL_LENGTH,
@@ -26,7 +27,7 @@ import {
   MIN_PORTAL_RADIUS,
   MAX_PORTAL_RADIUS,
 } from './PortalTypes';
-import { distanceSqToPortalCapsule } from '../portal/portalMath';
+import { distanceSqToPortalCapsule, rotateVec } from '../portal/portalMath';
 
 export interface SerializedTrackLine {
   id: number;
@@ -728,6 +729,42 @@ export class TrackStore {
           ...portal.exit,
           position: portal.exit.position.add(offset),
         },
+      };
+    });
+    return this.getPortalById(portalId);
+  }
+
+  rotatePortalPair(portalId: number, angleDelta: number, pivot?: Vec2): PortalPair | null {
+    const existing = this.getPortalById(portalId);
+    if (!existing || angleDelta === 0) return existing;
+    const center = pivot?.clone() ?? existing.entry.position.lerp(existing.exit.position, 0.5);
+    this.beginMutation();
+    this.portals = this.portals.map(portal => {
+      if (portal.id !== portalId) return portal;
+      const rotateEndpoint = (endpoint: PortalPair['entry']) => ({
+        ...endpoint,
+        position: center.add(rotateVec(endpoint.position.sub(center), angleDelta)),
+        rotation: endpoint.rotation + angleDelta,
+      });
+      return {
+        ...portal,
+        entry: rotateEndpoint(portal.entry),
+        exit: rotateEndpoint(portal.exit),
+      };
+    });
+    return this.getPortalById(portalId);
+  }
+
+  swapPortalEndpoints(portalId: number): PortalPair | null {
+    const existing = this.getPortalById(portalId);
+    if (!existing) return null;
+    this.beginMutation();
+    this.portals = this.portals.map(portal => {
+      if (portal.id !== portalId) return portal;
+      return {
+        ...portal,
+        entry: clonePortalEndpoint(portal.exit),
+        exit: clonePortalEndpoint(portal.entry),
       };
     });
     return this.getPortalById(portalId);
