@@ -1,6 +1,7 @@
 import type { TrackLayer } from '../store/TrackStore';
 import type { PortalEndpointKey, PortalPair } from '../store/PortalTypes';
 import { getPortalThemePalette } from '../portal/portalTheme';
+import { Vec2 } from '../math/Vec2';
 
 export interface PortalRenderEvent {
   pairId: number;
@@ -24,6 +25,12 @@ export class PortalRenderer {
   ) {
     const now = performance.now();
     const layerMap = new Map(layers.map(layer => [layer.id, layer]));
+    const activeEvents = new Map<number, PortalRenderEvent>();
+    for (const event of options.events ?? []) {
+      if (now - event.startedAt <= 260) {
+        activeEvents.set(event.pairId, event);
+      }
+    }
 
     for (const portal of portals) {
       const layer = layerMap.get(portal.layer);
@@ -32,7 +39,7 @@ export class PortalRenderer {
       const selected = options.selectedPortalId === portal.id;
       const editing = options.editing ?? false;
       const palette = getPortalThemePalette(portal.visual.colorTheme);
-      const activeEvent = (options.events ?? []).find(event => event.pairId === portal.id && now - event.startedAt <= 260);
+      const activeEvent = activeEvents.get(portal.id);
       const showLink = editing && (selected || portal.visual.showEditorLink);
       if (showLink) {
         this.drawLink(ctx, portal, selected, palette.link);
@@ -55,6 +62,8 @@ export class PortalRenderer {
           endpoint.rotation,
           endpoint.length,
           endpoint.radius,
+          endpointKey,
+          portal.mode,
           color,
           portal.enabled ? baseAlpha : baseAlpha * 0.42,
           selected,
@@ -71,9 +80,12 @@ export class PortalRenderer {
           this.drawEndpointLabel(ctx, endpoint.position.x, endpoint.position.y, endpointKey, active);
         }
       }
+      if (editing && (selected || portal.mode === 'twoWay')) {
+        this.drawPairBadge(ctx, portal, palette.link, selected);
+      }
     }
 
-    for (const event of options.events ?? []) {
+    for (const event of activeEvents.values()) {
       const age = now - event.startedAt;
       if (age > 260) continue;
       const t = age / 260;
@@ -85,13 +97,21 @@ export class PortalRenderer {
   }
 
   private drawLink(ctx: CanvasRenderingContext2D, portal: PortalPair, selected: boolean, color: string) {
+    const start = portal.entry.position;
+    const end = portal.exit.position;
+    const delta = end.sub(start);
+    const tangent = delta.lengthSq() > 0.001 ? delta.normalize() : new Vec2(1, 0);
+    const normal = tangent.perpCCW();
+    const midpoint = start.lerp(end, 0.5);
+    const curveHeight = Math.min(34, Math.max(12, Math.sqrt(delta.lengthSq()) * (selected ? 0.16 : 0.1)));
+    const control = midpoint.add(normal.scale(curveHeight));
     ctx.save();
     ctx.strokeStyle = selected ? this.withAlpha(color, 0.42) : this.withAlpha(color, 0.22);
     ctx.lineWidth = selected ? 2.2 : 1.25;
     ctx.setLineDash(selected ? [9, 7] : [6, 6]);
     ctx.beginPath();
-    ctx.moveTo(portal.entry.position.x, portal.entry.position.y);
-    ctx.lineTo(portal.exit.position.x, portal.exit.position.y);
+    ctx.moveTo(start.x, start.y);
+    ctx.quadraticCurveTo(control.x, control.y, end.x, end.y);
     ctx.stroke();
     ctx.restore();
   }
@@ -103,6 +123,8 @@ export class PortalRenderer {
     rotation: number,
     length: number,
     radius: number,
+    endpointKey: PortalEndpointKey,
+    mode: PortalPair['mode'],
     color: string,
     alpha: number,
     selected: boolean,
@@ -132,6 +154,15 @@ export class PortalRenderer {
     ctx.fill();
     ctx.stroke();
 
+    ctx.beginPath();
+    ctx.roundRect(-half + 1.5, -radius + 1.5, length - 3, radius * 2 - 3, Math.max(3, radius - 1.5));
+    const innerGlow = ctx.createLinearGradient(-half, 0, half, 0);
+    innerGlow.addColorStop(0, this.withAlpha(color, 0.06 * alpha));
+    innerGlow.addColorStop(0.5, this.withAlpha('#ffffff', 0.12 * alpha));
+    innerGlow.addColorStop(1, this.withAlpha(color, 0.06 * alpha));
+    ctx.fillStyle = innerGlow;
+    ctx.fill();
+
     ctx.shadowBlur = 0;
     ctx.beginPath();
     ctx.roundRect(-half + 4, -radius + 3, Math.max(4, length - 8), Math.max(4, radius * 2 - 6), Math.max(3, radius - 3));
@@ -139,17 +170,46 @@ export class PortalRenderer {
     ctx.lineWidth = 1;
     ctx.stroke();
 
-    ctx.beginPath();
-    ctx.moveTo(-5, radius * 0.1);
-    ctx.lineTo(0, radius * 0.6);
-    ctx.lineTo(5, radius * 0.1);
-    ctx.strokeStyle = this.withAlpha(color, 0.82 * alpha);
+    this.drawFlowGlyph(ctx, endpointKey, mode, radius, color, alpha);
+
+    ctx.restore();
+  }
+
+  private drawFlowGlyph(
+    ctx: CanvasRenderingContext2D,
+    endpointKey: PortalEndpointKey,
+    mode: PortalPair['mode'],
+    radius: number,
+    color: string,
+    alpha: number,
+  ) {
+    const drawChevron = (dir: number, yOffset = 0) => {
+      ctx.beginPath();
+      ctx.moveTo(-5, yOffset - dir * radius * 0.22);
+      ctx.lineTo(0, yOffset + dir * radius * 0.34);
+      ctx.lineTo(5, yOffset - dir * radius * 0.22);
+      ctx.stroke();
+    };
+
+    ctx.strokeStyle = this.withAlpha(color, 0.84 * alpha);
     ctx.lineWidth = 1.7;
     ctx.lineCap = 'round';
     ctx.lineJoin = 'round';
-    ctx.stroke();
+    if (mode === 'twoWay') {
+      drawChevron(1, radius * 0.12);
+      drawChevron(-1, -radius * 0.12);
+      return;
+    }
 
-    ctx.restore();
+    drawChevron(1, endpointKey === 'entry' ? -radius * 0.08 : radius * 0.08);
+    if (endpointKey === 'exit') {
+      ctx.beginPath();
+      ctx.moveTo(-7, -radius * 0.45);
+      ctx.lineTo(7, -radius * 0.45);
+      ctx.strokeStyle = this.withAlpha('#ffffff', 0.22 * alpha);
+      ctx.lineWidth = 1;
+      ctx.stroke();
+    }
   }
 
   private drawDebugOverlay(
@@ -198,14 +258,41 @@ export class PortalRenderer {
     ctx.restore();
   }
 
+  private drawPairBadge(ctx: CanvasRenderingContext2D, portal: PortalPair, color: string, selected: boolean) {
+    const midpoint = portal.entry.position.lerp(portal.exit.position, 0.5);
+    const label = portal.mode === 'twoWay' ? '2W' : '1W';
+    ctx.save();
+    ctx.font = `700 ${selected ? 10 : 9}px ui-monospace, monospace`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    const width = selected ? 24 : 22;
+    const height = selected ? 15 : 14;
+    ctx.fillStyle = this.withAlpha('#ffffff', selected ? 0.9 : 0.78);
+    ctx.strokeStyle = this.withAlpha(color, selected ? 0.48 : 0.32);
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.roundRect(midpoint.x - width / 2, midpoint.y - height / 2, width, height, 7);
+    ctx.fill();
+    ctx.stroke();
+    ctx.fillStyle = this.withAlpha('#2b3240', selected ? 0.88 : 0.72);
+    ctx.fillText(label, midpoint.x, midpoint.y + 0.5);
+    ctx.restore();
+  }
+
   private drawTeleportFlash(ctx: CanvasRenderingContext2D, event: PortalRenderEvent, t: number, color: string) {
     const alpha = 1 - t;
+    const start = new Vec2(event.entryPosition.x, event.entryPosition.y);
+    const end = new Vec2(event.exitPosition.x, event.exitPosition.y);
+    const delta = end.sub(start);
+    const tangent = delta.lengthSq() > 0.001 ? delta.normalize() : new Vec2(1, 0);
+    const normal = tangent.perpCCW();
+    const midpoint = start.lerp(end, 0.5).add(normal.scale(Math.min(44, Math.max(14, Math.sqrt(delta.lengthSq()) * 0.16))));
     ctx.save();
     ctx.strokeStyle = this.withAlpha(color, 0.38 * alpha);
     ctx.lineWidth = 4 * alpha + 1;
     ctx.beginPath();
-    ctx.moveTo(event.entryPosition.x, event.entryPosition.y);
-    ctx.lineTo(event.exitPosition.x, event.exitPosition.y);
+    ctx.moveTo(start.x, start.y);
+    ctx.quadraticCurveTo(midpoint.x, midpoint.y, end.x, end.y);
     ctx.stroke();
 
     for (const point of [event.entryPosition, event.exitPosition]) {

@@ -1234,7 +1234,8 @@ renderer.addRenderCallback((ctx) => {
     const hasAny = hasLocal || hasYT;
 
     audioFileInfo.style.display = hasAny ? '' : 'none';
-    audioControls.style.display = hasAny ? '' : 'none';
+    audioControls.style.display = '';
+    (audioRemoveBtn as HTMLButtonElement).disabled = !hasAny;
 
     if (hasLocal) {
       audioNameEl.textContent = audioPlayer.name;
@@ -1246,6 +1247,9 @@ renderer.addRenderCallback((ctx) => {
       const mins = Math.floor(ytPlayer.duration / 60);
       const secs = Math.floor(ytPlayer.duration % 60);
       audioDurationEl.textContent = `${mins}:${String(secs).padStart(2, '0')}`;
+    } else {
+      audioNameEl.textContent = 'No audio loaded';
+      audioDurationEl.textContent = '';
     }
   }
 

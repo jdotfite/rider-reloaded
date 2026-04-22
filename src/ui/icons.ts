@@ -11,7 +11,7 @@ export const ICONS = {
   // Drawing tools
   pen: '<svg class="icon icon-lg" viewBox="0 0 24 24"><path d="M17 3a2.83 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5z"/><path d="M15 5l4 4"/></svg>',
   line: '<svg class="icon icon-lg" viewBox="0 0 24 24"><line x1="5" y1="19" x2="19" y2="5"/></svg>',
-  portal: '<svg class="icon icon-lg" viewBox="0 0 24 24"><rect x="3" y="6" width="6" height="12" rx="3"/><rect x="15" y="6" width="6" height="12" rx="3"/><path d="M9 9c3 0 5 2 6 5" fill="none"/><polyline points="12 14 15 14 15 11"/></svg>',
+  portal: '<svg class="icon icon-lg" viewBox="0 0 24 24"><rect x="2.5" y="5.5" width="6.5" height="13" rx="3.2"/><rect x="15" y="5.5" width="6.5" height="13" rx="3.2"/><path d="M9.5 8c3.8 0 6.2 2.3 6.9 6.2" fill="none"/><path d="M11.6 13.8l3.2.1-.1-3.2" fill="none"/><path d="M5.1 9.2l1.7 1.9 1.7-1.9" fill="none"/><path d="M16.7 12.9l1.6 1.9 1.6-1.9" fill="none"/></svg>',
   eraser: '<svg class="icon icon-lg" viewBox="0 0 24 24"><line x1="5" y1="5" x2="19" y2="19"/><line x1="19" y1="5" x2="5" y2="19"/></svg>',
   curve: '<svg class="icon icon-lg" viewBox="0 0 24 24"><circle cx="6" cy="18" r="2"/><circle cx="18" cy="6" r="2"/><path d="M6 16c0-6 4-10 12-10" fill="none"/><line x1="6" y1="18" x2="6" y2="12" stroke-dasharray="2 2"/><line x1="18" y1="6" x2="12" y2="6" stroke-dasharray="2 2"/></svg>',
   select: '<svg class="icon icon-lg" viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16" rx="1" stroke-dasharray="4 2" fill="none"/></svg>',
