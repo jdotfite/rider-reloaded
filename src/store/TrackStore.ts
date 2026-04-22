@@ -403,7 +403,7 @@ export class TrackStore {
 
   serialize(): SerializedTrack {
     return {
-      version: '6.3',
+      version: '6.4',
       label: 'Untitled Track',
       creator: 'Rider Reloaded',
       startPosition: {
@@ -1062,17 +1062,46 @@ export class TrackStore {
             3,
           ),
           preserveLocalOffset: this.toBoolean(candidate.physics?.preserveLocalOffset) ?? false,
-          entryDirectionRule: candidate.physics?.entryDirectionRule === 'frontOnly' ? 'frontOnly' : 'any',
+          entryDirectionRule:
+            candidate.physics?.entryDirectionRule === 'frontOnly'
+              ? 'frontOnly'
+              : candidate.physics?.entryDirectionRule === 'backOnly'
+                ? 'backOnly'
+                : 'any',
+          triggerBody:
+            candidate.physics?.triggerBody === 'center'
+              ? 'center'
+              : candidate.physics?.triggerBody === 'front'
+                ? 'front'
+                : candidate.physics?.triggerBody === 'rear'
+                  ? 'rear'
+                  : 'auto',
           cooldownFrames: Math.round(this.clamp(
             typeof candidate.physics?.cooldownFrames === 'number' ? candidate.physics.cooldownFrames : 10,
             0,
             60,
           )),
+          exitOffset: this.clamp(
+            typeof candidate.physics?.exitOffset === 'number' ? candidate.physics.exitOffset : 3,
+            0,
+            30,
+          ),
         },
         visual: {
-          visibility: candidate.visual?.visibility === 'always' ? 'always' : 'subtle',
-          colorTheme: 'violet',
+          visibility:
+            candidate.visual?.visibility === 'always'
+              ? 'always'
+              : candidate.visual?.visibility === 'activation'
+                ? 'activation'
+                : 'subtle',
+          colorTheme:
+            candidate.visual?.colorTheme === 'amber'
+              ? 'amber'
+              : candidate.visual?.colorTheme === 'mint'
+                ? 'mint'
+                : 'violet',
           showEditorLink: this.toBoolean(candidate.visual?.showEditorLink) ?? false,
+          showDebug: this.toBoolean(candidate.visual?.showDebug) ?? false,
         },
       });
     }
@@ -1118,7 +1147,9 @@ export class TrackStore {
       speedMultiplier: 1,
       preserveLocalOffset: false,
       entryDirectionRule: 'any',
+      triggerBody: 'auto',
       cooldownFrames: 10,
+      exitOffset: 3,
     };
   }
 
@@ -1127,6 +1158,7 @@ export class TrackStore {
       visibility: 'subtle',
       colorTheme: 'violet',
       showEditorLink: false,
+      showDebug: false,
     };
   }
 

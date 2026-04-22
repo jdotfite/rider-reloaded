@@ -4,6 +4,7 @@ import { Vec2 } from '../math/Vec2';
 import { COLOR_SOLID, COLOR_ACC, COLOR_SCENERY, LINE_WIDTH } from '../constants';
 import type { TrackLayer } from '../store/TrackStore';
 import type { PortalPair } from '../store/PortalTypes';
+import { getPortalThemePalette } from '../portal/portalTheme';
 
 const TYPE_COLORS: Record<LineType, string> = {
   [LineType.SOLID]: COLOR_SOLID,
@@ -95,13 +96,14 @@ function buildPortalGroups(portals: PortalPair[], layers: TrackLayer[]): string 
 
   let groups = '  <g id="portals">\n';
   for (const portal of visiblePortals) {
+    const palette = getPortalThemePalette(portal.visual.colorTheme);
     const opacity = portal.enabled ? '1' : '0.45';
     groups += `    <g id="portal-${portal.id}" opacity="${opacity}">\n`;
     if (portal.visual.showEditorLink) {
-      groups += `      <line x1="${r(portal.entry.position.x)}" y1="${r(portal.entry.position.y)}" x2="${r(portal.exit.position.x)}" y2="${r(portal.exit.position.y)}" stroke="#93a0d8" stroke-width="1.2" stroke-dasharray="6 5" />\n`;
+      groups += `      <line x1="${r(portal.entry.position.x)}" y1="${r(portal.entry.position.y)}" x2="${r(portal.exit.position.x)}" y2="${r(portal.exit.position.y)}" stroke="${palette.link}" stroke-width="1.2" stroke-dasharray="6 5" />\n`;
     }
-    groups += buildPortalEndpointSvg(portal.entry.position, portal.entry.rotation, portal.entry.length, portal.entry.radius, '#6f6cff');
-    groups += buildPortalEndpointSvg(portal.exit.position, portal.exit.rotation, portal.exit.length, portal.exit.radius, '#36d1ff');
+    groups += buildPortalEndpointSvg(portal.entry.position, portal.entry.rotation, portal.entry.length, portal.entry.radius, palette.entry);
+    groups += buildPortalEndpointSvg(portal.exit.position, portal.exit.rotation, portal.exit.length, portal.exit.radius, palette.exit);
     groups += '    </g>\n';
   }
   groups += '  </g>\n';

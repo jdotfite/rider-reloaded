@@ -21,6 +21,8 @@ export interface PortalTeleportEvent {
   destination: PortalEndpointKey;
   entryPosition: Vec2;
   exitPosition: Vec2;
+  speed: number;
+  theme: PortalPair['visual']['colorTheme'];
 }
 
 export class PhysicsEngine {
@@ -154,11 +156,10 @@ export class PhysicsEngine {
     const portals = this.getPortals();
     if (portals.length === 0) return;
 
-    const triggerPoint = this.rider.getPortalTriggerPoint(1);
-    const triggerVelocity = this.rider.getPortalTriggerVelocity();
-
     for (const portal of portals) {
       if (!portal.enabled || this.rider.isPortalBlocked(portal.id)) continue;
+      const triggerPoint = this.rider.getPortalTriggerPoint(portal.physics.triggerBody, 1);
+      const triggerVelocity = this.rider.getPortalTriggerVelocity(portal.physics.triggerBody);
 
       const candidates: Array<[PortalEndpointKey, PortalEndpointKey]> = portal.mode === 'twoWay'
         ? [['entry', 'exit'], ['exit', 'entry']]
@@ -175,8 +176,10 @@ export class PhysicsEngine {
   }
 
   private passesDirectionRule(velocity: Vec2, endpoint: PortalEndpoint, rule: PortalPair['physics']['entryDirectionRule']) {
-    if (rule !== 'frontOnly') return true;
-    return velocity.dot(portalNormal(endpoint.rotation)) > 0;
+    const alignment = velocity.dot(portalNormal(endpoint.rotation));
+    if (rule === 'frontOnly') return alignment > 0;
+    if (rule === 'backOnly') return alignment < 0;
+    return true;
   }
 
   private teleportThroughPortal(
@@ -189,13 +192,14 @@ export class PhysicsEngine {
     const destination = pair[destinationKey];
     const local = worldToPortalLocal(triggerPoint, source);
     const mappedLocal = pair.physics.preserveLocalOffset ? local : new Vec2(0, 0);
-    const exitLocal = new Vec2(mappedLocal.x, destination.radius + 3);
+    const exitLocal = new Vec2(mappedLocal.x, destination.radius + pair.physics.exitOffset);
     const nextCenter = portalLocalToWorld(exitLocal, destination);
     const rotationDelta = destination.rotation - source.rotation;
     const sourceTangent = portalTangent(source.rotation);
     const sourceNormal = portalNormal(source.rotation);
     const destinationTangent = portalTangent(destination.rotation);
     const destinationNormal = portalNormal(destination.rotation);
+    const entrySpeed = this.rider.getPortalTriggerVelocity(pair.physics.triggerBody).length();
 
     this.rider.teleportAroundPoint(triggerPoint, nextCenter, rotationDelta, (velocity) => {
       if (pair.physics.velocityMode === 'world') {
@@ -217,6 +221,8 @@ export class PhysicsEngine {
       destination: destinationKey,
       entryPosition: source.position.clone(),
       exitPosition: destination.position.clone(),
+      speed: entrySpeed * pair.physics.speedMultiplier,
+      theme: pair.visual.colorTheme,
     });
   }
 }

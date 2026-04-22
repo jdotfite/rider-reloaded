@@ -1,5 +1,7 @@
 import type { TrackLayer } from '../store/TrackStore';
 import type { PortalEndpointKey, PortalPair } from '../store/PortalTypes';
+import { portalLocalToWorld, portalNormal, portalTangent } from '../portal/portalMath';
+import { getPortalThemePalette } from '../portal/portalTheme';
 
 export interface PortalRenderEvent {
   pairId: number;
@@ -7,9 +9,6 @@ export interface PortalRenderEvent {
   exitPosition: { x: number; y: number };
   startedAt: number;
 }
-
-const ENTRY_COLOR = '#6f6cff';
-const EXIT_COLOR = '#36d1ff';
 
 export class PortalRenderer {
   render(
@@ -21,6 +20,7 @@ export class PortalRenderer {
       activeEndpoint?: PortalEndpointKey | null;
       editing?: boolean;
       events?: PortalRenderEvent[];
+      warningEndpoints?: Partial<Record<PortalEndpointKey, boolean>> | null;
     } = {},
   ) {
     const now = performance.now();
@@ -32,16 +32,22 @@ export class PortalRenderer {
 
       const selected = options.selectedPortalId === portal.id;
       const editing = options.editing ?? false;
+      const palette = getPortalThemePalette(portal.visual.colorTheme);
+      const activeEvent = (options.events ?? []).find(event => event.pairId === portal.id && now - event.startedAt <= 260);
       const showLink = editing && (selected || portal.visual.showEditorLink);
       if (showLink) {
-        this.drawLink(ctx, portal, selected);
+        this.drawLink(ctx, portal, selected, palette.link);
       }
 
       for (const endpointKey of ['entry', 'exit'] as const) {
         const endpoint = portal[endpointKey];
         const active = selected && options.activeEndpoint === endpointKey;
-        const color = endpointKey === 'entry' ? ENTRY_COLOR : EXIT_COLOR;
-        const playbackAlpha = portal.visual.visibility === 'always' ? 0.94 : 0.74;
+        const color = endpointKey === 'entry' ? palette.entry : palette.exit;
+        const playbackAlpha = portal.visual.visibility === 'always'
+          ? 0.94
+          : portal.visual.visibility === 'activation'
+            ? activeEvent ? 0.86 : 0.12
+            : 0.74;
         const baseAlpha = editing ? 0.94 : playbackAlpha;
         this.drawPortalEndpoint(
           ctx,
@@ -56,6 +62,12 @@ export class PortalRenderer {
           active,
           0.6 + 0.4 * Math.sin(now / 520 + portal.id + (endpointKey === 'entry' ? 0 : 1.2)),
         );
+        if (portal.visual.showDebug && editing) {
+          this.drawDebugOverlay(ctx, endpoint.position.x, endpoint.position.y, endpoint.rotation, endpoint.length, endpoint.radius, color);
+        }
+        if (selected && options.warningEndpoints?.[endpointKey]) {
+          this.drawWarningHalo(ctx, endpoint.position.x, endpoint.position.y, endpoint.length, endpoint.radius);
+        }
         if (selected && editing) {
           this.drawEndpointLabel(ctx, endpoint.position.x, endpoint.position.y, endpointKey, active);
         }
@@ -66,13 +78,16 @@ export class PortalRenderer {
       const age = now - event.startedAt;
       if (age > 260) continue;
       const t = age / 260;
-      this.drawTeleportFlash(ctx, event, t);
+      const palette = getPortalThemePalette(
+        portals.find(portal => portal.id === event.pairId)?.visual.colorTheme ?? 'violet',
+      );
+      this.drawTeleportFlash(ctx, event, t, palette.flash);
     }
   }
 
-  private drawLink(ctx: CanvasRenderingContext2D, portal: PortalPair, selected: boolean) {
+  private drawLink(ctx: CanvasRenderingContext2D, portal: PortalPair, selected: boolean, color: string) {
     ctx.save();
-    ctx.strokeStyle = selected ? 'rgba(71, 143, 255, 0.45)' : 'rgba(125, 125, 175, 0.18)';
+    ctx.strokeStyle = selected ? this.withAlpha(color, 0.42) : this.withAlpha(color, 0.22);
     ctx.lineWidth = selected ? 2.2 : 1.25;
     ctx.setLineDash(selected ? [9, 7] : [6, 6]);
     ctx.beginPath();
@@ -138,10 +153,56 @@ export class PortalRenderer {
     ctx.restore();
   }
 
-  private drawTeleportFlash(ctx: CanvasRenderingContext2D, event: PortalRenderEvent, t: number) {
+  private drawDebugOverlay(
+    ctx: CanvasRenderingContext2D,
+    x: number,
+    y: number,
+    rotation: number,
+    length: number,
+    radius: number,
+    color: string,
+  ) {
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.rotate(rotation);
+    ctx.setLineDash([5, 4]);
+    ctx.strokeStyle = this.withAlpha(color, 0.36);
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.roundRect(-length / 2, -radius, length, radius * 2, radius);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.strokeStyle = this.withAlpha(color, 0.44);
+    ctx.beginPath();
+    ctx.moveTo(-length / 2 - 12, 0);
+    ctx.lineTo(length / 2 + 12, 0);
+    ctx.moveTo(0, -radius - 12);
+    ctx.lineTo(0, radius + 12);
+    ctx.stroke();
+    ctx.restore();
+  }
+
+  private drawWarningHalo(
+    ctx: CanvasRenderingContext2D,
+    x: number,
+    y: number,
+    length: number,
+    radius: number,
+  ) {
+    ctx.save();
+    ctx.strokeStyle = 'rgba(214, 75, 75, 0.78)';
+    ctx.lineWidth = 2;
+    ctx.setLineDash([7, 5]);
+    ctx.beginPath();
+    ctx.ellipse(x, y, length * 0.55, radius + 8, 0, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.restore();
+  }
+
+  private drawTeleportFlash(ctx: CanvasRenderingContext2D, event: PortalRenderEvent, t: number, color: string) {
     const alpha = 1 - t;
     ctx.save();
-    ctx.strokeStyle = `rgba(90, 170, 255, ${0.35 * alpha})`;
+    ctx.strokeStyle = this.withAlpha(color, 0.38 * alpha);
     ctx.lineWidth = 4 * alpha + 1;
     ctx.beginPath();
     ctx.moveTo(event.entryPosition.x, event.entryPosition.y);
@@ -151,7 +212,7 @@ export class PortalRenderer {
     for (const point of [event.entryPosition, event.exitPosition]) {
       ctx.beginPath();
       ctx.arc(point.x, point.y, 6 + 14 * t, 0, Math.PI * 2);
-      ctx.strokeStyle = `rgba(90, 170, 255, ${0.45 * alpha})`;
+      ctx.strokeStyle = this.withAlpha(color, 0.48 * alpha);
       ctx.lineWidth = 2.5 * alpha + 0.5;
       ctx.stroke();
     }

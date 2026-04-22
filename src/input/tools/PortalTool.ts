@@ -2,10 +2,16 @@ import { Vec2 } from '../../math/Vec2';
 import { Tool } from './Tool';
 import { TrackStore } from '../../store/TrackStore';
 import { SNAP_RADIUS } from '../../constants';
+import { LineType } from '../../physics/lines/LineTypes';
 import {
+  DEFAULT_PORTAL_LENGTH,
+  DEFAULT_PORTAL_RADIUS,
+  PortalColorTheme,
   PortalEndpointKey,
+  PortalDirectionRule,
   PortalMode,
   PortalPair,
+  PortalTriggerBody,
   PortalVelocityMode,
   PortalVisibility,
   MIN_PORTAL_LENGTH,
@@ -33,6 +39,7 @@ const BODY_HIT_PADDING_PX = 8;
 
 export class PortalTool implements Tool {
   name = 'portal';
+  onPortalCreated: ((portal: PortalPair) => void) | null = null;
   private store: TrackStore;
   private getZoom: () => number;
   private getSnapEnabled: () => boolean;
@@ -270,10 +277,16 @@ export class PortalTool implements Tool {
     this.store.updatePortalPhysics(portal.id, { preserveLocalOffset: enabled });
   }
 
-  setSelectedFrontOnly(enabled: boolean) {
+  setSelectedDirectionRule(rule: PortalDirectionRule) {
     const portal = this.getSelectedPortal();
     if (!portal) return;
-    this.store.updatePortalPhysics(portal.id, { entryDirectionRule: enabled ? 'frontOnly' : 'any' });
+    this.store.updatePortalPhysics(portal.id, { entryDirectionRule: rule });
+  }
+
+  setSelectedTriggerBody(body: PortalTriggerBody) {
+    const portal = this.getSelectedPortal();
+    if (!portal) return;
+    this.store.updatePortalPhysics(portal.id, { triggerBody: body });
   }
 
   setSelectedCooldownFrames(frames: number) {
@@ -288,10 +301,28 @@ export class PortalTool implements Tool {
     this.store.updatePortalVisual(portal.id, { visibility });
   }
 
+  setSelectedExitOffset(offset: number) {
+    const portal = this.getSelectedPortal();
+    if (!portal) return;
+    this.store.updatePortalPhysics(portal.id, { exitOffset: Math.max(0, Math.min(30, offset)) });
+  }
+
+  setSelectedColorTheme(theme: PortalColorTheme) {
+    const portal = this.getSelectedPortal();
+    if (!portal) return;
+    this.store.updatePortalVisual(portal.id, { colorTheme: theme });
+  }
+
   setSelectedShowEditorLink(enabled: boolean) {
     const portal = this.getSelectedPortal();
     if (!portal) return;
     this.store.updatePortalVisual(portal.id, { showEditorLink: enabled });
+  }
+
+  setSelectedShowDebug(enabled: boolean) {
+    const portal = this.getSelectedPortal();
+    if (!portal) return;
+    this.store.updatePortalVisual(portal.id, { showDebug: enabled });
   }
 
   setSelectedEnabled(enabled: boolean) {
@@ -320,6 +351,29 @@ export class PortalTool implements Tool {
     this.store.endTransaction();
   }
 
+  getDiagnostics(): {
+    messages: string[];
+    warningEndpoints: Partial<Record<PortalEndpointKey, boolean>> | null;
+  } {
+    if (this.pendingEntry) {
+      return this.collectDiagnostics(
+        {
+          position: this.pendingEntry,
+          radius: DEFAULT_PORTAL_RADIUS,
+        },
+        {
+          position: this.previewPos,
+          radius: DEFAULT_PORTAL_RADIUS,
+        },
+      );
+    }
+    const portal = this.getSelectedPortal();
+    if (!portal) {
+      return { messages: [], warningEndpoints: null };
+    }
+    return this.collectDiagnostics(portal.entry, portal.exit, portal);
+  }
+
   private commitPortal(exitPosition: Vec2) {
     if (!this.pendingEntry) return;
     const delta = exitPosition.sub(this.pendingEntry);
@@ -332,6 +386,7 @@ export class PortalTool implements Tool {
     this.state = 'idle';
     if (pair) {
       this.selectPortal(pair.id, 'exit');
+      this.onPortalCreated?.(pair);
     }
   }
 
@@ -506,6 +561,44 @@ export class PortalTool implements Tool {
   private applySnap(worldPos: Vec2, excludePortalIds?: Set<number>): Vec2 {
     if (!this.getSnapEnabled()) return worldPos.clone();
     return this.store.findNearestEndpoint(worldPos, SNAP_RADIUS, undefined, excludePortalIds) ?? worldPos.clone();
+  }
+
+  private collectDiagnostics(
+    entry: { position: Vec2; radius: number },
+    exit: { position: Vec2; radius: number },
+    portal?: PortalPair,
+  ) {
+    const messages: string[] = [];
+    const warningEndpoints: Partial<Record<PortalEndpointKey, boolean>> = {};
+
+    if (this.endpointTouchesCollision(entry.position, entry.radius)) {
+      messages.push('Entry overlaps solid track geometry.');
+      warningEndpoints.entry = true;
+    }
+    if (this.endpointTouchesCollision(exit.position, exit.radius)) {
+      messages.push('Exit overlaps solid track geometry.');
+      warningEndpoints.exit = true;
+    }
+
+    const cooldownFrames = portal?.physics.cooldownFrames ?? 10;
+    const minSeparation = Math.max(entry.radius, exit.radius) * 2 + 8;
+    if (entry.position.distanceTo(exit.position) < minSeparation && cooldownFrames < 6) {
+      messages.push('Portal ends are close together. Increase cooldown to reduce re-entry bounce.');
+    }
+
+    return {
+      messages,
+      warningEndpoints: Object.keys(warningEndpoints).length > 0 ? warningEndpoints : null,
+    };
+  }
+
+  private endpointTouchesCollision(position: Vec2, radius: number): boolean {
+    const thresholdSq = (radius + 3) * (radius + 3);
+    for (const line of this.store.lines) {
+      if (line.type === LineType.SCENERY) continue;
+      if (line.distanceToPointSq(position) <= thresholdSq) return true;
+    }
+    return false;
   }
 
   private quantizeAngle(angle: number): number {

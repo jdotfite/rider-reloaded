@@ -628,10 +628,14 @@
     }
     .portal-panel-header {
       display: flex;
-      align-items: baseline;
+      align-items: flex-start;
       justify-content: space-between;
       gap: var(--sp-2);
       margin-bottom: var(--sp-2);
+    }
+    .portal-panel-heading {
+      display: grid;
+      gap: 4px;
     }
     .portal-panel-title {
       font: 700 var(--text-xs)/1 var(--font);
@@ -648,10 +652,32 @@
       font: 500 var(--text-xs)/1.45 var(--font);
       color: var(--ink-muted);
     }
+    .portal-detail-toggle {
+      min-width: 146px;
+    }
+    .portal-detail-toggle button {
+      min-height: 30px;
+      font-size: var(--text-xs);
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+    }
+    #portal-warning-box {
+      margin-top: var(--sp-2);
+      padding: 8px 10px;
+      border-radius: var(--radius-md);
+      border: 1px solid rgba(198, 81, 81, 0.18);
+      background: rgba(255, 242, 242, 0.88);
+      color: #9b2d2d;
+      font: 600 var(--text-xs)/1.45 var(--font);
+    }
     #portal-settings-fields {
       display: grid;
       gap: var(--sp-2);
       margin-top: var(--sp-2);
+    }
+    #portal-advanced-fields {
+      display: grid;
+      gap: var(--sp-2);
     }
     .portal-segmented {
       display: grid;
@@ -1795,12 +1821,19 @@
       .portal-field span,
       .portal-panel-title,
       #portal-selection-status,
-      #portal-empty-hint {
+      #portal-empty-hint,
+      #portal-warning-box {
         font-size: 10px;
       }
       .portal-segmented button {
         min-height: 32px;
         font-size: 10px;
+      }
+      .portal-panel-header {
+        align-items: stretch;
+      }
+      .portal-detail-toggle {
+        min-width: 116px;
       }
       .portal-inline-value {
         min-width: 34px;
@@ -2021,15 +2054,31 @@
           </div>
           <div id="portal-settings">
             <div class="portal-panel-header">
-              <span class="portal-panel-title">Portal Pair</span>
-              <span id="portal-selection-status">Place entry</span>
+              <div class="portal-panel-heading">
+                <span class="portal-panel-title">Portal Pair</span>
+                <span id="portal-selection-status">Place entry</span>
+              </div>
+              <div class="portal-detail-toggle portal-segmented">
+                <button id="portal-detail-simple" type="button" class="active">Simple</button>
+                <button id="portal-detail-advanced" type="button">Advanced</button>
+              </div>
             </div>
             <div id="portal-empty-hint">Click once to place the entry portal, then click again to place the exit. Select a portal to rotate or stretch its endpoints.</div>
+            <div id="portal-warning-box" style="display:none;"></div>
             <div id="portal-settings-fields">
               <div class="portal-segmented">
                 <button id="portal-mode-oneway" type="button">One Way</button>
                 <button id="portal-mode-twoway" type="button">Two Way</button>
               </div>
+              <label class="portal-field">
+                <span>Theme</span>
+                <select id="portal-theme">
+                  <option value="violet">Violet</option>
+                  <option value="amber">Amber</option>
+                  <option value="mint">Mint</option>
+                </select>
+                <strong class="portal-inline-value"></strong>
+              </label>
               <label class="portal-field">
                 <span>Velocity</span>
                 <select id="portal-velocity-mode">
@@ -2048,42 +2097,69 @@
                 <input type="range" id="portal-size" min="18" max="84" step="1" value="34" />
                 <strong id="portal-size-value" class="portal-inline-value">34</strong>
               </label>
-              <label class="portal-field">
-                <span>Width</span>
-                <input type="range" id="portal-radius" min="6" max="28" step="1" value="10" />
-                <strong id="portal-radius-value" class="portal-inline-value">10</strong>
-              </label>
-              <div class="portal-checkbox-grid">
-                <label class="tool-option-label">
-                  <input type="checkbox" id="portal-preserve-offset" />
-                  <span>Preserve offset</span>
+              <div id="portal-advanced-fields">
+                <label class="portal-field">
+                  <span>Width</span>
+                  <input type="range" id="portal-radius" min="6" max="28" step="1" value="10" />
+                  <strong id="portal-radius-value" class="portal-inline-value">10</strong>
                 </label>
-                <label class="tool-option-label">
-                  <input type="checkbox" id="portal-front-only" />
-                  <span>Front-face only</span>
+                <label class="portal-field">
+                  <span>Trigger</span>
+                  <select id="portal-trigger-body">
+                    <option value="auto">Auto</option>
+                    <option value="center">Center</option>
+                    <option value="front">Front</option>
+                    <option value="rear">Rear</option>
+                  </select>
+                  <strong class="portal-inline-value"></strong>
                 </label>
-                <label class="tool-option-label">
-                  <input type="checkbox" id="portal-show-link" />
-                  <span>Show pair link</span>
+                <label class="portal-field">
+                  <span>Direction</span>
+                  <select id="portal-direction-rule">
+                    <option value="any">Any</option>
+                    <option value="frontOnly">Front Only</option>
+                    <option value="backOnly">Back Only</option>
+                  </select>
+                  <strong class="portal-inline-value"></strong>
                 </label>
-                <label class="tool-option-label">
-                  <input type="checkbox" id="portal-enabled" checked />
-                  <span>Enabled</span>
+                <label class="portal-field">
+                  <span>Exit Push</span>
+                  <input type="range" id="portal-exit-offset" min="0" max="30" step="1" value="3" />
+                  <strong id="portal-exit-offset-value" class="portal-inline-value">3</strong>
+                </label>
+                <div class="portal-checkbox-grid">
+                  <label class="tool-option-label">
+                    <input type="checkbox" id="portal-preserve-offset" />
+                    <span>Preserve offset</span>
+                  </label>
+                  <label class="tool-option-label">
+                    <input type="checkbox" id="portal-show-link" />
+                    <span>Show pair link</span>
+                  </label>
+                  <label class="tool-option-label">
+                    <input type="checkbox" id="portal-show-debug" />
+                    <span>Debug overlay</span>
+                  </label>
+                  <label class="tool-option-label">
+                    <input type="checkbox" id="portal-enabled" checked />
+                    <span>Enabled</span>
+                  </label>
+                </div>
+                <label class="portal-field">
+                  <span>Cooldown</span>
+                  <input type="range" id="portal-cooldown" min="0" max="60" step="1" value="10" />
+                  <strong id="portal-cooldown-value" class="portal-inline-value">10f</strong>
+                </label>
+                <label class="portal-field">
+                  <span>Playback</span>
+                  <select id="portal-visibility">
+                    <option value="subtle">Subtle</option>
+                    <option value="always">Always</option>
+                    <option value="activation">On Trigger</option>
+                  </select>
+                  <strong class="portal-inline-value"></strong>
                 </label>
               </div>
-              <label class="portal-field">
-                <span>Cooldown</span>
-                <input type="range" id="portal-cooldown" min="0" max="60" step="1" value="10" />
-                <strong id="portal-cooldown-value" class="portal-inline-value">10f</strong>
-              </label>
-              <label class="portal-field">
-                <span>Playback</span>
-                <select id="portal-visibility">
-                  <option value="subtle">Subtle</option>
-                  <option value="always">Always</option>
-                </select>
-                <strong class="portal-inline-value"></strong>
-              </label>
             </div>
           </div>
         </div>

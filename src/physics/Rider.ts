@@ -17,6 +17,7 @@ import { INITIAL_RIDER_VELOCITY } from '../constants';
 import { RiderRenderData } from '../rendering/RiderRenderer';
 import { VehicleDef } from './vehicles/VehicleDef';
 import { rotateVec } from '../portal/portalMath';
+import type { PortalTriggerBody } from '../store/PortalTypes';
 
 export interface RiderSnapshot {
   positions: Array<{ px: number; py: number; ppx: number; ppy: number }>;
@@ -220,10 +221,8 @@ export class Rider {
     return Math.sqrt(averageX * averageX + averageY * averageY);
   }
 
-  getPortalTriggerPoint(alpha: number = 1): Vec2 {
-    const indices = this.portalTriggerIndices.length > 0
-      ? this.portalTriggerIndices
-      : [this.centerIdx1, this.centerIdx2];
+  getPortalTriggerPoint(body: PortalTriggerBody = 'auto', alpha: number = 1): Vec2 {
+    const indices = this.getPortalTriggerIndices(body);
     const t = Math.max(0, Math.min(1, alpha));
     let x = 0;
     let y = 0;
@@ -239,10 +238,8 @@ export class Rider {
     return new Vec2(x / count, y / count);
   }
 
-  getPortalTriggerVelocity(): Vec2 {
-    const indices = this.portalTriggerIndices.length > 0
-      ? this.portalTriggerIndices
-      : [this.centerIdx1, this.centerIdx2];
+  getPortalTriggerVelocity(body: PortalTriggerBody = 'auto'): Vec2 {
+    const indices = this.getPortalTriggerIndices(body);
     let x = 0;
     let y = 0;
     let count = 0;
@@ -283,6 +280,30 @@ export class Rider {
     this.portalCooldowns.set(pairId, Math.max(0, Math.floor(frames)));
   }
 
+  private getPortalTriggerIndices(body: PortalTriggerBody): number[] {
+    if (body === 'front') {
+      return this.resolveNamedRenderPointIndices(
+        ['nose', 'string', 'peg', 'chassisFront', 'wheelFront', 'frontWheel', 'frontCage'],
+        this.getCollisionPointIndices().slice(0, 2),
+      );
+    }
+    if (body === 'rear') {
+      return this.resolveNamedRenderPointIndices(
+        ['tail', 'rearCage', 'chassisRear', 'wheelRear', 'rearWheel', 'butt'],
+        this.getCollisionPointIndices().slice(-2),
+      );
+    }
+    if (body === 'center') {
+      return this.resolveNamedRenderPointIndices(
+        ['driverSeat', 'driverHead', 'butt', 'shoulder', 'chassisFront', 'chassisRear'],
+        [this.centerIdx1, this.centerIdx2],
+      );
+    }
+    return this.portalTriggerIndices.length > 0
+      ? this.portalTriggerIndices
+      : [this.centerIdx1, this.centerIdx2];
+  }
+
   teleportAroundPoint(
     currentAnchor: Vec2,
     nextAnchor: Vec2,
@@ -321,6 +342,23 @@ export class Rider {
 
     return this.collisionPoints
       .slice(0, 4)
+      .map(point => this.points.indexOf(point))
+      .filter(index => index >= 0);
+  }
+
+  private resolveNamedRenderPointIndices(names: string[], fallback: number[]): number[] {
+    const renderPoints = this.vehicle?.renderPoints ?? {};
+    const resolved = [...new Set(
+      names
+        .map(name => renderPoints[name])
+        .filter((value): value is number => typeof value === 'number' && value >= 0 && value < this.points.length),
+    )];
+    if (resolved.length > 0) return resolved.slice(0, 4);
+    return fallback.filter(index => index >= 0 && index < this.points.length);
+  }
+
+  private getCollisionPointIndices(): number[] {
+    return this.collisionPoints
       .map(point => this.points.indexOf(point))
       .filter(index => index >= 0);
   }

@@ -3,8 +3,10 @@ import { Vec2 } from '../math/Vec2';
 export type PortalEndpointKey = 'entry' | 'exit';
 export type PortalMode = 'oneWay' | 'twoWay';
 export type PortalVelocityMode = 'remap' | 'world';
-export type PortalDirectionRule = 'any' | 'frontOnly';
-export type PortalVisibility = 'subtle' | 'always';
+export type PortalDirectionRule = 'any' | 'frontOnly' | 'backOnly';
+export type PortalTriggerBody = 'auto' | 'center' | 'front' | 'rear';
+export type PortalVisibility = 'activation' | 'subtle' | 'always';
+export type PortalColorTheme = 'violet' | 'amber' | 'mint';
 
 export interface PortalEndpoint {
   position: Vec2;
@@ -18,13 +20,16 @@ export interface PortalPhysics {
   speedMultiplier: number;
   preserveLocalOffset: boolean;
   entryDirectionRule: PortalDirectionRule;
+  triggerBody: PortalTriggerBody;
   cooldownFrames: number;
+  exitOffset: number;
 }
 
 export interface PortalVisual {
   visibility: PortalVisibility;
-  colorTheme: 'violet';
+  colorTheme: PortalColorTheme;
   showEditorLink: boolean;
+  showDebug: boolean;
 }
 
 export interface PortalPair {
@@ -60,12 +65,15 @@ export interface SerializedPortalPair {
     speedMultiplier?: number;
     preserveLocalOffset?: boolean;
     entryDirectionRule?: string;
+    triggerBody?: string;
     cooldownFrames?: number;
+    exitOffset?: number;
   };
   visual?: {
     visibility?: string;
     colorTheme?: string;
     showEditorLink?: boolean;
+    showDebug?: boolean;
   };
 }
 

@@ -251,11 +251,13 @@ const gameLoop = new GameLoop(physics, () => {
   const speed = rider.getCenterSpeed() * (1000 / TIMESTEP);
   toolbar.updateStats(store.lines.length, speed);
   toolbar.setSelectedLineState(currentTool === selectTool ? selectTool.getSelectedCount() : 0, selectTool.isSmoothing());
+  const portalDiagnostics = currentTool === portalTool ? portalTool.getDiagnostics() : null;
   toolbar.setPortalState(
     currentTool === portalTool,
     currentTool === portalTool ? portalTool.getSelectedPortal() : null,
     currentTool === portalTool && portalTool.isPlacing(),
     currentTool === portalTool ? portalTool.getActiveEndpoint() : null,
+    portalDiagnostics,
   );
 
   // Update beat HUD counter
@@ -351,6 +353,9 @@ toolbar.onConvertSelectedType = (type) => {
 toolbar.onPortalModeChange = (mode) => {
   if (currentTool === portalTool) portalTool.setSelectedPortalMode(mode);
 };
+toolbar.onPortalThemeChange = (theme) => {
+  if (currentTool === portalTool) portalTool.setSelectedColorTheme(theme);
+};
 toolbar.onPortalVelocityModeChange = (mode) => {
   if (currentTool === portalTool) portalTool.setSelectedVelocityMode(mode);
 };
@@ -360,11 +365,17 @@ toolbar.onPortalSpeedMultiplierChange = (multiplier) => {
 toolbar.onPortalPreserveOffsetChange = (enabled) => {
   if (currentTool === portalTool) portalTool.setSelectedPreserveOffset(enabled);
 };
-toolbar.onPortalFrontOnlyChange = (enabled) => {
-  if (currentTool === portalTool) portalTool.setSelectedFrontOnly(enabled);
+toolbar.onPortalDirectionRuleChange = (rule) => {
+  if (currentTool === portalTool) portalTool.setSelectedDirectionRule(rule);
+};
+toolbar.onPortalTriggerBodyChange = (body) => {
+  if (currentTool === portalTool) portalTool.setSelectedTriggerBody(body);
 };
 toolbar.onPortalCooldownChange = (frames) => {
   if (currentTool === portalTool) portalTool.setSelectedCooldownFrames(frames);
+};
+toolbar.onPortalExitOffsetChange = (offset) => {
+  if (currentTool === portalTool) portalTool.setSelectedExitOffset(offset);
 };
 toolbar.onPortalVisibilityChange = (visibility) => {
   if (currentTool === portalTool) portalTool.setSelectedVisibility(visibility);
@@ -377,6 +388,9 @@ toolbar.onPortalRadiusChange = (radius) => {
 };
 toolbar.onPortalShowEditorLinkChange = (enabled) => {
   if (currentTool === portalTool) portalTool.setSelectedShowEditorLink(enabled);
+};
+toolbar.onPortalShowDebugChange = (enabled) => {
+  if (currentTool === portalTool) portalTool.setSelectedShowDebug(enabled);
 };
 toolbar.onPortalEnabledChange = (enabled) => {
   if (currentTool === portalTool) portalTool.setSelectedEnabled(enabled);
@@ -955,11 +969,13 @@ renderer.addRenderCallback((ctx) => {
   while (portalFxEvents.length > 0 && performance.now() - portalFxEvents[0].startedAt > 280) {
     portalFxEvents.shift();
   }
+  const selectedPortalDiagnostics = currentTool === portalTool ? portalTool.getDiagnostics() : null;
   portalRenderer.render(ctx, store.portals, store.layers, {
     selectedPortalId: currentTool === portalTool ? portalTool.getSelectedPortalId() : null,
     activeEndpoint: currentTool === portalTool ? portalTool.getActiveEndpoint() : null,
     editing: gameLoop.state !== GameState.PLAYING,
     events: portalFxEvents,
+    warningEndpoints: selectedPortalDiagnostics?.warningEndpoints ?? null,
   });
 
   // Draw active tool preview (editing or paused)
