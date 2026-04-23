@@ -1,37 +1,64 @@
 import { Vec2 } from '../../math/Vec2';
 import { Tool } from './Tool';
+import {
+  PointSnapResult,
+  renderPointSnapIndicator,
+  resolvePointSnap,
+} from './pointSnap';
 
 export class FlagTool implements Tool {
   name = 'flag';
   private hoverVisible = false;
   private isDragging = false;
   private cursor = new Vec2();
+  private snapPreview: PointSnapResult | null = null;
   private onPlace: (position: Vec2) => void;
+  private getGridSnapEnabled: () => boolean;
+  private getGridSize: () => number;
+  private getZoom: () => number;
 
-  constructor(onPlace: (position: Vec2) => void) {
+  constructor(
+    onPlace: (position: Vec2) => void,
+    getGridSnapEnabled: () => boolean = () => false,
+    getGridSize: () => number = () => 24,
+    getZoom: () => number = () => 1,
+  ) {
     this.onPlace = onPlace;
+    this.getGridSnapEnabled = getGridSnapEnabled;
+    this.getGridSize = getGridSize;
+    this.getZoom = getZoom;
+  }
+
+  private resolvePosition(worldPos: Vec2): Vec2 {
+    const snap = resolvePointSnap(worldPos, {
+      gridEnabled: this.getGridSnapEnabled(),
+      gridSize: this.getGridSize(),
+      endpoint: null,
+    });
+    this.snapPreview = snap.kind === 'none' ? null : snap;
+    return snap.point;
   }
 
   onMouseDown(worldPos: Vec2) {
     this.hoverVisible = true;
     this.isDragging = true;
-    this.cursor = worldPos.clone();
-    this.onPlace(worldPos.clone());
+    this.cursor = this.resolvePosition(worldPos);
+    this.onPlace(this.cursor.clone());
   }
 
   onMouseMove(worldPos: Vec2) {
     this.hoverVisible = true;
-    this.cursor = worldPos.clone();
+    this.cursor = this.resolvePosition(worldPos);
     if (this.isDragging) {
-      this.onPlace(worldPos.clone());
+      this.onPlace(this.cursor.clone());
     }
   }
 
   onMouseUp(worldPos: Vec2) {
     this.hoverVisible = true;
-    this.cursor = worldPos.clone();
+    this.cursor = this.resolvePosition(worldPos);
     if (this.isDragging) {
-      this.onPlace(worldPos.clone());
+      this.onPlace(this.cursor.clone());
       this.isDragging = false;
     }
   }
@@ -72,6 +99,7 @@ export class FlagTool implements Tool {
     ctx.arc(x, y, 2, 0, Math.PI * 2);
     ctx.fill();
 
+    renderPointSnapIndicator(ctx, this.snapPreview, this.getZoom());
     ctx.restore();
   }
 }

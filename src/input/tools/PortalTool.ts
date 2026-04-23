@@ -24,6 +24,11 @@ import {
   portalTangent,
   worldToPortalLocal,
 } from '../../portal/portalMath';
+import {
+  PointSnapResult,
+  renderPointSnapIndicator,
+  resolvePointSnap,
+} from './pointSnap';
 
 type PortalToolState = 'idle' | 'placing' | 'dragging-position' | 'dragging-rotation' | 'dragging-length';
 
@@ -42,7 +47,9 @@ export class PortalTool implements Tool {
   onPortalCreated: ((portal: PortalPair) => void) | null = null;
   private store: TrackStore;
   private getZoom: () => number;
-  private getSnapEnabled: () => boolean;
+  private getEndpointSnapEnabled: () => boolean;
+  private getGridSnapEnabled: () => boolean;
+  private getGridSize: () => number;
   private shiftHeld = false;
   private state: PortalToolState = 'idle';
   private pendingEntry: Vec2 | null = null;
@@ -53,11 +60,20 @@ export class PortalTool implements Tool {
   private hoveredHandle: HandleHit | null = null;
   private dragCurrent = new Vec2();
   private pairRotateAngle = 0;
+  private snapPreview: PointSnapResult | null = null;
 
-  constructor(store: TrackStore, getZoom: () => number, getSnapEnabled: () => boolean) {
+  constructor(
+    store: TrackStore,
+    getZoom: () => number,
+    getEndpointSnapEnabled: () => boolean = () => false,
+    getGridSnapEnabled: () => boolean = () => false,
+    getGridSize: () => number = () => 24,
+  ) {
     this.store = store;
     this.getZoom = getZoom;
-    this.getSnapEnabled = getSnapEnabled;
+    this.getEndpointSnapEnabled = getEndpointSnapEnabled;
+    this.getGridSnapEnabled = getGridSnapEnabled;
+    this.getGridSize = getGridSize;
     window.addEventListener('keydown', this.onWindowKeyDown);
     window.addEventListener('keyup', this.onWindowKeyUp);
   }
@@ -139,6 +155,7 @@ export class PortalTool implements Tool {
       return;
     }
 
+    this.snapPreview = null;
     this.hoveredHandle = this.findSelectedHandle(worldPos) ?? this.findPairHandle(worldPos);
   }
 
@@ -148,6 +165,7 @@ export class PortalTool implements Tool {
       this.dragHandle = null;
       this.state = 'idle';
     }
+    this.snapPreview = null;
   }
 
   onKeyDown(e: KeyboardEvent) {
@@ -268,7 +286,10 @@ export class PortalTool implements Tool {
     }
 
     const portal = this.getSelectedPortal();
-    if (!portal) return;
+    if (!portal) {
+      renderPointSnapIndicator(ctx, this.snapPreview, this.getZoom());
+      return;
+    }
 
     for (const endpointKey of ['entry', 'exit'] as const) {
       const endpoint = portal[endpointKey];
@@ -307,6 +328,8 @@ export class PortalTool implements Tool {
     this.drawHandle(ctx, pairMid, '#5e6475', 4.8 / this.getZoom());
     this.drawHandle(ctx, pairRotateHandle, '#f29d38', 5.5 / this.getZoom());
     ctx.restore();
+
+    renderPointSnapIndicator(ctx, this.snapPreview, this.getZoom());
   }
 
   getCursor(): string | null {
@@ -339,6 +362,7 @@ export class PortalTool implements Tool {
     this.selectedPortalId = null;
     this.dragHandle = null;
     this.hoveredHandle = null;
+    this.snapPreview = null;
     this.state = this.pendingEntry ? 'placing' : 'idle';
   }
 
@@ -495,6 +519,7 @@ export class PortalTool implements Tool {
     const portal = this.store.getPortalById(handle.portalId);
     if (!portal) return;
     if (handle.handle === 'pair') {
+      this.snapPreview = null;
       const dx = worldPos.x - this.dragCurrent.x;
       const dy = worldPos.y - this.dragCurrent.y;
       this.store.movePortalPair(portal.id, dx, dy);
@@ -502,6 +527,7 @@ export class PortalTool implements Tool {
       return;
     }
     if (handle.handle === 'pair-rotate') {
+      this.snapPreview = null;
       const angle = this.getPairRotationAngle(portal, worldPos);
       const delta = this.normalizeAngleDelta(angle - this.pairRotateAngle);
       if (Math.abs(delta) > 0.0001) {
@@ -518,6 +544,7 @@ export class PortalTool implements Tool {
       this.dragCurrent = snapped;
       return;
     }
+    this.snapPreview = null;
     if (handle.handle === 'rotation') {
       const delta = worldPos.sub(endpoint.position);
       const angle = this.quantizeAngle(Math.atan2(delta.y, delta.x));
@@ -667,8 +694,16 @@ export class PortalTool implements Tool {
   }
 
   private applySnap(worldPos: Vec2, excludePortalIds?: Set<number>): Vec2 {
-    if (!this.getSnapEnabled()) return worldPos.clone();
-    return this.store.findNearestEndpoint(worldPos, SNAP_RADIUS, undefined, excludePortalIds) ?? worldPos.clone();
+    const endpoint = this.getEndpointSnapEnabled()
+      ? this.store.findNearestEndpoint(worldPos, SNAP_RADIUS, undefined, excludePortalIds)
+      : null;
+    const snap = resolvePointSnap(worldPos, {
+      gridEnabled: this.getGridSnapEnabled(),
+      gridSize: this.getGridSize(),
+      endpoint,
+    });
+    this.snapPreview = snap.kind === 'none' ? null : snap;
+    return snap.point;
   }
 
   private collectDiagnostics(

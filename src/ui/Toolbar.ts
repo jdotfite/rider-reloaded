@@ -60,6 +60,9 @@ export class Toolbar {
   onStepForward: (() => void) | null = null;
   onStepBack: (() => void) | null = null;
   onSnapToggle: ((enabled: boolean) => void) | null = null;
+  onGridToggle: ((enabled: boolean) => void) | null = null;
+  onGridSnapToggle: ((enabled: boolean) => void) | null = null;
+  onGridSizeChange: ((size: number) => void) | null = null;
   onTimelineScrub: ((frame: number) => void) | null = null;
   onSmoothStart: (() => boolean) | null = null;
   onSmoothChange: ((amount: number) => void) | null = null;
@@ -118,6 +121,12 @@ export class Toolbar {
   private portalCooldownValue!: HTMLElement;
   private portalVisibility!: HTMLSelectElement;
   private portalAdvancedMode = false;
+  private endpointSnapCheckbox!: HTMLInputElement;
+  private gridCheckbox!: HTMLInputElement;
+  private gridSnapCheckbox!: HTMLInputElement;
+  private gridSizeInput!: HTMLInputElement;
+  private gridSizeValue!: HTMLElement;
+  private mobileEndpointSnapButton: HTMLButtonElement | null = null;
   private lineTypeButtons: Map<LineType, HTMLButtonElement> = new Map();
   private convertTypeButtons: Map<LineType, HTMLButtonElement> = new Map();
   private playBtn!: HTMLButtonElement;
@@ -205,13 +214,32 @@ export class Toolbar {
     }
 
     // Snap toggle
-    const snapCheckbox = document.getElementById('snap-checkbox') as HTMLInputElement;
+    this.endpointSnapCheckbox = document.getElementById('snap-checkbox') as HTMLInputElement;
+    const snapCheckbox = this.endpointSnapCheckbox;
     const mobileSnapBtn = document.getElementById('mobile-snap-btn') as HTMLButtonElement | null;
+    this.mobileEndpointSnapButton = mobileSnapBtn;
     if (snapCheckbox) {
       snapCheckbox.addEventListener('change', () => {
         this.onSnapToggle?.(snapCheckbox.checked);
       });
     }
+
+    this.gridCheckbox = document.getElementById('grid-checkbox') as HTMLInputElement;
+    this.gridSnapCheckbox = document.getElementById('grid-snap-checkbox') as HTMLInputElement;
+    this.gridSizeInput = document.getElementById('grid-size-input') as HTMLInputElement;
+    this.gridSizeValue = document.getElementById('grid-size-value') as HTMLElement;
+
+    this.gridCheckbox?.addEventListener('change', () => {
+      this.onGridToggle?.(this.gridCheckbox.checked);
+    });
+    this.gridSnapCheckbox?.addEventListener('change', () => {
+      this.onGridSnapToggle?.(this.gridSnapCheckbox.checked);
+    });
+    this.gridSizeInput?.addEventListener('input', () => {
+      const size = parseInt(this.gridSizeInput.value || '24', 10);
+      this.gridSizeValue.textContent = String(size);
+      this.onGridSizeChange?.(size);
+    });
 
     const bindMobileToggle = (
       checkbox: HTMLInputElement | null,
@@ -594,6 +622,28 @@ export class Toolbar {
     if (this.portalSettings) {
       this.portalSettings.style.display = name === 'portal' ? '' : 'none';
     }
+  }
+
+  setEndpointSnapEnabled(enabled: boolean) {
+    if (!this.endpointSnapCheckbox) return;
+    this.endpointSnapCheckbox.checked = enabled;
+    this.syncEndpointSnapButton();
+  }
+
+  setGridState(enabled: boolean, snapEnabled: boolean, size: number) {
+    if (this.gridCheckbox) this.gridCheckbox.checked = enabled;
+    if (this.gridSnapCheckbox) this.gridSnapCheckbox.checked = snapEnabled;
+    if (this.gridSizeInput) this.gridSizeInput.value = String(size);
+    if (this.gridSizeValue) this.gridSizeValue.textContent = String(size);
+  }
+
+  private syncEndpointSnapButton() {
+    if (!this.endpointSnapCheckbox || !this.mobileEndpointSnapButton) return;
+    this.mobileEndpointSnapButton.classList.toggle('active', this.endpointSnapCheckbox.checked);
+    this.mobileEndpointSnapButton.setAttribute('aria-pressed', this.endpointSnapCheckbox.checked ? 'true' : 'false');
+    this.mobileEndpointSnapButton.title = this.endpointSnapCheckbox.checked
+      ? 'Snap to endpoints on'
+      : 'Snap to endpoints off';
   }
 
   showSmoothSlider() {

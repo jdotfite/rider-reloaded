@@ -4,6 +4,11 @@ import { TrackStore } from '../../store/TrackStore';
 import { HANDLE_SIZE, HANDLE_HIT_SIZE, SNAP_RADIUS, SELECT_RADIUS } from '../../constants';
 import { BezierPath, BezierAnchor } from '../../store/BezierPath';
 import { cubicBezierPoint } from '../../math/bezier';
+import {
+  PointSnapResult,
+  renderPointSnapIndicator,
+  resolvePointSnap,
+} from './pointSnap';
 
 type EditState = 'idle' | 'dragging-endpoint' | 'dragging-line' | 'dragging-anchor' | 'dragging-handle';
 
@@ -28,7 +33,9 @@ export class EditTool implements Tool {
   name = 'edit';
   private store: TrackStore;
   private getZoom: () => number;
-  private getSnapEnabled: () => boolean;
+  private getEndpointSnapEnabled: () => boolean;
+  private getGridSnapEnabled: () => boolean;
+  private getGridSize: () => number;
 
   private state: EditState = 'idle';
   private hoveredHandle: HandleHit | null = null;
@@ -65,11 +72,20 @@ export class EditTool implements Tool {
 
   // Selected anchor for deletion
   private selectedAnchor: AnchorHit | null = null;
+  private snapPreview: PointSnapResult | null = null;
 
-  constructor(store: TrackStore, getZoom: () => number, getSnapEnabled: () => boolean) {
+  constructor(
+    store: TrackStore,
+    getZoom: () => number,
+    getEndpointSnapEnabled: () => boolean = () => false,
+    getGridSnapEnabled: () => boolean = () => false,
+    getGridSize: () => number = () => 24,
+  ) {
     this.store = store;
     this.getZoom = getZoom;
-    this.getSnapEnabled = getSnapEnabled;
+    this.getEndpointSnapEnabled = getEndpointSnapEnabled;
+    this.getGridSnapEnabled = getGridSnapEnabled;
+    this.getGridSize = getGridSize;
     window.addEventListener('keydown', (e) => {
       if (e.key === 'Shift') this.shiftHeld = true;
       if (e.key === 'Alt') this.altHeld = true;
@@ -93,15 +109,33 @@ export class EditTool implements Tool {
     return HANDLE_HIT_SIZE / this.getZoom();
   }
 
-  private shouldSnap(): boolean {
-    const snapEnabled = this.getSnapEnabled();
-    return snapEnabled !== this.shiftHeld;
+  private shouldGridSnap(): boolean {
+    return this.getGridSnapEnabled() && !this.shiftHeld;
   }
 
-  private trySnap(pos: Vec2, excludeLineIds?: Set<number>): Vec2 {
-    if (!this.shouldSnap()) return pos;
-    const snap = this.store.findNearestEndpoint(pos, SNAP_RADIUS, excludeLineIds);
-    return snap ?? pos;
+  private shouldEndpointSnap(): boolean {
+    if (this.shouldGridSnap()) return false;
+    const endpointSnapEnabled = this.getEndpointSnapEnabled();
+    return endpointSnapEnabled !== this.shiftHeld;
+  }
+
+  private resolveEndpointSnap(pos: Vec2, excludeLineIds?: Set<number>): PointSnapResult {
+    const endpoint = this.shouldEndpointSnap()
+      ? this.store.findNearestEndpoint(pos, SNAP_RADIUS, excludeLineIds)
+      : null;
+    return resolvePointSnap(pos, {
+      gridEnabled: this.shouldGridSnap(),
+      gridSize: this.getGridSize(),
+      endpoint,
+    });
+  }
+
+  private resolveAnchorSnap(pos: Vec2): PointSnapResult {
+    return resolvePointSnap(pos, {
+      gridEnabled: this.shouldGridSnap(),
+      gridSize: this.getGridSize(),
+      endpoint: null,
+    });
   }
 
   onMouseDown(worldPos: Vec2) {
@@ -210,18 +244,23 @@ export class EditTool implements Tool {
 
   onMouseMove(worldPos: Vec2) {
     if (this.state === 'dragging-handle' && this.dragBezierHandle) {
+      this.snapPreview = null;
       this.updateBezierHandle(worldPos);
       return;
     }
 
     if (this.state === 'dragging-anchor' && this.dragAnchorHit) {
-      this.updateAnchorPosition(worldPos);
+      const snap = this.resolveAnchorSnap(worldPos);
+      this.snapPreview = snap.kind === 'none' ? null : snap;
+      this.updateAnchorPosition(snap.point);
       return;
     }
 
     if (this.state === 'dragging-endpoint' && this.dragHandle) {
       const excludeIds = new Set([this.dragHandle.lineId, ...this.dragConnected.map(c => c.lineId)]);
-      const snapped = this.trySnap(worldPos, excludeIds);
+      const snap = this.resolveEndpointSnap(worldPos, excludeIds);
+      const snapped = snap.point;
+      this.snapPreview = snap.kind === 'none' ? null : snap;
 
       const line = this.store.lines.find(l => l.id === this.dragHandle!.lineId);
       if (line) {
@@ -242,6 +281,7 @@ export class EditTool implements Tool {
     }
 
     if (this.state === 'dragging-line' && (this.dragPathId !== null || this.dragLineId !== null)) {
+      this.snapPreview = null;
       const dx = worldPos.x - this.dragCurrent.x;
       const dy = worldPos.y - this.dragCurrent.y;
       if (dx !== 0 || dy !== 0) {
@@ -261,6 +301,8 @@ export class EditTool implements Tool {
       }
       return;
     }
+
+    this.snapPreview = null;
 
     // Idle: update hover state
     const hitRadius = this.worldHandleRadius();
@@ -298,6 +340,7 @@ export class EditTool implements Tool {
       this.store.endTransaction();
     }
     this.state = 'idle';
+    this.snapPreview = null;
     this.dragHandle = null;
     this.dragConnected = [];
     this.dragLineId = null;
@@ -375,6 +418,8 @@ export class EditTool implements Tool {
         ctx.stroke();
       }
     }
+
+    renderPointSnapIndicator(ctx, this.snapPreview, zoom);
   }
 
   private renderBezierPath(ctx: CanvasRenderingContext2D, path: BezierPath, zoom: number) {
@@ -571,16 +616,18 @@ export class EditTool implements Tool {
     if (!path) return;
 
     const anchor = path.anchors[this.dragAnchorHit.anchorIndex];
-    const delta = worldPos.sub(this.dragCurrent);
-    anchor.position = anchor.position.add(delta);
+    const previousPosition = anchor.position.clone();
+    if (previousPosition.distanceToSq(worldPos) < 0.0001) return;
+
+    anchor.position = worldPos.clone();
     this.dragCurrent = worldPos.clone();
 
     // Move coincident anchors on other paths
     for (const otherPath of this.store.bezierPaths) {
       if (otherPath.id === path.id) continue;
       for (const otherAnchor of otherPath.anchors) {
-        if (otherAnchor.position.distanceTo(anchor.position.sub(delta)) < 0.01) {
-          otherAnchor.position = anchor.position.clone();
+        if (otherAnchor.position.distanceTo(previousPosition) < 0.01) {
+          otherAnchor.position = worldPos.clone();
           this.store.regenerateBezierPathLines(otherPath.id);
         }
       }

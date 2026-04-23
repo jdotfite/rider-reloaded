@@ -32,6 +32,8 @@ export class InputManager {
   onLoadTrack: (() => void) | null = null;
   onToolSwitch: ((name: string) => void) | null = null;
   onLineTypeSwitch: ((type: string) => void) | null = null;
+  onGridToggle: (() => void) | null = null;
+  onGridSnapToggle: (() => void) | null = null;
   getGameState: (() => GameState) | null = null;
 
   constructor(canvas: HTMLCanvasElement, camera: Camera) {
@@ -149,6 +151,16 @@ export class InputManager {
     if (primaryModifier && e.code === 'KeyO') {
       e.preventDefault();
       this.onLoadTrack?.();
+      return;
+    }
+
+    if (!primaryModifier && !e.altKey && e.code === 'KeyG') {
+      e.preventDefault();
+      if (e.shiftKey) {
+        this.onGridSnapToggle?.();
+      } else {
+        this.onGridToggle?.();
+      }
       return;
     }
 

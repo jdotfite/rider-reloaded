@@ -1,6 +1,7 @@
 import { Vec2 } from './math/Vec2';
 import { Camera } from './camera/Camera';
 import { Renderer } from './rendering/Renderer';
+import { PaperGridRenderer } from './rendering/PaperGridRenderer';
 import { LineRenderer } from './rendering/LineRenderer';
 import { FlagRenderer } from './rendering/FlagRenderer';
 import { UIRenderer } from './rendering/UIRenderer';
@@ -31,11 +32,63 @@ import { AudioPlayer } from './audio/AudioPlayer';
 import { PortalAudio } from './audio/PortalAudio';
 import { WaveformRenderer } from './audio/WaveformRenderer';
 import { parseYouTubeId, YouTubePlayer } from './audio/youtube';
+import {
+  clampEditorGridSize,
+  DEFAULT_EDITOR_GRID_MAJOR_EVERY,
+  DEFAULT_EDITOR_GRID_SIZE,
+  type EditorGridSettings,
+} from './editor/GridMath';
+
+interface EditorPreferences {
+  endpointSnapEnabled: boolean;
+  paperGrid: EditorGridSettings;
+}
+
+const EDITOR_PREFERENCES_KEY = 'line-rider-editor-preferences';
+
+function loadEditorPreferences(): EditorPreferences {
+  const defaults: EditorPreferences = {
+    endpointSnapEnabled: true,
+    paperGrid: {
+      enabled: true,
+      snapEnabled: false,
+      size: DEFAULT_EDITOR_GRID_SIZE,
+      majorEvery: DEFAULT_EDITOR_GRID_MAJOR_EVERY,
+    },
+  };
+
+  try {
+    const raw = window.localStorage.getItem(EDITOR_PREFERENCES_KEY);
+    if (!raw) return defaults;
+    const parsed = JSON.parse(raw) as Partial<EditorPreferences> & {
+      paperGrid?: Partial<EditorGridSettings>;
+    };
+
+    return {
+      endpointSnapEnabled: parsed.endpointSnapEnabled ?? defaults.endpointSnapEnabled,
+      paperGrid: {
+        enabled: parsed.paperGrid?.enabled ?? defaults.paperGrid.enabled,
+        snapEnabled: parsed.paperGrid?.snapEnabled ?? defaults.paperGrid.snapEnabled,
+        size: clampEditorGridSize(parsed.paperGrid?.size ?? defaults.paperGrid.size),
+        majorEvery: Math.max(2, Math.round(parsed.paperGrid?.majorEvery ?? defaults.paperGrid.majorEvery)),
+      },
+    };
+  } catch {
+    return defaults;
+  }
+}
+
+function saveEditorPreferences(preferences: EditorPreferences) {
+  try {
+    window.localStorage.setItem(EDITOR_PREFERENCES_KEY, JSON.stringify(preferences));
+  } catch { /* ignore */ }
+}
 
 // Core
 const canvas = document.getElementById('canvas') as HTMLCanvasElement;
 const camera = new Camera();
 const renderer = new Renderer(canvas, camera);
+const editorPreferences = loadEditorPreferences();
 const store = new TrackStore();
 store.onMutation = () => {
   markGridDirty();
@@ -50,11 +103,14 @@ const portalAudio = new PortalAudio();
 const ytPlayer = new YouTubePlayer();
 const waveformCanvas = document.getElementById('waveform-canvas') as HTMLCanvasElement;
 const waveformRenderer = new WaveformRenderer(waveformCanvas);
+const paperGridRenderer = new PaperGridRenderer(camera, () => paperGrid);
 const hudBeat = document.getElementById('hud-beat') as HTMLElement;
 const statBeat = document.getElementById('stat-beat') as HTMLElement;
 const metronomeFlash = document.getElementById('metronome-flash') as HTMLElement;
 let lastBeatIndex = -1; // track which beat we were on to detect crossings
 let portalCameraBias: { target: Vec2; strength: number; framesLeft: number } | null = null;
+let endpointSnapEnabled = editorPreferences.endpointSnapEnabled;
+const paperGrid: EditorGridSettings = { ...editorPreferences.paperGrid };
 
 // Unified audio helpers — forward to whichever source is loaded
 function audioPlay() {
@@ -150,13 +206,38 @@ let currentLineType: LineType = LineType.SOLID;
 let currentTool: Tool;
 
 // Tools
-const pencilTool = new PencilTool(store, () => currentLineType);
-const lineTool = new LineTool(store, () => currentLineType);
+const pencilTool = new PencilTool(
+  store,
+  () => currentLineType,
+  () => endpointSnapEnabled,
+  () => paperGrid.snapEnabled,
+  () => paperGrid.size,
+  () => camera.zoom,
+);
+const lineTool = new LineTool(
+  store,
+  () => currentLineType,
+  () => endpointSnapEnabled,
+  () => paperGrid.snapEnabled,
+  () => paperGrid.size,
+  () => camera.zoom,
+);
 const eraserTool = new EraserTool(store);
 const selectTool = new SelectTool(store);
-let snapEnabled = true;
-const editTool = new EditTool(store, () => camera.zoom, () => snapEnabled);
-const portalTool = new PortalTool(store, () => camera.zoom, () => snapEnabled);
+const editTool = new EditTool(
+  store,
+  () => camera.zoom,
+  () => endpointSnapEnabled,
+  () => paperGrid.snapEnabled,
+  () => paperGrid.size,
+);
+const portalTool = new PortalTool(
+  store,
+  () => camera.zoom,
+  () => endpointSnapEnabled,
+  () => paperGrid.snapEnabled,
+  () => paperGrid.size,
+);
 portalTool.onPortalCreated = (portal) => {
   portalFxEvents.push({
     pairId: portal.id,
@@ -169,7 +250,7 @@ portalTool.onPortalCreated = (portal) => {
 const flagTool = new FlagTool((position) => {
   if (!store.setStartPosition(position)) return;
   rider.setStartPosition(store.startPosition);
-});
+}, () => paperGrid.snapEnabled, () => paperGrid.size, () => camera.zoom);
 currentTool = pencilTool;
 const loadInput = document.createElement('input');
 loadInput.type = 'file';
@@ -218,6 +299,8 @@ input.onQuickEraseMove = (worldPos) => continueQuickErase(worldPos);
 input.onQuickEraseEnd = () => endQuickErase();
 input.onSaveTrack = () => saveTrack();
 input.onLoadTrack = () => openLoadDialog();
+input.onGridToggle = () => setPaperGridEnabled(!paperGrid.enabled);
+input.onGridSnapToggle = () => setPaperGridSnapEnabled(!paperGrid.snapEnabled);
 
 // Camera follow state
 let cameraFollowing = false;
@@ -228,6 +311,37 @@ let gridDirty = false; // Track changes made while paused
 
 function canEdit(): boolean {
   return gameLoop.state === GameState.EDITING || gameLoop.state === GameState.PAUSED;
+}
+
+function persistEditorPreferences() {
+  saveEditorPreferences({
+    endpointSnapEnabled,
+    paperGrid: { ...paperGrid },
+  });
+}
+
+function setEndpointSnapEnabled(enabled: boolean) {
+  endpointSnapEnabled = enabled;
+  toolbar.setEndpointSnapEnabled(endpointSnapEnabled);
+  persistEditorPreferences();
+}
+
+function setPaperGridEnabled(enabled: boolean) {
+  paperGrid.enabled = enabled;
+  toolbar.setGridState(paperGrid.enabled, paperGrid.snapEnabled, paperGrid.size);
+  persistEditorPreferences();
+}
+
+function setPaperGridSnapEnabled(enabled: boolean) {
+  paperGrid.snapEnabled = enabled;
+  toolbar.setGridState(paperGrid.enabled, paperGrid.snapEnabled, paperGrid.size);
+  persistEditorPreferences();
+}
+
+function setPaperGridSize(size: number) {
+  paperGrid.size = clampEditorGridSize(size);
+  toolbar.setGridState(paperGrid.enabled, paperGrid.snapEnabled, paperGrid.size);
+  persistEditorPreferences();
 }
 
 function markGridDirty() {
@@ -249,7 +363,12 @@ const toolbar = new Toolbar();
 toolbar.setActiveTool('pencil');
 toolbar.setActiveLineType(LineType.SOLID);
 toolbar.setPlaybackState(GameState.EDITING);
+toolbar.setEndpointSnapEnabled(endpointSnapEnabled);
+toolbar.setGridState(paperGrid.enabled, paperGrid.snapEnabled, paperGrid.size);
 toolbar.setLayerState(store.layers, store.getActiveLayerIndex());
+renderer.addBackgroundRenderCallback((ctx) => {
+  paperGridRenderer.render(ctx);
+});
 
 // Game loop
 const gameLoop = new GameLoop(physics, () => {
@@ -349,7 +468,16 @@ toolbar.onOnionSkinToggle = (enabled) => {
   onionSkinning = enabled;
 };
 toolbar.onSnapToggle = (enabled) => {
-  snapEnabled = enabled;
+  setEndpointSnapEnabled(enabled);
+};
+toolbar.onGridToggle = (enabled) => {
+  setPaperGridEnabled(enabled);
+};
+toolbar.onGridSnapToggle = (enabled) => {
+  setPaperGridSnapEnabled(enabled);
+};
+toolbar.onGridSizeChange = (size) => {
+  setPaperGridSize(size);
 };
 toolbar.onSmoothStart = () => selectTool.startSmooth();
 toolbar.onSmoothChange = (amount) => selectTool.setSmoothAmount(amount);

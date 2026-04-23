@@ -605,6 +605,60 @@
       border-radius: var(--radius-md);
       background: linear-gradient(180deg, var(--bg-alt), rgba(255,255,255,0));
     }
+    #grid-settings-panel {
+      margin-top: var(--sp-2);
+      padding: var(--sp-2);
+      border: 1px solid var(--border-light);
+      border-radius: var(--radius-md);
+      background: linear-gradient(180deg, rgba(244, 242, 236, 0.96), rgba(255,255,255,0.88));
+      box-shadow: inset 0 1px 0 rgba(255,255,255,0.5);
+    }
+    .grid-settings-header {
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      gap: var(--sp-2);
+      margin-bottom: var(--sp-1);
+    }
+    .grid-settings-title {
+      font: 700 var(--text-xs)/1 var(--font);
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: var(--ink-muted);
+    }
+    .grid-settings-shortcuts {
+      font: 600 var(--text-xs)/1 var(--font-mono);
+      color: var(--ink-muted);
+      white-space: nowrap;
+    }
+    #grid-settings-panel .tool-option-label {
+      padding-left: 0;
+      padding-right: 0;
+    }
+    .grid-size-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: var(--sp-2);
+      margin-top: var(--sp-1);
+      margin-bottom: 6px;
+      font: 600 var(--text-sm)/1 var(--font);
+      color: var(--ink-secondary);
+    }
+    #grid-size-value {
+      font: 700 var(--text-xs)/1 var(--font-mono);
+      color: var(--ink-muted);
+      letter-spacing: 0.08em;
+    }
+    #grid-size-input {
+      width: 100%;
+      accent-color: #6d7d91;
+    }
+    .grid-settings-hint {
+      margin-top: var(--sp-1);
+      font: 500 var(--text-xs)/1.4 var(--font);
+      color: var(--ink-muted);
+    }
     .select-action-header {
       display: flex;
       align-items: baseline;
@@ -1536,6 +1590,16 @@
         box-shadow: 0 14px 30px rgba(17,17,17,0.08);
         backdrop-filter: blur(16px);
       }
+      body.desktop-top-tools #grid-settings-panel {
+        min-width: 320px;
+        margin-top: 0;
+        padding: 10px 12px;
+        border-radius: 18px;
+        border: 1px solid rgba(17,17,17,0.08);
+        background: rgba(250,248,242,0.96);
+        box-shadow: 0 14px 30px rgba(17,17,17,0.08);
+        backdrop-filter: blur(16px);
+      }
       body.desktop-top-tools #portal-settings {
         min-width: 360px;
         margin-top: 0;
@@ -1812,6 +1876,24 @@
         background: linear-gradient(180deg, rgba(244,247,252,0.98), rgba(255,255,255,0.92));
         box-shadow: 0 10px 22px rgba(17,17,17,0.08);
       }
+      #grid-settings-panel {
+        width: 100%;
+        margin-top: 0;
+        padding: 10px;
+        border-radius: 16px;
+        border: 1px solid rgba(17,17,17,0.08);
+        background: linear-gradient(180deg, rgba(246,243,236,0.98), rgba(255,255,255,0.92));
+        box-shadow: 0 10px 22px rgba(17,17,17,0.08);
+      }
+      #grid-settings-panel .tool-option-label {
+        display: flex;
+        padding: 8px 0;
+      }
+      .grid-settings-shortcuts,
+      .grid-settings-hint,
+      .grid-size-row {
+        font-size: 10px;
+      }
       .select-action-header {
         margin-bottom: 6px;
       }
@@ -2063,6 +2145,26 @@
             <input type="checkbox" id="snap-checkbox" checked />
             <span>Snap to endpoints</span>
           </label>
+          <div id="grid-settings-panel">
+            <div class="grid-settings-header">
+              <span class="grid-settings-title">Paper Grid</span>
+              <span class="grid-settings-shortcuts"><kbd>G</kbd> / <kbd>Shift</kbd>+<kbd>G</kbd></span>
+            </div>
+            <label class="tool-option-label" id="grid-toggle">
+              <input type="checkbox" id="grid-checkbox" checked />
+              <span>Grid background</span>
+            </label>
+            <label class="tool-option-label" id="grid-snap-toggle">
+              <input type="checkbox" id="grid-snap-checkbox" />
+              <span>Snap to grid</span>
+            </label>
+            <div class="grid-size-row">
+              <label for="grid-size-input">Grid size</label>
+              <span id="grid-size-value">24</span>
+            </div>
+            <input type="range" id="grid-size-input" min="8" max="64" step="2" value="24" />
+            <div class="grid-settings-hint">World-aligned graph paper that stays locked to the track while you pan or zoom.</div>
+          </div>
           <div id="smooth-container">
             <div class="select-action-header">
               <span class="select-action-title">Selected Lines</span>

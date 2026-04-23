@@ -5,6 +5,7 @@ export class Renderer {
   canvas: HTMLCanvasElement;
   ctx: CanvasRenderingContext2D;
   camera: Camera;
+  private backgroundCallbacks: Array<(ctx: CanvasRenderingContext2D) => void> = [];
   private renderCallbacks: Array<(ctx: CanvasRenderingContext2D) => void> = [];
   private resizeObserver: ResizeObserver | null = null;
   private viewportWidth = 1;
@@ -42,6 +43,10 @@ export class Renderer {
     this.renderCallbacks.push(cb);
   }
 
+  addBackgroundRenderCallback(cb: (ctx: CanvasRenderingContext2D) => void) {
+    this.backgroundCallbacks.push(cb);
+  }
+
   render() {
     const { ctx, camera } = this;
 
@@ -52,6 +57,11 @@ export class Renderer {
 
     // Apply camera
     camera.applyTransform(ctx, this.pixelRatio);
+
+    // Background layer (grid, paper overlays, etc.)
+    for (const cb of this.backgroundCallbacks) {
+      cb(ctx);
+    }
 
     // Draw origin crosshair
     this.drawOriginMarker(ctx);
