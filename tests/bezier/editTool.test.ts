@@ -62,3 +62,35 @@ test('dragging a bezier line body keeps moving across multiple mouse moves', () 
     assert.equal(movedPath!.anchors[i].position.y, originalPositions[i].y + 12);
   }
 });
+
+test('double-clicking a bezier segment inserts an anchor point', () => {
+  installWindowStub();
+
+  const store = new TrackStore();
+  const path = createCurve(store);
+  const middleLineId = path.lineIds[Math.floor(path.lineIds.length / 2)];
+  const segment = store.lines.find(line => line.id === middleLineId);
+  assert.ok(segment);
+
+  const originalNow = Date.now;
+  let now = 1000;
+  Date.now = () => now;
+
+  try {
+    const editTool = new EditTool(store, () => 1, () => false);
+    const clickPos = segment!.p1.lerp(segment!.p2, 0.5);
+
+    editTool.onMouseDown(clickPos);
+    editTool.onMouseUp();
+
+    now = 1100;
+    editTool.onMouseDown(clickPos);
+    editTool.onMouseUp();
+  } finally {
+    Date.now = originalNow;
+  }
+
+  const updated = store.bezierPaths.find(candidate => candidate.id === path.id);
+  assert.ok(updated);
+  assert.equal(updated!.anchors.length, 3);
+});

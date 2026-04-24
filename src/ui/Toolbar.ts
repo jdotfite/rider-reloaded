@@ -200,7 +200,6 @@ export class Toolbar {
     this.addToolGridBtn('line', ICONS.line, 'Line');
     this.addToolGridBtn('portal', ICONS.portal, 'Portal');
     this.addToolGridBtn('eraser', ICONS.eraser, 'Erase');
-    this.addToolGridBtn('edit', ICONS.edit, 'Edit');
     this.addToolGridBtn('select', ICONS.select, 'Select');
     this.addToolGridBtn('flag', ICONS.flag, 'Flag');
 

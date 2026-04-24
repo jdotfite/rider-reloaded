@@ -12,6 +12,8 @@ import { EraserTool } from './input/tools/EraserTool';
 import { FlagTool } from './input/tools/FlagTool';
 import { SelectTool } from './input/tools/SelectTool';
 import { EditTool } from './input/tools/EditTool';
+import { DrawEditTool } from './input/tools/DrawEditTool';
+import { StampTool } from './input/tools/StampTool';
 import { PortalTool } from './input/tools/PortalTool';
 import { TrackStore } from './store/TrackStore';
 import { Rider } from './physics/Rider';
@@ -38,6 +40,7 @@ import {
   DEFAULT_EDITOR_GRID_SIZE,
   type EditorGridSettings,
 } from './editor/GridMath';
+import { buildCloudStampAssets, type StampAsset } from './stamps/cloudAssets';
 
 interface EditorPreferences {
   endpointSnapEnabled: boolean;
@@ -204,9 +207,10 @@ function renderVehicle(ctx: CanvasRenderingContext2D, data: import('./rendering/
 // Current state
 let currentLineType: LineType = LineType.SOLID;
 let currentTool: Tool;
+let currentToolName = 'pencil';
 
 // Tools
-const pencilTool = new PencilTool(
+const rawPencilTool = new PencilTool(
   store,
   () => currentLineType,
   () => endpointSnapEnabled,
@@ -214,7 +218,7 @@ const pencilTool = new PencilTool(
   () => paperGrid.size,
   () => camera.zoom,
 );
-const lineTool = new LineTool(
+const rawLineTool = new LineTool(
   store,
   () => currentLineType,
   () => endpointSnapEnabled,
@@ -230,6 +234,14 @@ const editTool = new EditTool(
   () => endpointSnapEnabled,
   () => paperGrid.snapEnabled,
   () => paperGrid.size,
+);
+const pencilTool = new DrawEditTool('pencil', rawPencilTool, editTool);
+const lineTool = new DrawEditTool('line', rawLineTool, editTool);
+const stampTool = new StampTool(
+  store,
+  () => paperGrid.snapEnabled,
+  () => paperGrid.size,
+  () => camera.zoom,
 );
 const portalTool = new PortalTool(
   store,
@@ -251,6 +263,10 @@ const flagTool = new FlagTool((position) => {
   if (!store.setStartPosition(position)) return;
   rider.setStartPosition(store.startPosition);
 }, () => paperGrid.snapEnabled, () => paperGrid.size, () => camera.zoom);
+const cloudStampAssets = buildCloudStampAssets();
+let stampResumeToolName = currentToolName;
+let activeStampAssetId: string | null = null;
+stampTool.onCancel = () => cancelStampPlacement();
 currentTool = pencilTool;
 const loadInput = document.createElement('input');
 loadInput.type = 'file';
@@ -367,6 +383,7 @@ toolbar.setEndpointSnapEnabled(endpointSnapEnabled);
 toolbar.setGridState(paperGrid.enabled, paperGrid.snapEnabled, paperGrid.size);
 toolbar.setLayerState(store.layers, store.getActiveLayerIndex());
 renderer.addBackgroundRenderCallback((ctx) => {
+  if (gameLoop.state === GameState.PLAYING) return;
   paperGridRenderer.render(ctx);
 });
 
@@ -646,6 +663,86 @@ toolbar.onStepBack = () => {
   }
 };
 
+const achievementsButton = document.getElementById('btn-achievements') as HTMLButtonElement | null;
+const achievementsOverlay = document.getElementById('achievements-overlay') as HTMLElement | null;
+const achievementsClose = document.getElementById('achievements-close') as HTMLButtonElement | null;
+const achievementsList = document.getElementById('achievements-list') as HTMLElement | null;
+
+function openAchievementsModal() {
+  if (!achievementsOverlay) return;
+  document.body.classList.add('achievements-open');
+  syncAchievementsButton();
+}
+
+function closeAchievementsModal() {
+  document.body.classList.remove('achievements-open');
+  syncAchievementsButton();
+}
+
+function syncAchievementsButton() {
+  if (!achievementsButton) return;
+  const active = activeStampAssetId !== null || document.body.classList.contains('achievements-open');
+  achievementsButton.classList.toggle('active', active);
+  achievementsButton.setAttribute('aria-pressed', active ? 'true' : 'false');
+}
+
+function syncAchievementsSelection() {
+  if (!achievementsList) return;
+  achievementsList.querySelectorAll<HTMLButtonElement>('.achievement-card').forEach(card => {
+    card.classList.toggle('active', card.dataset.assetId === activeStampAssetId);
+  });
+}
+
+function buildAchievementsModal() {
+  if (!achievementsList) return;
+  achievementsList.innerHTML = '';
+
+  for (const asset of cloudStampAssets) {
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'achievement-card';
+    button.dataset.assetId = asset.id;
+    button.innerHTML = `
+      <span class="achievement-card-art">${asset.previewMarkup}</span>
+      <span class="achievement-card-copy">
+        <strong>${asset.name}</strong>
+        <span>Stamp</span>
+      </span>
+    `;
+    button.addEventListener('click', () => {
+      if (!canEdit()) return;
+      activateStampPlacement(asset);
+      closeAchievementsModal();
+    });
+    achievementsList.appendChild(button);
+  }
+
+  syncAchievementsSelection();
+}
+
+achievementsButton?.addEventListener('click', () => {
+  if (!canEdit()) return;
+  if (document.body.classList.contains('achievements-open')) {
+    closeAchievementsModal();
+    return;
+  }
+  openAchievementsModal();
+});
+achievementsClose?.addEventListener('click', () => closeAchievementsModal());
+achievementsOverlay?.addEventListener('click', (event) => {
+  if (event.target === achievementsOverlay) {
+    closeAchievementsModal();
+  }
+});
+window.addEventListener('keydown', (event) => {
+  if (event.code === 'Escape' && document.body.classList.contains('achievements-open')) {
+    closeAchievementsModal();
+  }
+});
+
+buildAchievementsModal();
+syncAchievementsButton();
+
 const vehiclePickerOverlay = document.getElementById('vehicle-picker-overlay') as HTMLElement | null;
 const vehiclePickerClose = document.getElementById('vehicle-picker-close') as HTMLButtonElement | null;
 const vehiclePickerButton = document.getElementById('vehicle-picker-btn') as HTMLButtonElement | null;
@@ -774,19 +871,60 @@ loadInput.addEventListener('change', async () => {
 });
 
 function switchTool(name: string) {
-  if (name === 'pencil') currentTool = pencilTool;
-  else if (name === 'line') currentTool = lineTool;
-  else if (name === 'eraser') currentTool = eraserTool;
-  else if (name === 'select') currentTool = selectTool;
-  else if (name === 'edit') currentTool = editTool;
-  else if (name === 'flag') currentTool = flagTool;
-  else if (name === 'portal') currentTool = portalTool;
+  clearStampPlacementState();
+  currentToolName = name;
+  currentTool = resolveToolByName(name);
+  if (name !== 'pencil' && name !== 'line') {
+    editTool.clearSelection();
+  }
   input.setTool(currentTool);
   toolbar.setActiveTool(name);
 }
 
+function resolveToolByName(name: string): Tool {
+  if (name === 'pencil') return pencilTool;
+  if (name === 'line') return lineTool;
+  if (name === 'eraser') return eraserTool;
+  if (name === 'select') return selectTool;
+  if (name === 'flag') return flagTool;
+  if (name === 'portal') return portalTool;
+  return pencilTool;
+}
+
+function clearStampPlacementState() {
+  activeStampAssetId = null;
+  stampTool.clearAsset();
+  syncAchievementsButton();
+  syncAchievementsSelection();
+}
+
+function activateStampPlacement(asset: StampAsset) {
+  if (activeStampAssetId === null) {
+    stampResumeToolName = currentToolName;
+  }
+  activeStampAssetId = asset.id;
+  stampTool.setAsset(asset);
+  currentTool = stampTool;
+  input.setTool(currentTool);
+  toolbar.setActiveTool(stampResumeToolName);
+  syncAchievementsButton();
+  syncAchievementsSelection();
+}
+
+function cancelStampPlacement() {
+  if (activeStampAssetId === null) return;
+  clearStampPlacementState();
+  currentToolName = stampResumeToolName;
+  currentTool = resolveToolByName(currentToolName);
+  input.setTool(currentTool);
+  toolbar.setActiveTool(currentToolName);
+}
+
 function clearTrack() {
-  if (gameLoop.state !== GameState.EDITING) return;
+  if (!canEdit()) return;
+  if (gameLoop.state !== GameState.EDITING) {
+    stopPlayback();
+  }
   store.clear();
   triggerStore.clear();
   portalFxEvents.length = 0;
@@ -803,7 +941,7 @@ const confirmDiscard = document.getElementById('confirm-new-discard')!;
 const confirmSaveNew = document.getElementById('confirm-new-save')!;
 
 function confirmNewTrack() {
-  if (gameLoop.state !== GameState.EDITING) return;
+  if (!canEdit()) return;
   // If the track is empty, just clear without prompting
   if (store.lines.length === 0 && store.portals.length === 0) {
     clearTrack();
@@ -978,7 +1116,7 @@ function endQuickErase() {
 }
 
 function saveTrack() {
-  if (gameLoop.state !== GameState.EDITING) return;
+  if (!canEdit()) return;
 
   const trackData = store.serialize();
   (trackData as unknown as Record<string, unknown>).triggers = triggerStore.serialize();

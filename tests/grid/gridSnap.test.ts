@@ -77,3 +77,40 @@ test('edit tool snaps bezier anchors onto grid intersections', () => {
   assert.equal(moved!.anchors[0].position.x, 20);
   assert.equal(moved!.anchors[0].position.y, 40);
 });
+
+test('edit tool snaps dragged bezier path bodies to grid intersections', () => {
+  installWindowStub();
+
+  const store = new TrackStore();
+  const anchors: BezierAnchor[] = [
+    {
+      position: new Vec2(0, 0),
+      handleIn: new Vec2(0, 0),
+      handleOut: new Vec2(40, -30),
+      smooth: true,
+    },
+    {
+      position: new Vec2(120, 10),
+      handleIn: new Vec2(-35, 45),
+      handleOut: new Vec2(0, 0),
+      smooth: true,
+    },
+  ];
+  const path = store.addBezierPath(anchors, LineType.SOLID, store.activeLayerId);
+  const segment = store.lines.find(line => line.id === path.lineIds[0]);
+  assert.ok(segment);
+
+  const editTool = new EditTool(store, () => 1, () => true, () => true, () => 20);
+  const start = segment!.p1.lerp(segment!.p2, 0.5);
+
+  editTool.onMouseDown(start);
+  editTool.onMouseMove(start.add(new Vec2(13, 31)));
+  editTool.onMouseUp();
+
+  const moved = store.bezierPaths.find(candidate => candidate.id === path.id);
+  assert.ok(moved);
+  assert.equal(moved!.anchors[0].position.x, 20);
+  assert.equal(moved!.anchors[0].position.y, 40);
+  assert.equal(moved!.anchors[1].position.x, 140);
+  assert.equal(moved!.anchors[1].position.y, 50);
+});

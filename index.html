@@ -916,6 +916,117 @@
       text-transform: uppercase;
       letter-spacing: 0.12em;
     }
+    .achievement-modal {
+      width: min(760px, calc(100vw - 32px));
+      gap: var(--sp-3);
+    }
+    .achievement-modal-header {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: var(--sp-3);
+    }
+    .achievement-modal-header button {
+      min-width: var(--control-h);
+      min-height: var(--control-h);
+      padding: 0;
+    }
+    .achievement-modal-copy {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+    .achievement-modal-copy strong {
+      font: 700 var(--text-xs)/1 var(--font);
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      color: var(--ink-muted);
+    }
+    .achievement-modal-copy p {
+      margin: 0;
+      max-width: 460px;
+    }
+    #achievements-list {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(118px, 1fr));
+      gap: 12px;
+    }
+    .achievement-card {
+      min-height: 0;
+      aspect-ratio: 1 / 1;
+      padding: 12px;
+      border-radius: 16px;
+      background: linear-gradient(180deg, rgba(249,248,244,1), rgba(240,239,234,0.94));
+      align-items: center;
+      justify-content: center;
+      flex-direction: column;
+      text-align: center;
+      gap: 8px;
+    }
+    .achievement-card:hover {
+      border-color: rgba(17,17,17,0.18);
+      background: linear-gradient(180deg, rgba(255,255,255,1), rgba(240,239,234,1));
+    }
+    .achievement-card.active {
+      background: var(--bg-active);
+      border-color: var(--bg-active);
+      color: var(--ink-inverse);
+    }
+    .achievement-card.active .achievement-card-copy strong,
+    .achievement-card.active .achievement-card-copy span {
+      color: var(--ink-inverse);
+    }
+    .achievement-card-art {
+      min-height: 62px;
+      width: 100%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: 12px;
+      background:
+        linear-gradient(180deg, rgba(255,255,255,0.95), rgba(244,242,236,0.95)),
+        repeating-linear-gradient(
+          to right,
+          rgba(32,34,38,0.05) 0,
+          rgba(32,34,38,0.05) 1px,
+          transparent 1px,
+          transparent 18px
+        ),
+        repeating-linear-gradient(
+          to bottom,
+          rgba(32,34,38,0.05) 0,
+          rgba(32,34,38,0.05) 1px,
+          transparent 1px,
+          transparent 18px
+        );
+      color: #25282d;
+      overflow: hidden;
+    }
+    .achievement-card-art svg {
+      width: 100%;
+      height: 48px;
+      max-width: 82px;
+    }
+    .achievement-card-art svg path {
+      fill: none;
+    }
+    .achievement-card-copy {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+      align-items: center;
+    }
+    .achievement-card-copy strong {
+      font: 700 var(--text-xs)/1.1 var(--font);
+      color: var(--ink);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+    .achievement-card-copy span {
+      font: 500 11px/1.25 var(--font);
+      color: var(--ink-muted);
+    }
+    body.achievements-open #achievements-overlay { display: flex; }
 
     /* ══════════════════════════════════════════════
        BOTTOM BAR
@@ -2103,6 +2214,9 @@
         <button id="btn-desktop-layout" class="btn-icon" title="Switch to top tools" aria-label="Switch to top tools">
           <svg class="icon" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="5" rx="1.5"/><rect x="3" y="11" width="5" height="10" rx="1.5"/><rect x="10" y="11" width="11" height="10" rx="1.5"/></svg>
         </button>
+        <button id="btn-achievements" class="btn-icon" title="Achievements" aria-label="Achievements and unlockable scenery" aria-pressed="false">
+          <svg class="icon" viewBox="0 0 24 24"><path d="M8 21h8"/><path d="M9 17h6"/><path d="M12 8v9"/><path d="M7 4h10v3a5 5 0 0 1-10 0z"/><path d="M17 5h3a2 2 0 0 1-2 2h-1"/><path d="M7 5H4a2 2 0 0 0 2 2h1"/></svg>
+        </button>
         <button id="btn-sound" class="btn-icon" title="Sound" aria-label="Sound settings">
           <svg class="icon" viewBox="0 0 24 24"><path d="M11 5L6 9H2v6h4l5 4V5z"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"/></svg>
         </button>
@@ -2447,6 +2561,22 @@
       </div>
     </div>
 
+    <div id="achievements-overlay" class="modal-overlay" role="dialog" aria-label="Achievements">
+      <div class="modal-box achievement-modal">
+        <div class="achievement-modal-header">
+          <div class="achievement-modal-copy">
+            <strong>Achievements</strong>
+            <h3>Unlocked Cloud Stamps</h3>
+            <p>Pick a cloud, then click on the track to stamp it in as scenery lines. Press <kbd>Esc</kbd> to leave placement mode. You can later convert the lines to solid or accel with the Select tool.</p>
+          </div>
+          <button id="achievements-close" type="button" class="btn-icon subtle" aria-label="Close achievements">
+            <svg class="icon icon-sm" viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+          </button>
+        </div>
+        <div id="achievements-list"></div>
+      </div>
+    </div>
+
     <!-- Hotkeys panel -->
     <div id="hotkeys-panel" role="dialog" aria-label="Keyboard shortcuts">
       <div id="hotkeys-header">
@@ -2461,25 +2591,23 @@
         <div class="hk-row"><kbd>1</kbd><span>Pencil tool</span></div>
         <div class="hk-row"><kbd>2</kbd><span>Line tool</span></div>
         <div class="hk-row"><kbd>3</kbd><span>Eraser tool</span></div>
-        <div class="hk-row"><kbd>4</kbd><span>Edit tool</span></div>
-        <div class="hk-row"><kbd>5</kbd><span>Select tool</span></div>
-        <div class="hk-row"><kbd>6</kbd><span>Flag tool</span></div>
-        <div class="hk-row"><kbd>7</kbd><span>Portal tool</span></div>
+        <div class="hk-row"><kbd>4</kbd><span>Select tool</span></div>
+        <div class="hk-row"><kbd>5</kbd><span>Flag tool</span></div>
+        <div class="hk-row"><kbd>6</kbd><span>Portal tool</span></div>
         <div class="hk-row"><kbd>Ctrl+C</kbd><span>Copy selected lines (Select tool)</span></div>
         <div class="hk-row"><kbd>Ctrl+X</kbd><span>Cut selected lines (Select tool)</span></div>
         <div class="hk-row"><kbd>Ctrl+V</kbd><span>Paste copied lines (Select tool)</span></div>
         <div class="hk-row"><kbd>Ctrl+D</kbd><span>Duplicate selected lines or portal pair</span></div>
         <div class="hk-row"><kbd>S</kbd><span>Smooth selected lines (Select tool)</span></div>
         <div class="hk-row"><kbd>Delete</kbd><span>Delete selected lines (Select tool)</span></div>
-        <div class="hk-row"><kbd>C</kbd><span>Convert to bezier path (Edit tool)</span></div>
-        <div class="hk-row"><kbd>Dbl-click</kbd><span>Toggle smooth/corner anchor (Edit tool)</span></div>
-        <div class="hk-row"><kbd>Dbl-click</kbd><span>Add anchor on curve segment (Edit tool)</span></div>
-        <div class="hk-row"><kbd>Delete</kbd><span>Remove selected anchor (Edit tool)</span></div>
-        <div class="hk-row"><kbd>F</kbd><span>Flip line direction (Edit tool)</span></div>
+        <div class="hk-row"><kbd>C</kbd><span>Convert active drawn line to bezier while using Pen or Line</span></div>
+        <div class="hk-row"><kbd>Dbl-click</kbd><span>Toggle smooth/corner anchor on the active curve</span></div>
+        <div class="hk-row"><kbd>Dbl-click</kbd><span>Add anchor on the active curve segment</span></div>
+        <div class="hk-row"><kbd>Delete</kbd><span>Remove selected anchor on the active curve</span></div>
+        <div class="hk-row"><kbd>F</kbd><span>Flip hovered/active line direction, or fit view when nothing is active</span></div>
         <div class="hk-row"><kbd>Q</kbd><span>Solid line type or convert selection to solid</span></div>
         <div class="hk-row"><kbd>W</kbd><span>Accel line type or convert selection to accel</span></div>
         <div class="hk-row"><kbd>E</kbd><span>Scenery line type or convert selection to scenery</span></div>
-        <div class="hk-row"><kbd>F</kbd><span>Fit view (non-Edit tools)</span></div>
         <div class="hk-row"><kbd>T</kbd><span>Toggle one-way / two-way (Portal tool)</span></div>
         <div class="hk-row"><kbd>Tab</kbd><span>Switch active portal endpoint</span></div>
         <div class="hk-row"><kbd>Arrows</kbd><span>Nudge active portal endpoint</span></div>

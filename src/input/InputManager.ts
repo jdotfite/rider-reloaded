@@ -167,10 +167,9 @@ export class InputManager {
     if (e.code === 'Digit1') this.onToolSwitch?.('pencil');
     if (e.code === 'Digit2') this.onToolSwitch?.('line');
     if (e.code === 'Digit3') this.onToolSwitch?.('eraser');
-    if (e.code === 'Digit4') this.onToolSwitch?.('edit');
-    if (e.code === 'Digit5') this.onToolSwitch?.('select');
-    if (e.code === 'Digit6') this.onToolSwitch?.('flag');
-    if (e.code === 'Digit7') this.onToolSwitch?.('portal');
+    if (e.code === 'Digit4') this.onToolSwitch?.('select');
+    if (e.code === 'Digit5') this.onToolSwitch?.('flag');
+    if (e.code === 'Digit6') this.onToolSwitch?.('portal');
 
     // Forward to active tool
     this.tool?.onKeyDown?.(e);
@@ -186,7 +185,7 @@ export class InputManager {
       this.onClearTrack?.();
     }
 
-    if (e.code === 'KeyF' && !(this.tool && this.tool.name === 'edit')) {
+    if (e.code === 'KeyF') {
       e.preventDefault();
       this.onFitView?.();
     }

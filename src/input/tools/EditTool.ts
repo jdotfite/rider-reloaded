@@ -48,6 +48,9 @@ export class EditTool implements Tool {
   private dragLineId: number | null = null;
   private dragPathId: number | null = null;
   private dragLineStart = new Vec2();
+  private dragLineOriginal: { lineId: number; p1: Vec2; p2: Vec2 } | null = null;
+  private dragPathOriginalAnchors: Vec2[] = [];
+  private dragMoveReferenceStart: Vec2 | null = null;
 
   // BezierPath anchor dragging
   private dragAnchorHit: AnchorHit | null = null;
@@ -63,6 +66,7 @@ export class EditTool implements Tool {
 
   // Active path (the one whose handles are shown)
   private activePathId: number | null = null;
+  private activeLineId: number | null = null;
 
   // Double-click detection
   private lastClickTime = 0;
@@ -89,9 +93,6 @@ export class EditTool implements Tool {
     window.addEventListener('keydown', (e) => {
       if (e.key === 'Shift') this.shiftHeld = true;
       if (e.key === 'Alt') this.altHeld = true;
-      if (e.code === 'KeyC' && this.state === 'idle') this.tryConvertToBezierPath();
-      if (e.code === 'KeyF' && this.state === 'idle') this.tryFlipLine();
-      if ((e.code === 'Delete' || e.code === 'Backspace') && this.state === 'idle') this.tryDeleteAnchor();
     });
     window.addEventListener('keyup', (e) => {
       if (e.key === 'Shift') this.shiftHeld = false;
@@ -102,7 +103,73 @@ export class EditTool implements Tool {
   /** Set the active bezier path (e.g. after CurveTool commits a new curve) */
   setActivePath(pathId: number) {
     this.activePathId = pathId;
+    this.activeLineId = null;
     this.selectedAnchor = null;
+  }
+
+  clearSelection() {
+    this.state = 'idle';
+    this.activePathId = null;
+    this.activeLineId = null;
+    this.selectedAnchor = null;
+    this.hoveredHandle = null;
+    this.hoveredAnchor = null;
+    this.hoveredBezierHandle = null;
+    this.hoveredLineId = null;
+    this.snapPreview = null;
+    this.dragHandle = null;
+    this.dragConnected = [];
+    this.dragLineId = null;
+    this.dragPathId = null;
+    this.dragAnchorHit = null;
+    this.dragBezierHandle = null;
+    this.dragLineOriginal = null;
+    this.dragPathOriginalAnchors = [];
+    this.dragMoveReferenceStart = null;
+  }
+
+  canStartInteraction(worldPos: Vec2): boolean {
+    const hitRadius = this.worldHandleRadius();
+    if (this.findBezierHandleHit(worldPos, hitRadius)) return true;
+    if (this.findAnchorHit(worldPos, hitRadius)) return true;
+    if (this.findNonBezierHandle(worldPos, hitRadius)) return true;
+    return this.store.getLineAt(worldPos, SELECT_RADIUS / this.getZoom()) !== null;
+  }
+
+  onKeyDown(e: KeyboardEvent) {
+    if (e.code === 'Escape' && (this.activePathId !== null || this.activeLineId !== null || this.selectedAnchor !== null)) {
+      e.preventDefault();
+      this.clearSelection();
+      return;
+    }
+
+    if (this.state !== 'idle') return;
+    if (e.ctrlKey || e.metaKey || e.altKey) return;
+
+    if (e.code === 'KeyC') {
+      this.tryConvertToBezierPath();
+      if (this.activePathId !== null) {
+        e.preventDefault();
+      }
+      return;
+    }
+
+    if (e.code === 'KeyF') {
+      const before = this.store.lines;
+      this.tryFlipLine();
+      if (before !== this.store.lines) {
+        e.preventDefault();
+      }
+      return;
+    }
+
+    if (e.code === 'Delete' || e.code === 'Backspace') {
+      const beforeAnchor = this.selectedAnchor;
+      this.tryDeleteAnchor();
+      if (beforeAnchor !== this.selectedAnchor) {
+        e.preventDefault();
+      }
+    }
   }
 
   private worldHandleRadius(): number {
@@ -145,16 +212,35 @@ export class EditTool implements Tool {
     // Check double-click
     if (now - this.lastClickTime < 300 && worldPos.distanceTo(this.lastClickPos) < 5 / this.getZoom()) {
       // Double-click on anchor: toggle smooth/corner
-      const anchorHit = this.findAnchorHit(worldPos, hitRadius);
+      const anchorHit = this.findAnyAnchorHit(worldPos, hitRadius);
       if (anchorHit) {
+        this.activePathId = anchorHit.pathId;
+        this.activeLineId = null;
+        this.selectedAnchor = anchorHit;
         this.toggleAnchorSmooth(anchorHit);
         this.lastClickTime = 0;
         return;
       }
       // Double-click on path segment: add anchor point
-      if (this.activePathId !== null) {
-        const added = this.tryAddAnchorOnPath(worldPos);
+      const pathAtCursor = this.findBezierPathAt(worldPos);
+      if (pathAtCursor) {
+        this.activePathId = pathAtCursor.id;
+        this.activeLineId = null;
+        const added = this.tryAddAnchorOnPath(worldPos, pathAtCursor.id, true);
         if (added) {
+          this.lastClickTime = 0;
+          return;
+        }
+      }
+
+      // Double-click on a straight line: convert it to a bezier and expose handles
+      const lineAtCursor = this.store.getLineAt(worldPos, SELECT_RADIUS / this.getZoom());
+      if (lineAtCursor && !this.store.findBezierPathForLine(lineAtCursor.id)) {
+        this.activePathId = null;
+        this.activeLineId = lineAtCursor.id;
+        this.selectedAnchor = null;
+        this.tryConvertToBezierPath();
+        if (this.activePathId !== null) {
           this.lastClickTime = 0;
           return;
         }
@@ -166,6 +252,7 @@ export class EditTool implements Tool {
     // Priority 1: BezierPath handle dots
     const handleHit = this.findBezierHandleHit(worldPos, hitRadius);
     if (handleHit) {
+      this.activeLineId = null;
       this.state = 'dragging-handle';
       this.dragBezierHandle = handleHit;
       this.dragStart = worldPos.clone();
@@ -176,6 +263,7 @@ export class EditTool implements Tool {
     // Priority 2: BezierPath anchor points
     const anchorHit = this.findAnchorHit(worldPos, hitRadius);
     if (anchorHit) {
+      this.activeLineId = null;
       this.state = 'dragging-anchor';
       this.dragAnchorHit = anchorHit;
       this.selectedAnchor = anchorHit;
@@ -185,27 +273,12 @@ export class EditTool implements Tool {
       return;
     }
 
-    // Priority 3: Non-bezier endpoint handles — auto-convert to bezier on click
+    // Priority 3: Endpoint handles on the currently active straight line
     const handle = this.findNonBezierHandle(worldPos, hitRadius);
-    if (handle) {
-      // Auto-convert the plain line to a bezier path so user can pull handles
-      const converted = this.autoConvertToBezier(handle.lineId);
-      if (converted) {
-        // Find the anchor that corresponds to the endpoint the user clicked
-        const path = this.store.bezierPaths.find(p => p.id === converted.id);
-        if (path) {
-          const anchorIdx = handle.endpoint === 'p1' ? 0 : path.anchors.length - 1;
-          this.activePathId = path.id;
-          this.state = 'dragging-anchor';
-          this.dragAnchorHit = { pathId: path.id, anchorIndex: anchorIdx };
-          this.selectedAnchor = this.dragAnchorHit;
-          this.dragStart = worldPos.clone();
-          this.dragCurrent = worldPos.clone();
-          // Transaction already started inside autoConvertToBezier
-          return;
-        }
-      }
-      // Fallback: plain drag if conversion failed
+    if (handle && this.activeLineId === handle.lineId) {
+      this.activePathId = null;
+      this.activeLineId = handle.lineId;
+      this.selectedAnchor = null;
       this.state = 'dragging-endpoint';
       this.dragHandle = handle;
       this.dragStart = worldPos.clone();
@@ -217,29 +290,33 @@ export class EditTool implements Tool {
     // Priority 4: Line body drag
     const line = this.store.getLineAt(worldPos, SELECT_RADIUS / this.getZoom());
     if (line) {
-      // Auto-convert non-bezier lines to bezier on click so handles are available
-      let path = this.store.findBezierPathForLine(line.id);
-      if (!path) {
-        const converted = this.autoConvertToBezier(line.id);
-        if (converted) {
-          path = converted;
-        }
-      }
+      const path = this.store.findBezierPathForLine(line.id);
       this.activePathId = path ? path.id : null;
+      this.activeLineId = path ? null : line.id;
+      this.selectedAnchor = null;
 
       this.state = 'dragging-line';
       this.dragPathId = path ? path.id : null;
       this.dragLineId = path ? null : line.id;
       this.dragLineStart = worldPos.clone();
       this.dragCurrent = worldPos.clone();
-      if (!path) this.store.beginTransaction();
-      // If we auto-converted, transaction is already open
+      if (path) {
+        this.dragPathOriginalAnchors = path.anchors.map(anchor => anchor.position.clone());
+        this.dragMoveReferenceStart = path.anchors[0]?.position.clone() ?? worldPos.clone();
+      } else {
+        this.dragLineOriginal = {
+          lineId: line.id,
+          p1: line.p1.clone(),
+          p2: line.p2.clone(),
+        };
+        this.dragMoveReferenceStart = line.p1.clone();
+      }
+      this.store.beginTransaction();
       return;
     }
 
     // Click on empty space — deactivate path and clear selection
-    this.activePathId = null;
-    this.selectedAnchor = null;
+    this.clearSelection();
   }
 
   onMouseMove(worldPos: Vec2) {
@@ -281,24 +358,33 @@ export class EditTool implements Tool {
     }
 
     if (this.state === 'dragging-line' && (this.dragPathId !== null || this.dragLineId !== null)) {
-      this.snapPreview = null;
-      const dx = worldPos.x - this.dragCurrent.x;
-      const dy = worldPos.y - this.dragCurrent.y;
-      if (dx !== 0 || dy !== 0) {
-        const path = this.dragPathId !== null
-          ? this.store.bezierPaths.find(candidate => candidate.id === this.dragPathId) ?? null
-          : null;
-        if (path) {
-          const offset = new Vec2(dx, dy);
-          for (const anchor of path.anchors) {
-            anchor.position = anchor.position.add(offset);
-          }
-          this.store.regenerateBezierPathLines(path.id);
-        } else if (this.dragLineId !== null) {
-          this.store.moveLines(new Set([this.dragLineId]), dx, dy);
-        }
-        this.dragCurrent = worldPos.clone();
+      let offset = worldPos.sub(this.dragLineStart);
+      if (this.dragMoveReferenceStart && this.shouldGridSnap()) {
+        const snap = this.resolveAnchorSnap(this.dragMoveReferenceStart.add(offset));
+        this.snapPreview = snap.kind === 'none' ? null : snap;
+        offset = snap.point.sub(this.dragMoveReferenceStart);
+      } else {
+        this.snapPreview = null;
       }
+
+      const dx = offset.x;
+      const dy = offset.y;
+      const path = this.dragPathId !== null
+        ? this.store.bezierPaths.find(candidate => candidate.id === this.dragPathId) ?? null
+        : null;
+      if (path && this.dragPathOriginalAnchors.length === path.anchors.length) {
+        for (let i = 0; i < path.anchors.length; i++) {
+          path.anchors[i].position = this.dragPathOriginalAnchors[i].add(offset);
+        }
+        this.store.regenerateBezierPathLines(path.id);
+      } else if (this.dragLineOriginal && this.dragLineId !== null) {
+        this.store.replaceLine(
+          this.dragLineOriginal.lineId,
+          this.dragLineOriginal.p1.add(offset),
+          this.dragLineOriginal.p2.add(offset),
+        );
+      }
+      this.dragCurrent = worldPos.clone();
       return;
     }
 
@@ -316,7 +402,7 @@ export class EditTool implements Tool {
     this.hoveredAnchor = anchorHit;
 
     // Check non-bezier endpoint handle
-    if (!handleHit && !anchorHit) {
+    if (!handleHit && !anchorHit && this.activeLineId !== null) {
       this.hoveredHandle = this.findNonBezierHandle(worldPos, hitRadius);
     } else {
       this.hoveredHandle = null;
@@ -326,13 +412,6 @@ export class EditTool implements Tool {
     const line = this.store.getLineAt(worldPos, SELECT_RADIUS / this.getZoom());
     this.hoveredLineId = line ? line.id : null;
 
-    // Update active path based on hovered line
-    if (this.hoveredLineId !== null) {
-      const path = this.store.findBezierPathForLine(this.hoveredLineId);
-      if (path) {
-        this.activePathId = path.id;
-      }
-    }
   }
 
   onMouseUp() {
@@ -347,6 +426,9 @@ export class EditTool implements Tool {
     this.dragPathId = null;
     this.dragAnchorHit = null;
     this.dragBezierHandle = null;
+    this.dragLineOriginal = null;
+    this.dragPathOriginalAnchors = [];
+    this.dragMoveReferenceStart = null;
   }
 
   getCursor(): string | null {
@@ -382,6 +464,8 @@ export class EditTool implements Tool {
       // Skip lines that belong to a bezier path (their anchors are rendered separately)
       if (this.store.findBezierPathForLine(line.id)) continue;
 
+      const isActiveLine = this.activeLineId === line.id;
+
       for (const endpoint of ['p1', 'p2'] as const) {
         const p = line[endpoint];
         const isHovered = this.hoveredHandle &&
@@ -392,9 +476,16 @@ export class EditTool implements Tool {
           this.dragHandle.lineId === line.id &&
           this.dragHandle.endpoint === endpoint;
 
+        if (!isActiveLine && !isDragging) {
+          continue;
+        }
+
         if (isHovered || isDragging) {
           ctx.fillStyle = '#4488cc';
           ctx.strokeStyle = '#2266aa';
+        } else if (isActiveLine) {
+          ctx.fillStyle = '#ffffff';
+          ctx.strokeStyle = '#4488cc';
         } else {
           ctx.fillStyle = '#ffffff';
           ctx.strokeStyle = '#888888';
@@ -406,10 +497,13 @@ export class EditTool implements Tool {
     }
 
     // Highlight hovered line (non-bezier only)
-    if (this.hoveredLineId !== null && this.state === 'idle' && !this.store.findBezierPathForLine(this.hoveredLineId)) {
-      const line = this.store.lines.find(l => l.id === this.hoveredLineId);
+    const highlightedLineId = this.activeLineId ?? this.hoveredLineId;
+    if (highlightedLineId !== null && this.state === 'idle' && !this.store.findBezierPathForLine(highlightedLineId)) {
+      const line = this.store.lines.find(l => l.id === highlightedLineId);
       if (line) {
-        ctx.strokeStyle = 'rgba(68, 136, 204, 0.5)';
+        ctx.strokeStyle = this.activeLineId === highlightedLineId
+          ? 'rgba(68, 136, 204, 0.65)'
+          : 'rgba(68, 136, 204, 0.5)';
         ctx.lineWidth = 3 / zoom;
         ctx.lineCap = 'round';
         ctx.beginPath();
@@ -568,10 +662,29 @@ export class EditTool implements Tool {
   }
 
   private findAnchorHit(worldPos: Vec2, radius: number): AnchorHit | null {
-    const radiusSq = radius * radius;
     if (this.activePathId === null) return null;
     const path = this.store.bezierPaths.find(p => p.id === this.activePathId);
     if (!path) return null;
+    return this.findAnchorHitInPath(path, worldPos, radius);
+  }
+
+  private findAnyAnchorHit(worldPos: Vec2, radius: number): AnchorHit | null {
+    if (this.activePathId !== null) {
+      const activeHit = this.findAnchorHit(worldPos, radius);
+      if (activeHit) return activeHit;
+    }
+
+    for (const path of this.store.bezierPaths) {
+      if (path.id === this.activePathId) continue;
+      if (path.layer !== this.store.activeLayerId) continue;
+      const hit = this.findAnchorHitInPath(path, worldPos, radius);
+      if (hit) return hit;
+    }
+    return null;
+  }
+
+  private findAnchorHitInPath(path: BezierPath, worldPos: Vec2, radius: number): AnchorHit | null {
+    const radiusSq = radius * radius;
 
     let bestDist = radiusSq;
     let best: AnchorHit | null = null;
@@ -584,6 +697,12 @@ export class EditTool implements Tool {
       }
     }
     return best;
+  }
+
+  private findBezierPathAt(worldPos: Vec2): BezierPath | null {
+    const line = this.store.getLineAt(worldPos, SELECT_RADIUS / this.getZoom());
+    if (!line) return null;
+    return this.store.findBezierPathForLine(line.id);
   }
 
   private findNonBezierHandle(worldPos: Vec2, radius: number): HandleHit | null {
@@ -714,10 +833,11 @@ export class EditTool implements Tool {
   }
 
   private tryConvertToBezierPath() {
-    if (this.hoveredLineId === null) return;
-    if (this.store.findBezierPathForLine(this.hoveredLineId)) return;
+    const targetLineId = this.activeLineId ?? this.hoveredLineId;
+    if (targetLineId === null) return;
+    if (this.store.findBezierPathForLine(targetLineId)) return;
 
-    const line = this.store.lines.find(l => l.id === this.hoveredLineId);
+    const line = this.store.lines.find(l => l.id === targetLineId);
     if (!line) return;
 
     this.store.beginTransaction();
@@ -726,42 +846,31 @@ export class EditTool implements Tool {
     const anchors = this.buildLineAnchors(line.p1.clone(), line.p2.clone());
     const newPath = this.store.addBezierPath(anchors, line.type, line.layer);
     this.activePathId = newPath.id;
+    this.activeLineId = null;
 
     this.store.endTransaction();
     this.hoveredLineId = null;
   }
 
-  /** Auto-convert a plain line to a BezierPath (returns the new path, or null).
-   *  Leaves a transaction open so the caller can continue dragging. */
-  private autoConvertToBezier(lineId: number): BezierPath | null {
-    if (this.store.findBezierPathForLine(lineId)) return null;
-    const line = this.store.lines.find(l => l.id === lineId);
-    if (!line) return null;
-
-    this.store.beginTransaction();
-    this.store.removeLines(new Set([lineId]));
-
-    const anchors = this.buildLineAnchors(line.p1.clone(), line.p2.clone());
-    const newPath = this.store.addBezierPath(anchors, line.type, line.layer);
-    this.activePathId = newPath.id;
-    this.hoveredLineId = null;
-    return newPath;
-  }
-
   private tryFlipLine() {
-    if (this.hoveredLineId === null) return;
-    this.store.flipLine(this.hoveredLineId);
+    const targetLineId = this.activeLineId ?? this.hoveredLineId;
+    if (targetLineId === null) return;
+    this.store.flipLine(targetLineId);
   }
 
   // ── Add anchor on path segment (double-click) ──
 
-  private tryAddAnchorOnPath(worldPos: Vec2): boolean {
-    if (this.activePathId === null) return false;
-    const path = this.store.bezierPaths.find(p => p.id === this.activePathId);
+  private tryAddAnchorOnPath(
+    worldPos: Vec2,
+    pathId: number = this.activePathId ?? -1,
+    relaxedHit: boolean = false,
+  ): boolean {
+    if (pathId === -1) return false;
+    const path = this.store.bezierPaths.find(p => p.id === pathId);
     if (!path || path.anchors.length < 2) return false;
 
     const hitRadius = SELECT_RADIUS / this.getZoom();
-    let bestDist = hitRadius;
+    let bestDist = relaxedHit ? Number.POSITIVE_INFINITY : hitRadius;
     let bestSegment = -1;
     let bestT = 0.5;
 
