@@ -68,6 +68,7 @@ export class Toolbar {
   onSmoothChange: ((amount: number) => void) | null = null;
   onSmoothApply: (() => void) | null = null;
   onSmoothCancel: (() => void) | null = null;
+  onFlipSelection: (() => void) | null = null;
   onPortalModeChange: ((mode: PortalMode) => void) | null = null;
   onPortalThemeChange: ((theme: PortalColorTheme) => void) | null = null;
   onPortalVelocityModeChange: ((mode: PortalVelocityMode) => void) | null = null;
@@ -87,6 +88,7 @@ export class Toolbar {
   private toolButtons: Map<string, HTMLButtonElement> = new Map();
   private smoothContainer!: HTMLElement;
   private smoothBtn!: HTMLButtonElement;
+  private reverseBtn: HTMLButtonElement | null = null;
   private smoothSliderRow!: HTMLElement;
   private smoothSlider!: HTMLInputElement;
   private smoothValue!: HTMLElement;
@@ -198,9 +200,9 @@ export class Toolbar {
     // Tool grid (right sidebar, 2-column) — SVG icons
     this.addToolGridBtn('pencil', ICONS.pen, 'Pen');
     this.addToolGridBtn('line', ICONS.line, 'Line');
-    this.addToolGridBtn('portal', ICONS.portal, 'Portal');
     this.addToolGridBtn('eraser', ICONS.eraser, 'Erase');
     this.addToolGridBtn('select', ICONS.select, 'Select');
+    this.addToolGridBtn('portal', ICONS.portal, 'Portal');
     this.addToolGridBtn('flag', ICONS.flag, 'Flag');
 
     // Onion skin toggle
@@ -266,6 +268,7 @@ export class Toolbar {
     // Smooth UI (visible only when select tool is active)
     this.smoothContainer = document.getElementById('smooth-container') as HTMLElement;
     this.smoothBtn = document.getElementById('smooth-btn') as HTMLButtonElement;
+    this.reverseBtn = document.getElementById('reverse-btn') as HTMLButtonElement | null;
     this.smoothSliderRow = document.getElementById('smooth-slider-row') as HTMLElement;
     this.smoothSlider = document.getElementById('smooth-slider') as HTMLInputElement;
     this.smoothValue = document.getElementById('smooth-value') as HTMLElement;
@@ -294,6 +297,9 @@ export class Toolbar {
         const started = this.onSmoothStart?.() ?? false;
         if (started) this.showSmoothSlider();
       });
+    }
+    if (this.reverseBtn) {
+      this.reverseBtn.addEventListener('click', () => this.onFlipSelection?.());
     }
     if (this.smoothSlider) {
       this.smoothSlider.addEventListener('input', () => {
@@ -542,33 +548,78 @@ export class Toolbar {
   }
 
   private setupPlaceholders() {
-    const btnDesktopLayout = document.getElementById('btn-desktop-layout') as HTMLButtonElement | null;
+    const btnToolRailToggle = document.getElementById('btn-tool-rail-toggle') as HTMLButtonElement | null;
     const btnMobileDock = document.getElementById('btn-mobile-dock') as HTMLButtonElement | null;
+    const dockUndoBtn = document.getElementById('dock-undo-btn') as HTMLButtonElement | null;
+    const dockRedoBtn = document.getElementById('dock-redo-btn') as HTMLButtonElement | null;
+    const dockInspectorBtn = document.getElementById('dock-inspector-btn') as HTMLButtonElement | null;
+    const leftDockTools = document.getElementById('left-dock-tools') as HTMLElement | null;
+    const topToolRail = document.getElementById('top-tool-rail') as HTMLElement | null;
 
-    const desktopLayoutKey = 'line-rider-desktop-tools-layout';
-    const applyDesktopLayoutMode = (mode: 'sidebar' | 'top') => {
-      document.body.classList.toggle('desktop-top-tools', mode === 'top');
-      if (!btnDesktopLayout) return;
-      btnDesktopLayout.classList.toggle('active', mode === 'top');
-      btnDesktopLayout.setAttribute('aria-pressed', mode === 'top' ? 'true' : 'false');
-      btnDesktopLayout.title = mode === 'top'
-        ? 'Switch to sidebar tools'
-        : 'Switch to top tools';
-      btnDesktopLayout.setAttribute('aria-label', btnDesktopLayout.title);
+    const toolRailKey = 'line-rider-tool-rail-mode';
+    const sidebarInspectorKey = 'line-rider-sidebar-inspector-open';
+    let toolRailMode: 'left' | 'top' = 'left';
+    let sidebarInspectorOpen = false;
+    const isDesktopViewport = () => window.matchMedia('(min-width: 900px)').matches;
+
+    const mountToolGrid = () => {
+      const target = isDesktopViewport() && toolRailMode === 'top'
+        ? topToolRail ?? leftDockTools
+        : leftDockTools ?? topToolRail;
+      if (target && this.toolGrid.parentElement !== target) {
+        target.appendChild(this.toolGrid);
+      }
     };
 
-    let desktopLayoutMode: 'sidebar' | 'top' = 'sidebar';
+    const applySidebarInspectorMode = (open: boolean) => {
+      const shouldShow = open && isDesktopViewport();
+      document.body.classList.toggle('sidebar-inspector-open', shouldShow);
+      if (!dockInspectorBtn) return;
+      dockInspectorBtn.classList.toggle('active', shouldShow);
+      dockInspectorBtn.setAttribute('aria-pressed', shouldShow ? 'true' : 'false');
+      dockInspectorBtn.title = shouldShow ? 'Hide inspector' : 'Show inspector';
+      dockInspectorBtn.setAttribute('aria-label', dockInspectorBtn.title);
+    };
+
+    const applyToolRailMode = (mode: 'left' | 'top') => {
+      document.body.classList.toggle('tool-rail-top', mode === 'top');
+      mountToolGrid();
+      applySidebarInspectorMode(sidebarInspectorOpen);
+      if (!btnToolRailToggle) return;
+      const top = mode === 'top';
+      btnToolRailToggle.classList.toggle('active', top);
+      btnToolRailToggle.setAttribute('aria-pressed', top ? 'true' : 'false');
+      btnToolRailToggle.title = top ? 'Move tools to side rail' : 'Move tools to top bar';
+      btnToolRailToggle.setAttribute('aria-label', btnToolRailToggle.title);
+    };
+
     try {
-      const savedMode = window.localStorage.getItem(desktopLayoutKey);
-      if (savedMode === 'top') desktopLayoutMode = 'top';
+      const savedMode = window.localStorage.getItem(toolRailKey);
+      if (savedMode === 'top') toolRailMode = 'top';
     } catch {}
-    applyDesktopLayoutMode(desktopLayoutMode);
-    btnDesktopLayout?.addEventListener('click', () => {
-      desktopLayoutMode = desktopLayoutMode === 'sidebar' ? 'top' : 'sidebar';
-      applyDesktopLayoutMode(desktopLayoutMode);
+    try {
+      sidebarInspectorOpen = window.localStorage.getItem(sidebarInspectorKey) === 'true';
+    } catch {}
+    applyToolRailMode(toolRailMode);
+    btnToolRailToggle?.addEventListener('click', () => {
+      toolRailMode = toolRailMode === 'left' ? 'top' : 'left';
+      applyToolRailMode(toolRailMode);
       try {
-        window.localStorage.setItem(desktopLayoutKey, desktopLayoutMode);
+        window.localStorage.setItem(toolRailKey, toolRailMode);
       } catch {}
+    });
+    dockInspectorBtn?.addEventListener('click', () => {
+      sidebarInspectorOpen = !sidebarInspectorOpen;
+      applySidebarInspectorMode(sidebarInspectorOpen);
+      try {
+        window.localStorage.setItem(sidebarInspectorKey, sidebarInspectorOpen ? 'true' : 'false');
+      } catch {}
+    });
+    dockUndoBtn?.addEventListener('click', () => this.onUndo?.());
+    dockRedoBtn?.addEventListener('click', () => this.onRedo?.());
+    window.addEventListener('resize', () => {
+      mountToolGrid();
+      applySidebarInspectorMode(sidebarInspectorOpen);
     });
 
     const mobileDockKey = 'line-rider-mobile-dock-mode';
@@ -668,6 +719,9 @@ export class Toolbar {
     }
     for (const btn of this.convertTypeButtons.values()) {
       btn.disabled = !hasSelection || smoothing;
+    }
+    if (this.reverseBtn) {
+      this.reverseBtn.disabled = !hasSelection || smoothing;
     }
     if (this.smoothBtn) {
       this.smoothBtn.disabled = !hasSelection || smoothing;

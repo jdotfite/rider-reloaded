@@ -85,9 +85,9 @@
       --transition-base: 150ms ease;
 
       /* — layout — */
-      --sidebar-left-w: 240px;
+      --sidebar-left-w: 76px;
       --sidebar-right-w: 248px;
-      --topbar-h: 48px;
+      --topbar-h: 58px;
     }
 
     /* ══════════════════════════════════════════════
@@ -141,10 +141,11 @@
        TOPBAR
        ══════════════════════════════════════════════ */
     #topbar {
-      display: flex;
+      display: grid;
+      grid-template-columns: auto 1fr auto;
       align-items: center;
-      justify-content: space-between;
-      padding: 0 var(--sp-5);
+      gap: var(--sp-4);
+      padding: 0 0 0 var(--sp-5);
       height: var(--topbar-h);
       border-bottom: 1px solid var(--border);
       background: var(--bg);
@@ -153,6 +154,7 @@
       display: flex;
       align-items: center;
       gap: var(--sp-3);
+      min-width: 0;
     }
     #brand-mark {
       font: 800 var(--text-lg)/1 var(--font);
@@ -169,6 +171,12 @@
       text-transform: uppercase;
       letter-spacing: 0.16em;
     }
+    #top-center-slot {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-width: 0;
+    }
     #sled-info {
       display: flex;
       align-items: center;
@@ -178,12 +186,79 @@
       text-transform: uppercase;
       color: var(--ink-muted);
     }
-    #topbar-actions {
+    #top-tool-rail {
+      display: none;
+      align-items: center;
+      justify-content: center;
+      min-width: 0;
+    }
+    #topbar-right {
       display: flex;
+      align-items: center;
+      justify-self: end;
+      gap: 0;
+      min-width: 0;
+    }
+    #desktop-action-strip {
+      display: flex;
+      align-items: stretch;
+      justify-content: flex-end;
+      background: transparent;
+      border: none;
+      border-radius: 0;
+      box-shadow: none;
+      overflow: visible;
+    }
+    .desktop-action-divider {
+      width: 1px;
+      align-self: stretch;
+      background: var(--border-light);
+      flex-shrink: 0;
+    }
+    .desktop-action-btn {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 4px;
+      width: 72px;
+      min-width: 72px;
+      min-height: calc(var(--topbar-h) - 2px);
+      padding: 7px 8px 6px;
+      border: 1px solid transparent;
+      border-radius: 0;
+      background: transparent;
+      color: var(--ink-secondary);
+      font: 600 11px/1 var(--font);
+      letter-spacing: 0.01em;
+    }
+    .desktop-action-btn:hover {
+      background: var(--bg-alt);
+      border-color: transparent;
+      color: var(--ink);
+    }
+    .desktop-action-btn.active {
+      background: var(--bg-alt);
+      color: var(--ink);
+    }
+    .desktop-action-btn.active:hover {
+      background: var(--bg-hover);
+      color: var(--ink);
+    }
+    .desktop-action-btn .icon {
+      width: 18px;
+      height: 18px;
+      stroke-width: 1.8;
+    }
+    .desktop-action-label {
+      font: 600 11px/1 var(--font);
+      color: inherit;
+    }
+    #topbar-actions {
+      display: none;
       align-items: center;
       gap: 2px;
     }
-    #btn-desktop-layout { display: inline-flex; }
     #btn-mobile-dock { display: none; }
     #topbar-actions button {
       width: var(--control-h-lg);
@@ -207,9 +282,10 @@
        ══════════════════════════════════════════════ */
     #main {
       display: grid;
-      grid-template-columns: 1fr var(--sidebar-right-w);
+      grid-template-columns: var(--sidebar-left-w) 1fr;
       min-height: 0;
       overflow: hidden;
+      position: relative;
     }
 
     /* ══════════════════════════════════════════════
@@ -431,46 +507,116 @@
     /* ══════════════════════════════════════════════
        RIGHT SIDEBAR
        ══════════════════════════════════════════════ */
+    #sidebar-left {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      background: linear-gradient(180deg, rgba(255,255,255,0.98), rgba(247,247,247,0.96));
+      border-right: 1px solid var(--border);
+      min-width: 0;
+      overflow: hidden;
+      z-index: 6;
+    }
+    #left-dock-tools {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 10px;
+      width: 100%;
+      padding: 14px 8px 12px;
+    }
+    #left-dock-library {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 10px;
+      width: 100%;
+      padding: 0 8px;
+    }
+    #left-dock-spacer {
+      flex: 1;
+      min-height: 16px;
+    }
+    #left-dock-utilities {
+      width: 100%;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 4px;
+      padding: 6px 8px 14px;
+    }
+    .left-dock-divider {
+      width: calc(100% - 20px);
+      height: 1px;
+      background: var(--border-light);
+      margin: 4px 0 2px;
+    }
     #sidebar-right {
       display: flex;
       flex-direction: column;
-      background: var(--bg);
+      position: absolute;
+      top: 0;
+      right: 0;
+      bottom: 0;
+      width: var(--sidebar-right-w);
+      background: rgba(255,255,255,0.98);
       border-left: 1px solid var(--border);
       overflow-y: auto;
       scrollbar-width: thin;
       scrollbar-color: var(--color-gray-300) transparent;
       min-width: 0;
+      z-index: 12;
+      box-shadow: -18px 0 34px rgba(17,17,17,0.08);
+      transform: translateX(100%);
+      opacity: 0;
+      pointer-events: none;
+      transition: transform var(--transition-base), opacity var(--transition-base);
+      backdrop-filter: blur(18px);
+    }
+    body.sidebar-inspector-open #sidebar-right {
+      transform: translateX(0);
+      opacity: 1;
+      pointer-events: auto;
     }
 
     /* — Tool grid — */
     #tool-grid {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: var(--sp-1);
-      padding: var(--sp-2) var(--sp-3);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 10px;
+      width: 100%;
+      padding: 0;
     }
-    #tool-grid button {
+    #tool-grid button,
+    .dock-tool-button {
       display: flex;
       flex-direction: column;
       align-items: center;
       gap: 6px;
-      padding: var(--sp-3) var(--sp-2);
-      border-radius: var(--radius-lg);
-      background: var(--bg-alt);
-      border: 1px solid var(--border-light);
-      min-height: 64px;
-      transition: background var(--transition-fast), border-color var(--transition-fast);
+      justify-content: center;
+      width: 100%;
+      min-height: 58px;
+      padding: 8px 4px;
+      border-radius: 12px;
+      background: transparent;
+      border: 1px solid transparent;
+      color: var(--ink-secondary);
+      transition: background var(--transition-fast), border-color var(--transition-fast), color var(--transition-fast);
     }
-    #tool-grid button:hover {
-      background: var(--bg-hover);
-      border-color: var(--color-gray-400);
+    #tool-grid button:hover,
+    .dock-tool-button:hover {
+      background: rgba(17,17,17,0.04);
+      border-color: rgba(17,17,17,0.08);
     }
-    #tool-grid button.active {
+    #tool-grid button.active,
+    .dock-tool-button.active {
       background: var(--bg-active);
       border-color: var(--bg-active);
       color: var(--ink-inverse);
     }
-    #tool-grid button.active:hover {
+    #tool-grid button.active:hover,
+    .dock-tool-button.active:hover {
       background: var(--color-gray-800);
     }
     .tool-icon {
@@ -480,13 +626,95 @@
       width: var(--icon-size-lg);
       height: var(--icon-size-lg);
     }
+    #top-tool-rail #tool-grid {
+      display: flex;
+      flex-direction: row;
+      align-items: center;
+      gap: 4px;
+      width: auto;
+      padding: 0;
+    }
+    #top-tool-rail #tool-grid button {
+      width: 32px;
+      min-width: 32px;
+      min-height: 32px;
+      padding: 0;
+      border-radius: 10px;
+    }
+    #top-tool-rail #tool-grid .tool-label {
+      display: none;
+    }
+    #top-tool-rail #tool-grid .tool-icon {
+      width: 16px;
+      height: 16px;
+    }
+    #top-tool-rail #tool-grid .icon {
+      width: 16px;
+      height: 16px;
+      stroke-width: 1.65;
+    }
     .tool-label {
       font: 600 var(--text-xs)/1 var(--font);
       color: var(--ink-muted);
-      letter-spacing: 0.04em;
+      letter-spacing: 0.02em;
+      text-align: center;
+      white-space: normal;
+      line-height: 1.15;
+      max-width: 54px;
     }
-    #tool-grid button.active .tool-label { color: rgba(255,255,255,0.7); }
-    #tool-grid button.active .icon { stroke: var(--ink-inverse); }
+    #tool-grid button.active .tool-label,
+    .dock-tool-button.active .tool-label { color: rgba(255,255,255,0.82); }
+    #tool-grid button.active .icon,
+    .dock-tool-button.active .icon { stroke: currentColor; }
+    .dock-utility-button {
+      width: 44px;
+      height: 44px;
+      min-width: 44px;
+      min-height: 44px;
+      padding: 0;
+      border-radius: 12px;
+      background: transparent;
+      border: 1px solid transparent;
+      color: var(--ink-muted);
+    }
+    .dock-utility-button:hover {
+      background: rgba(17,17,17,0.04);
+      border-color: rgba(17,17,17,0.08);
+      color: var(--ink);
+    }
+    .dock-utility-button.active {
+      background: var(--bg-active);
+      border-color: var(--bg-active);
+      color: var(--ink-inverse);
+    }
+    #dock-inspector-btn {
+      background: rgba(255,255,255,0.96);
+      border-color: rgba(17,17,17,0.1);
+      color: var(--ink);
+    }
+    #dock-inspector-btn:hover {
+      background: rgba(255,255,255,1);
+      border-color: rgba(17,17,17,0.16);
+      color: var(--ink);
+    }
+    #dock-inspector-btn.active {
+      background: rgba(255,255,255,0.96);
+      border-color: rgba(17,17,17,0.14);
+      color: var(--ink);
+    }
+    body.tool-rail-top #top-tool-rail {
+      display: flex;
+    }
+    body.tool-rail-top #sled-info {
+      display: none;
+    }
+    body.tool-rail-top #left-dock-tools,
+    body.tool-rail-top #left-dock-tools-divider {
+      display: none;
+    }
+    body.tool-rail-top #left-dock-library {
+      padding-top: 14px;
+    }
 
     /* — Track type (line type) — */
     #track-type-panel {
@@ -684,19 +912,27 @@
       margin-bottom: var(--sp-1);
     }
     #convert-type-strip button,
+    #select-utility-strip button,
     #smooth-btn,
     #smooth-slider-row button {
       font-size: var(--text-sm);
     }
+    #select-utility-strip {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: var(--sp-1);
+      margin-top: var(--sp-2);
+    }
     #smooth-btn {
       width: 100%;
-      margin-top: var(--sp-2);
+      margin-top: 0;
     }
     .select-action-hint {
       font: 500 var(--text-xs)/1.4 var(--font);
       color: var(--ink-muted);
     }
     #convert-type-strip button:disabled,
+    #select-utility-strip button:disabled,
     #smooth-btn:disabled {
       opacity: 0.45;
       cursor: not-allowed;
@@ -916,43 +1152,55 @@
       text-transform: uppercase;
       letter-spacing: 0.12em;
     }
-    .achievement-modal {
+    .picker-modal {
       width: min(760px, calc(100vw - 32px));
       gap: var(--sp-3);
     }
-    .achievement-modal-header {
+    .picker-modal.picker-modal-wide {
+      width: min(860px, calc(100vw - 32px));
+    }
+    .picker-modal-header {
       display: flex;
       align-items: flex-start;
       justify-content: space-between;
       gap: var(--sp-3);
     }
-    .achievement-modal-header button {
+    .picker-modal-header button {
       min-width: var(--control-h);
       min-height: var(--control-h);
       padding: 0;
     }
-    .achievement-modal-copy {
+    .picker-modal-copy {
       display: flex;
       flex-direction: column;
       gap: 6px;
+      min-width: 0;
     }
-    .achievement-modal-copy strong {
+    .picker-modal-copy strong {
       font: 700 var(--text-xs)/1 var(--font);
       letter-spacing: 0.14em;
       text-transform: uppercase;
       color: var(--ink-muted);
     }
-    .achievement-modal-copy p {
+    .picker-modal-copy p {
       margin: 0;
-      max-width: 460px;
+      max-width: 56ch;
     }
-    #achievements-list {
-      display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(118px, 1fr));
+    .picker-modal-body {
+      display: flex;
+      flex-direction: column;
       gap: 12px;
+      min-width: 0;
     }
-    .achievement-card {
+    .picker-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(148px, 1fr));
+      gap: 12px;
+      align-items: stretch;
+    }
+    .picker-card {
       min-height: 0;
+      min-width: 0;
       aspect-ratio: 1 / 1;
       padding: 12px;
       border-radius: 16px;
@@ -962,21 +1210,25 @@
       flex-direction: column;
       text-align: center;
       gap: 8px;
+      position: relative;
+      overflow: hidden;
+      white-space: normal;
     }
-    .achievement-card:hover {
+    .picker-card:hover {
       border-color: rgba(17,17,17,0.18);
       background: linear-gradient(180deg, rgba(255,255,255,1), rgba(240,239,234,1));
     }
-    .achievement-card.active {
+    .picker-card.active {
       background: var(--bg-active);
       border-color: var(--bg-active);
       color: var(--ink-inverse);
     }
-    .achievement-card.active .achievement-card-copy strong,
-    .achievement-card.active .achievement-card-copy span {
+    .picker-card.active .picker-card-copy strong,
+    .picker-card.active .picker-card-copy span,
+    .picker-card.active .picker-card-state {
       color: var(--ink-inverse);
     }
-    .achievement-card-art {
+    .picker-card-art {
       min-height: 62px;
       width: 100%;
       display: flex;
@@ -1002,31 +1254,186 @@
       color: #25282d;
       overflow: hidden;
     }
-    .achievement-card-art svg {
+    .picker-card-art svg {
       width: 100%;
-      height: 48px;
-      max-width: 82px;
+      height: 52px;
+      max-width: 112px;
     }
-    .achievement-card-art svg path {
+    .picker-card-art svg path {
       fill: none;
     }
-    .achievement-card-copy {
+    .picker-card-copy {
       display: flex;
       flex-direction: column;
       gap: 2px;
       align-items: center;
+      min-width: 0;
     }
-    .achievement-card-copy strong {
+    .picker-card-copy strong {
       font: 700 var(--text-xs)/1.1 var(--font);
       color: var(--ink);
       text-transform: uppercase;
       letter-spacing: 0.05em;
     }
-    .achievement-card-copy span {
+    .picker-card-copy span {
       font: 500 11px/1.25 var(--font);
       color: var(--ink-muted);
+      white-space: normal;
+    }
+    .picker-card-state {
+      position: absolute;
+      top: 10px;
+      right: 10px;
+      font: 700 10px/1 var(--font);
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: var(--ink-muted);
+      opacity: 0;
+      transition: opacity var(--transition-fast);
+    }
+    #achievements-list {
+      grid-template-columns: repeat(auto-fit, minmax(118px, 1fr));
+    }
+    .achievement-card.active .picker-card-copy strong,
+    .achievement-card.active .picker-card-copy span {
+      color: var(--ink-inverse);
     }
     body.achievements-open #achievements-overlay { display: flex; }
+    #generators-list {
+      grid-template-columns: repeat(auto-fit, minmax(148px, 1fr));
+    }
+    .generator-card {
+      aspect-ratio: auto;
+      min-height: 156px;
+      text-align: left;
+      align-items: stretch;
+      justify-content: flex-start;
+    }
+    .generator-card .picker-card-copy {
+      align-items: flex-start;
+      gap: 3px;
+    }
+    .generator-card.active .picker-card-state,
+    .generator-card.placing .picker-card-state {
+      opacity: 1;
+    }
+    .picker-detail-panel,
+    #generator-detail {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      padding: 14px;
+      min-width: 0;
+      border-radius: 18px;
+      border: 1px solid var(--border-light);
+      background: linear-gradient(180deg, rgba(250,249,245,0.98), rgba(242,240,233,0.96));
+      min-height: 100%;
+    }
+    .generator-detail-copy {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+    .generator-detail-copy p {
+      margin: 0;
+      color: var(--ink-secondary);
+    }
+    #generator-detail-preview {
+      min-height: 132px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: 14px;
+      color: #25282d;
+      overflow: hidden;
+      background:
+        linear-gradient(180deg, rgba(255,255,255,0.95), rgba(244,242,236,0.95)),
+        repeating-linear-gradient(
+          to right,
+          rgba(32,34,38,0.05) 0,
+          rgba(32,34,38,0.05) 1px,
+          transparent 1px,
+          transparent 20px
+        ),
+        repeating-linear-gradient(
+          to bottom,
+          rgba(32,34,38,0.05) 0,
+          rgba(32,34,38,0.05) 1px,
+          transparent 1px,
+          transparent 20px
+        );
+    }
+    #generator-detail-preview svg {
+      width: 100%;
+      height: 88px;
+      max-width: 224px;
+    }
+    #generator-stats {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+    }
+    #generator-stats span {
+      padding: 6px 9px;
+      border-radius: 999px;
+      border: 1px solid rgba(17,17,17,0.08);
+      background: rgba(255,255,255,0.82);
+      font: 700 10px/1 var(--font);
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--ink-secondary);
+    }
+    #generator-controls {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+    .generator-control {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+    .generator-control-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: var(--sp-2);
+      font: 600 var(--text-xs)/1 var(--font);
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+      color: var(--ink-muted);
+    }
+    .generator-control-head strong {
+      font: inherit;
+      color: var(--ink);
+    }
+    .generator-control input[type="range"] {
+      width: 100%;
+    }
+    .generator-detail-note {
+      margin: 0;
+      font: 500 var(--text-xs)/1.45 var(--font);
+      color: var(--ink-secondary);
+    }
+    #generator-activate {
+      align-self: flex-start;
+      min-width: 132px;
+      margin-top: auto;
+    }
+    @media (max-width: 760px) {
+      .picker-modal,
+      .picker-modal.picker-modal-wide {
+        width: min(560px, calc(100vw - 20px));
+      }
+    }
+    @media (max-width: 460px) {
+      .picker-grid,
+      #achievements-list,
+      #generators-list {
+        grid-template-columns: 1fr;
+      }
+    }
+    body.generators-open #generators-overlay { display: flex; }
 
     /* ══════════════════════════════════════════════
        BOTTOM BAR
@@ -1326,12 +1733,14 @@
       font-weight: 600;
     }
     /* Sound button indicator when audio is loaded */
-    body.audio-loaded #btn-sound {
+    body.audio-loaded #btn-sound,
+    body.audio-loaded #btn-sound-dock {
       color: var(--ink);
       background: var(--bg-alt);
       border-color: var(--border);
     }
-    body.audio-loaded #btn-sound::after {
+    body.audio-loaded #btn-sound::after,
+    body.audio-loaded #btn-sound-dock::after {
       content: '';
       position: absolute;
       bottom: 4px;
@@ -1341,7 +1750,8 @@
       border-radius: 50%;
       background: #2e7d32;
     }
-    #btn-sound { position: relative; }
+    #btn-sound,
+    #btn-sound-dock { position: relative; }
     #audio-drop-zone {
       border: 2px dashed var(--border);
       border-radius: var(--radius-md);
@@ -1559,15 +1969,20 @@
        RESPONSIVE: 900–1199 px
        ══════════════════════════════════════════════ */
     @media (max-width: 1199px) {
-      #main { grid-template-columns: 1fr 212px; }
-      #sidebar-right { width: 212px; }
-      #tool-grid {
-        grid-template-columns: 1fr;
-        padding: var(--sp-1) var(--sp-2);
+      :root {
+        --sidebar-left-w: 72px;
       }
-      #tool-grid button {
-        min-height: 46px;
-        padding: var(--sp-2);
+      #main { grid-template-columns: var(--sidebar-left-w) 1fr; }
+      #sidebar-right { width: 212px; }
+      #left-dock-tools,
+      #left-dock-library {
+        padding-left: 6px;
+        padding-right: 6px;
+      }
+      #tool-grid button,
+      .dock-tool-button {
+        min-height: 52px;
+        padding: 7px 3px;
       }
       .tool-label { font-size: 10px; }
       #file-actions,
@@ -1590,150 +2005,9 @@
     }
 
     @media (min-width: 900px) {
-      body.desktop-top-tools #main {
-        grid-template-columns: 1fr;
-      }
-      body.desktop-top-tools #sidebar-right {
-        position: fixed;
-        top: calc(var(--topbar-h) + 12px);
-        left: 18px;
-        right: 18px;
-        z-index: 26;
-        display: flex;
-        flex-wrap: wrap;
-        align-content: flex-start;
-        gap: 10px;
-        padding: 0;
-        background: transparent;
-        border: none;
-        overflow: visible;
-      }
-      body.desktop-top-tools #sidebar-right > *:not(.section-label) {
-        background: rgba(255,255,255,0.92);
-        border: 1px solid rgba(17,17,17,0.08);
-        box-shadow: 0 14px 30px rgba(17,17,17,0.08);
-        backdrop-filter: blur(16px);
-      }
-      body.desktop-top-tools #sidebar-right .section-label {
+      #topbar-actions,
+      #file-actions {
         display: none;
-      }
-      body.desktop-top-tools #file-actions {
-        padding: 4px;
-        gap: 4px;
-        border: none;
-        border-radius: 999px;
-      }
-      body.desktop-top-tools #tool-grid {
-        display: flex;
-        flex-wrap: nowrap;
-        gap: 4px;
-        padding: 4px;
-        border-radius: 20px;
-      }
-      body.desktop-top-tools #tool-grid button {
-        min-width: 42px;
-        width: 42px;
-        min-height: 42px;
-        padding: 0;
-        border-radius: 13px;
-        background: transparent;
-        border: 1px solid transparent;
-      }
-      body.desktop-top-tools #tool-grid button:hover {
-        background: rgba(17,17,17,0.04);
-        border-color: rgba(17,17,17,0.08);
-      }
-      body.desktop-top-tools #tool-grid button.active {
-        background: var(--ink);
-        border-color: var(--ink);
-      }
-      body.desktop-top-tools #tool-grid button.active .icon {
-        stroke: var(--ink-inverse);
-      }
-      body.desktop-top-tools #tool-grid .tool-label {
-        display: none;
-      }
-      body.desktop-top-tools #track-type-panel {
-        border-top: none;
-        padding: 4px;
-        border-radius: 999px;
-      }
-      body.desktop-top-tools #line-type-strip {
-        gap: 4px;
-        padding: 0;
-      }
-      body.desktop-top-tools #line-type-strip button {
-        min-height: 34px;
-        padding: 0 14px;
-        border-radius: 999px;
-      }
-      body.desktop-top-tools #vehicle-panel {
-        padding: 4px;
-        border-radius: 18px;
-      }
-      body.desktop-top-tools #vehicle-picker-btn {
-        width: auto;
-        min-width: 220px;
-        margin: 0;
-      }
-      body.desktop-top-tools #tool-options {
-        width: 100%;
-        order: 10;
-        padding: 0;
-        border: none;
-        background: transparent;
-      }
-      body.desktop-top-tools #tool-options .tool-option-label {
-        display: inline-flex;
-        margin-right: 8px;
-        background: rgba(255,255,255,0.92);
-        border: 1px solid rgba(17,17,17,0.08);
-        box-shadow: 0 14px 30px rgba(17,17,17,0.08);
-        backdrop-filter: blur(16px);
-      }
-      body.desktop-top-tools #smooth-container {
-        min-width: 340px;
-        margin-top: 0;
-        padding: 10px 12px;
-        border-radius: 18px;
-        border: 1px solid rgba(17,17,17,0.08);
-        background: rgba(255,255,255,0.94);
-        box-shadow: 0 14px 30px rgba(17,17,17,0.08);
-        backdrop-filter: blur(16px);
-      }
-      body.desktop-top-tools #grid-settings-panel {
-        min-width: 320px;
-        margin-top: 0;
-        padding: 10px 12px;
-        border-radius: 18px;
-        border: 1px solid rgba(17,17,17,0.08);
-        background: rgba(250,248,242,0.96);
-        box-shadow: 0 14px 30px rgba(17,17,17,0.08);
-        backdrop-filter: blur(16px);
-      }
-      body.desktop-top-tools #portal-settings {
-        min-width: 360px;
-        margin-top: 0;
-        padding: 10px 12px;
-        border-radius: 18px;
-        border: 1px solid rgba(17,17,17,0.08);
-        background: rgba(255,255,255,0.94);
-        box-shadow: 0 14px 30px rgba(17,17,17,0.08);
-        backdrop-filter: blur(16px);
-      }
-      body.desktop-top-tools #layers-panel {
-        min-width: 250px;
-        margin-left: auto;
-        padding-bottom: 0;
-        border-radius: 18px;
-      }
-      body.desktop-top-tools #canvas-hud {
-        top: 112px;
-      }
-      body.desktop-top-tools #btn-desktop-layout {
-        background: var(--ink);
-        border-color: var(--ink);
-        color: var(--ink-inverse);
       }
     }
 
@@ -1744,9 +2018,18 @@
       :root {
         --topbar-h: 0px;
       }
+      .generator-modal-body {
+        grid-template-columns: 1fr;
+      }
+      #generator-detail-preview svg {
+        height: 72px;
+      }
       #main {
         grid-template-columns: 1fr;
         position: relative;
+      }
+      #sidebar-left {
+        display: none;
       }
       #topbar {
         height: 0;
@@ -1757,8 +2040,12 @@
         overflow: visible;
       }
       #brand-lockup,
-      #sled-info {
+      #top-center-slot,
+      #desktop-action-strip {
         display: none;
+      }
+      #topbar-right {
+        display: contents;
       }
       #topbar-actions {
         display: flex;
@@ -1783,9 +2070,6 @@
       #topbar-actions button:hover {
         background: rgba(255,255,255,0.96);
       }
-      #btn-desktop-layout {
-        display: none;
-      }
       #btn-mobile-dock {
         display: inline-flex;
       }
@@ -1802,6 +2086,7 @@
         background: transparent;
         border: none;
         overflow: visible;
+        opacity: 1;
         pointer-events: none;
         scrollbar-width: none;
       }
@@ -1871,11 +2156,13 @@
 
       #tool-grid {
         grid-area: tools;
+        display: grid;
         grid-template-columns: repeat(7, minmax(0, 1fr));
         gap: 4px;
         padding: 0;
       }
       #tool-grid button {
+        width: auto;
         min-height: 38px;
         aspect-ratio: 1;
         padding: 0;
@@ -2207,27 +2494,105 @@
         <span id="brand-mark">Line Rider</span>
         <span id="brand-pill">Reloaded</span>
       </div>
-      <div id="sled-info">
-        <span>Classic Sled</span>
+      <div id="top-center-slot">
+        <div id="sled-info">
+          <span>Classic Sled</span>
+        </div>
+        <div id="top-tool-rail" aria-label="Primary tools"></div>
       </div>
-      <div id="topbar-actions">
-        <button id="btn-desktop-layout" class="btn-icon" title="Switch to top tools" aria-label="Switch to top tools">
-          <svg class="icon" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="5" rx="1.5"/><rect x="3" y="11" width="5" height="10" rx="1.5"/><rect x="10" y="11" width="11" height="10" rx="1.5"/></svg>
-        </button>
-        <button id="btn-achievements" class="btn-icon" title="Achievements" aria-label="Achievements and unlockable scenery" aria-pressed="false">
-          <svg class="icon" viewBox="0 0 24 24"><path d="M8 21h8"/><path d="M9 17h6"/><path d="M12 8v9"/><path d="M7 4h10v3a5 5 0 0 1-10 0z"/><path d="M17 5h3a2 2 0 0 1-2 2h-1"/><path d="M7 5H4a2 2 0 0 0 2 2h1"/></svg>
-        </button>
-        <button id="btn-sound" class="btn-icon" title="Sound" aria-label="Sound settings">
-          <svg class="icon" viewBox="0 0 24 24"><path d="M11 5L6 9H2v6h4l5 4V5z"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"/></svg>
-        </button>
-        <button id="btn-mobile-dock" class="btn-icon" title="Dock tools" aria-label="Dock tools">
-          <svg class="icon" viewBox="0 0 24 24"><rect x="4" y="5" width="16" height="10" rx="2"/><path d="M10 19h4"/><path d="M12 15v4"/></svg>
-        </button>
+      <div id="topbar-right">
+        <div id="desktop-action-strip" aria-label="Track actions">
+          <button id="btn-new-action" class="desktop-action-btn" type="button" aria-label="New track">
+            <svg class="icon" viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+            <span class="desktop-action-label">New</span>
+          </button>
+          <span class="desktop-action-divider" aria-hidden="true"></span>
+          <button id="btn-open-action" class="desktop-action-btn" type="button" aria-label="Open track">
+            <svg class="icon" viewBox="0 0 24 24"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+            <span class="desktop-action-label">Open</span>
+          </button>
+          <span class="desktop-action-divider" aria-hidden="true"></span>
+          <button id="btn-save-action" class="desktop-action-btn" type="button" aria-label="Save track">
+            <svg class="icon" viewBox="0 0 24 24"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
+            <span class="desktop-action-label">Save</span>
+          </button>
+          <span class="desktop-action-divider" aria-hidden="true"></span>
+          <button id="btn-export-action" class="desktop-action-btn" type="button" aria-label="Export track">
+            <svg class="icon" viewBox="0 0 24 24"><path d="M12 3v12"/><polyline points="8 7 12 3 16 7"/><path d="M4 15v3a3 3 0 0 0 3 3h10a3 3 0 0 0 3-3v-3"/></svg>
+            <span class="desktop-action-label">Export</span>
+          </button>
+          <span class="desktop-action-divider" aria-hidden="true"></span>
+          <button id="btn-settings-action" class="desktop-action-btn" type="button" aria-label="Settings" aria-pressed="false" data-settings-trigger>
+            <svg class="icon" viewBox="0 0 24 24"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg>
+            <span class="desktop-action-label">Settings</span>
+          </button>
+        </div>
+        <div id="topbar-actions">
+          <button id="btn-generators" class="btn-icon" title="Generators" aria-label="Shape generators" aria-pressed="false" data-generators-trigger>
+            <svg class="icon" viewBox="0 0 24 24"><circle cx="7" cy="7" r="3"/><path d="M4 18a8 8 0 0 1 16 0"/><line x1="5" y1="13" x2="19" y2="13"/></svg>
+          </button>
+          <button id="btn-achievements" class="btn-icon" title="Achievements" aria-label="Achievements and unlockable scenery" aria-pressed="false" data-achievements-trigger>
+            <svg class="icon" viewBox="0 0 24 24"><path d="M8 21h8"/><path d="M9 17h6"/><path d="M12 8v9"/><path d="M7 4h10v3a5 5 0 0 1-10 0z"/><path d="M17 5h3a2 2 0 0 1-2 2h-1"/><path d="M7 5H4a2 2 0 0 0 2 2h1"/></svg>
+          </button>
+          <button id="btn-sound" class="btn-icon" type="button" title="Sound" aria-label="Sound settings" aria-pressed="false" data-audio-trigger>
+            <svg class="icon" viewBox="0 0 24 24"><path d="M11 5L6 9H2v6h4l5 4V5z"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"/></svg>
+          </button>
+          <button id="btn-mobile-dock" class="btn-icon" title="Dock tools" aria-label="Dock tools">
+            <svg class="icon" viewBox="0 0 24 24"><rect x="4" y="5" width="16" height="10" rx="2"/><path d="M10 19h4"/><path d="M12 15v4"/></svg>
+          </button>
+        </div>
       </div>
     </header>
 
     <!-- MAIN AREA -->
     <div id="main">
+      <aside id="sidebar-left">
+        <div id="left-dock-tools">
+          <div id="tool-grid"></div>
+        </div>
+        <div id="left-dock-tools-divider" class="left-dock-divider" aria-hidden="true"></div>
+        <div id="left-dock-library">
+          <button id="btn-achievements-dock" class="dock-tool-button" type="button" title="Achievements" aria-label="Achievements and unlockable scenery" aria-pressed="false" data-achievements-trigger>
+            <span class="tool-icon">
+              <svg class="icon icon-lg" viewBox="0 0 24 24"><path d="M8 21h8"/><path d="M9 17h6"/><path d="M12 8v9"/><path d="M7 4h10v3a5 5 0 0 1-10 0z"/><path d="M17 5h3a2 2 0 0 1-2 2h-1"/><path d="M7 5H4a2 2 0 0 0 2 2h1"/></svg>
+            </span>
+            <span class="tool-label">Achievements</span>
+          </button>
+          <button id="btn-generators-dock" class="dock-tool-button" type="button" title="Shapes" aria-label="Shape generators" aria-pressed="false" data-generators-trigger>
+            <span class="tool-icon">
+              <svg class="icon icon-lg" viewBox="0 0 24 24"><circle cx="7" cy="7" r="3"/><path d="M4 18a8 8 0 0 1 16 0"/><line x1="5" y1="13" x2="19" y2="13"/></svg>
+            </span>
+            <span class="tool-label">Shapes</span>
+          </button>
+          <button id="btn-sound-dock" class="dock-tool-button" type="button" title="Audio" aria-label="Audio settings" aria-pressed="false" data-audio-trigger>
+            <span class="tool-icon">
+              <svg class="icon icon-lg" viewBox="0 0 24 24"><path d="M11 5L6 9H2v6h4l5 4V5z"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"/></svg>
+            </span>
+            <span class="tool-label">Audio</span>
+          </button>
+        </div>
+        <div id="left-dock-spacer"></div>
+        <div id="left-dock-utilities">
+          <button id="btn-tool-rail-toggle" class="dock-utility-button" type="button" title="Move tools to top bar" aria-label="Move tools to top bar" aria-pressed="false">
+            <svg class="icon" viewBox="0 0 24 24">
+              <rect x="4" y="5" width="5" height="14" rx="1.5"></rect>
+              <rect x="11" y="5" width="9" height="4" rx="1.5"></rect>
+              <path d="M12 14h7"></path>
+              <polyline points="16 11 19 14 16 17"></polyline>
+            </svg>
+          </button>
+          <button id="dock-undo-btn" class="dock-utility-button" type="button" title="Undo" aria-label="Undo">
+            <svg class="icon" viewBox="0 0 24 24"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/></svg>
+          </button>
+          <button id="dock-redo-btn" class="dock-utility-button" type="button" title="Redo" aria-label="Redo">
+            <svg class="icon" viewBox="0 0 24 24"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
+          </button>
+          <button id="dock-inspector-btn" class="dock-utility-button" type="button" title="Show inspector" aria-label="Show inspector" aria-pressed="false">
+            <svg class="icon" viewBox="0 0 24 24"><circle cx="6" cy="12" r="1.6" fill="currentColor" stroke="none"/><circle cx="12" cy="12" r="1.6" fill="currentColor" stroke="none"/><circle cx="18" cy="12" r="1.6" fill="currentColor" stroke="none"/></svg>
+          </button>
+        </div>
+      </aside>
+
       <!-- CANVAS -->
       <div id="canvas-container">
         <canvas id="canvas"></canvas>
@@ -2242,8 +2607,6 @@
       <!-- RIGHT SIDEBAR -->
       <aside id="sidebar-right">
         <div id="file-actions"></div>
-
-        <div id="tool-grid"></div>
 
         <div id="track-type-panel">
           <div class="section-label">TRACK TYPE</div>
@@ -2290,7 +2653,10 @@
               <button id="convert-scene-btn" type="button" title="Convert selected lines to scenery (E)">Scene</button>
             </div>
             <div class="select-action-hint">Convert existing lines without redrawing them. Keyboard: Q / W / E.</div>
-            <button id="smooth-btn" type="button" style="padding:var(--sp-1) var(--sp-2); background:var(--bg-hover); border:1px solid var(--border); border-radius:4px; cursor:pointer; color:var(--ink);" title="Select lines then click to smooth (S)">Smooth (S)</button>
+            <div id="select-utility-strip">
+              <button id="reverse-btn" type="button" style="padding:var(--sp-1) var(--sp-2); background:var(--bg-hover); border:1px solid var(--border); border-radius:4px; cursor:pointer; color:var(--ink);" title="Reverse selected lines (F)">Reverse (F)</button>
+              <button id="smooth-btn" type="button" style="padding:var(--sp-1) var(--sp-2); background:var(--bg-hover); border:1px solid var(--border); border-radius:4px; cursor:pointer; color:var(--ink);" title="Select lines then click to smooth (S)">Smooth (S)</button>
+            </div>
             <div id="smooth-slider-row" style="display:none;">
               <div style="display:flex; align-items:center; gap:var(--sp-1); margin-top:var(--sp-1);">
                 <input type="range" id="smooth-slider" min="0" max="100" value="0" style="flex:1; accent-color:#4488cc;" />
@@ -2562,9 +2928,9 @@
     </div>
 
     <div id="achievements-overlay" class="modal-overlay" role="dialog" aria-label="Achievements">
-      <div class="modal-box achievement-modal">
-        <div class="achievement-modal-header">
-          <div class="achievement-modal-copy">
+      <div class="modal-box picker-modal">
+        <div class="picker-modal-header">
+          <div class="picker-modal-copy">
             <strong>Achievements</strong>
             <h3>Unlocked Cloud Stamps</h3>
             <p>Pick a cloud, then click on the track to stamp it in as scenery lines. Press <kbd>Esc</kbd> to leave placement mode. You can later convert the lines to solid or accel with the Select tool.</p>
@@ -2573,7 +2939,36 @@
             <svg class="icon icon-sm" viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
           </button>
         </div>
-        <div id="achievements-list"></div>
+        <div id="achievements-list" class="picker-grid"></div>
+      </div>
+    </div>
+
+    <div id="generators-overlay" class="modal-overlay" role="dialog" aria-label="Generators">
+      <div class="modal-box picker-modal picker-modal-wide">
+        <div class="picker-modal-header">
+          <div class="picker-modal-copy">
+            <strong>Generators</strong>
+            <h3>Shape Generator Palette</h3>
+            <p>Pick a generator, tune its controls, then click the map to place normal editable lines. The output uses your current line type and respects grid snap for placement.</p>
+          </div>
+          <button id="generators-close" type="button" class="btn-icon subtle" aria-label="Close generators">
+            <svg class="icon icon-sm" viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+          </button>
+        </div>
+        <div class="picker-modal-body generator-modal-body">
+          <div id="generators-list" class="picker-grid"></div>
+          <aside id="generator-detail" class="picker-detail-panel">
+            <div class="generator-detail-copy">
+              <h3 id="generator-detail-title">Circle</h3>
+              <p id="generator-detail-text"></p>
+            </div>
+            <div id="generator-detail-preview"></div>
+            <div id="generator-stats"></div>
+            <div id="generator-controls"></div>
+            <p class="generator-detail-note">Press <kbd>Start Placing</kbd>, click anywhere on the map to stamp the generator, and use <kbd>Esc</kbd> to leave placement mode.</p>
+            <button id="generator-activate" type="button">Start Placing</button>
+          </aside>
+        </div>
       </div>
     </div>
 
@@ -2604,7 +2999,7 @@
         <div class="hk-row"><kbd>Dbl-click</kbd><span>Toggle smooth/corner anchor on the active curve</span></div>
         <div class="hk-row"><kbd>Dbl-click</kbd><span>Add anchor on the active curve segment</span></div>
         <div class="hk-row"><kbd>Delete</kbd><span>Remove selected anchor on the active curve</span></div>
-        <div class="hk-row"><kbd>F</kbd><span>Flip hovered/active line direction, or fit view when nothing is active</span></div>
+        <div class="hk-row"><kbd>F</kbd><span>Flip selected lines, flip hovered/active line direction, or fit view when nothing is active</span></div>
         <div class="hk-row"><kbd>Q</kbd><span>Solid line type or convert selection to solid</span></div>
         <div class="hk-row"><kbd>W</kbd><span>Accel line type or convert selection to accel</span></div>
         <div class="hk-row"><kbd>E</kbd><span>Scenery line type or convert selection to scenery</span></div>
