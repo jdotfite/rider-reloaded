@@ -14,6 +14,7 @@ import { SelectTool } from './input/tools/SelectTool';
 import { EditTool } from './input/tools/EditTool';
 import { DrawEditTool } from './input/tools/DrawEditTool';
 import { StampTool } from './input/tools/StampTool';
+import { GeneratorTool } from './input/tools/GeneratorTool';
 import { PortalTool } from './input/tools/PortalTool';
 import { TrackStore } from './store/TrackStore';
 import { Rider } from './physics/Rider';
@@ -41,6 +42,16 @@ import {
   type EditorGridSettings,
 } from './editor/GridMath';
 import { buildCloudStampAssets, type StampAsset } from './stamps/cloudAssets';
+import {
+  buildGeneratorAssets,
+  buildGeneratorPreviewMarkup,
+  computeGeneratedSegmentBounds,
+  formatGeneratorControlValue,
+  sanitizeGeneratorSettings,
+  type GeneratorAsset,
+  type GeneratorSettings,
+} from './generators/catalog';
+import { exportTrackAsSvg } from './export/svgExport';
 
 interface EditorPreferences {
   endpointSnapEnabled: boolean;
@@ -48,6 +59,11 @@ interface EditorPreferences {
 }
 
 const EDITOR_PREFERENCES_KEY = 'line-rider-editor-preferences';
+const GENERATOR_LINE_TYPE_LABELS: Record<LineType, string> = {
+  [LineType.SOLID]: 'Solid',
+  [LineType.ACC]: 'Accel',
+  [LineType.SCENERY]: 'Scenery',
+};
 
 function loadEditorPreferences(): EditorPreferences {
   const defaults: EditorPreferences = {
@@ -227,7 +243,12 @@ const rawLineTool = new LineTool(
   () => camera.zoom,
 );
 const eraserTool = new EraserTool(store);
-const selectTool = new SelectTool(store);
+const selectTool = new SelectTool(
+  store,
+  () => paperGrid.snapEnabled,
+  () => paperGrid.size,
+  () => camera.zoom,
+);
 const editTool = new EditTool(
   store,
   () => camera.zoom,
@@ -239,6 +260,14 @@ const pencilTool = new DrawEditTool('pencil', rawPencilTool, editTool);
 const lineTool = new DrawEditTool('line', rawLineTool, editTool);
 const stampTool = new StampTool(
   store,
+  () => paperGrid.snapEnabled,
+  () => paperGrid.size,
+  () => camera.zoom,
+);
+const generatorTool = new GeneratorTool(
+  store,
+  () => currentLineType,
+  () => getActiveGeneratorSettings(),
   () => paperGrid.snapEnabled,
   () => paperGrid.size,
   () => camera.zoom,
@@ -264,9 +293,17 @@ const flagTool = new FlagTool((position) => {
   rider.setStartPosition(store.startPosition);
 }, () => paperGrid.snapEnabled, () => paperGrid.size, () => camera.zoom);
 const cloudStampAssets = buildCloudStampAssets();
+const generatorAssets = buildGeneratorAssets();
+const generatorSettingsById = new Map<string, GeneratorSettings>(
+  generatorAssets.map((asset) => [asset.id, { ...asset.defaultSettings }]),
+);
 let stampResumeToolName = currentToolName;
+let generatorResumeToolName = currentToolName;
 let activeStampAssetId: string | null = null;
+let activeGeneratorId: string | null = null;
+let selectedGeneratorId: string | null = generatorAssets[0]?.id ?? null;
 stampTool.onCancel = () => cancelStampPlacement();
+generatorTool.onCancel = () => cancelGeneratorPlacement();
 currentTool = pencilTool;
 const loadInput = document.createElement('input');
 loadInput.type = 'file';
@@ -308,6 +345,7 @@ input.onLineTypeSwitch = (type: string) => {
   const lt = type as LineType;
   currentLineType = lt;
   toolbar.setActiveLineType(lt);
+  renderGeneratorDetail();
 };
 input.onClearTrack = () => confirmNewTrack();
 input.onQuickEraseStart = (worldPos) => beginQuickErase(worldPos);
@@ -327,6 +365,25 @@ let gridDirty = false; // Track changes made while paused
 
 function canEdit(): boolean {
   return gameLoop.state === GameState.EDITING || gameLoop.state === GameState.PAUSED;
+}
+
+function getGeneratorAssetById(id: string | null): GeneratorAsset | null {
+  if (!id) return null;
+  return generatorAssets.find((asset) => asset.id === id) ?? null;
+}
+
+function getGeneratorSettingsState(id: string | null): GeneratorSettings | null {
+  const asset = getGeneratorAssetById(id);
+  if (!asset) return null;
+  const existing = generatorSettingsById.get(asset.id);
+  if (existing) return existing;
+  const defaults = { ...asset.defaultSettings };
+  generatorSettingsById.set(asset.id, defaults);
+  return defaults;
+}
+
+function getActiveGeneratorSettings(): GeneratorSettings | null {
+  return getGeneratorSettingsState(activeGeneratorId);
 }
 
 function persistEditorPreferences() {
@@ -500,6 +557,11 @@ toolbar.onSmoothStart = () => selectTool.startSmooth();
 toolbar.onSmoothChange = (amount) => selectTool.setSmoothAmount(amount);
 toolbar.onSmoothApply = () => selectTool.applySmooth();
 toolbar.onSmoothCancel = () => selectTool.cancelSmooth();
+toolbar.onFlipSelection = () => {
+  if (currentTool === selectTool) {
+    selectTool.flipSelected();
+  }
+};
 toolbar.onConvertSelectedType = (type) => {
   if (currentTool === selectTool) {
     selectTool.changeSelectedType(type);
@@ -563,6 +625,7 @@ toolbar.onLineTypeSelect = (type) => {
   if (currentTool === selectTool && selectTool.getSelectedCount() > 0) {
     selectTool.changeSelectedType(type);
   }
+  renderGeneratorDetail();
 };
 toolbar.onClear = () => confirmNewTrack();
 toolbar.onUndo = () => {
@@ -663,13 +726,16 @@ toolbar.onStepBack = () => {
   }
 };
 
-const achievementsButton = document.getElementById('btn-achievements') as HTMLButtonElement | null;
+const achievementsButtons = Array.from(
+  document.querySelectorAll<HTMLButtonElement>('[data-achievements-trigger]'),
+);
 const achievementsOverlay = document.getElementById('achievements-overlay') as HTMLElement | null;
 const achievementsClose = document.getElementById('achievements-close') as HTMLButtonElement | null;
 const achievementsList = document.getElementById('achievements-list') as HTMLElement | null;
 
 function openAchievementsModal() {
   if (!achievementsOverlay) return;
+  closeGeneratorsModal();
   document.body.classList.add('achievements-open');
   syncAchievementsButton();
 }
@@ -680,10 +746,11 @@ function closeAchievementsModal() {
 }
 
 function syncAchievementsButton() {
-  if (!achievementsButton) return;
   const active = activeStampAssetId !== null || document.body.classList.contains('achievements-open');
-  achievementsButton.classList.toggle('active', active);
-  achievementsButton.setAttribute('aria-pressed', active ? 'true' : 'false');
+  for (const button of achievementsButtons) {
+    button.classList.toggle('active', active);
+    button.setAttribute('aria-pressed', active ? 'true' : 'false');
+  }
 }
 
 function syncAchievementsSelection() {
@@ -693,26 +760,51 @@ function syncAchievementsSelection() {
   });
 }
 
+type PickerCardOptions = {
+  className: string;
+  datasetKey: string;
+  datasetValue: string;
+  previewMarkup: string;
+  title: string;
+  subtitle: string;
+  stateText?: string;
+  onClick: () => void;
+};
+
+function createPickerCard(options: PickerCardOptions): HTMLButtonElement {
+  const button = document.createElement('button');
+  button.type = 'button';
+  button.className = `picker-card ${options.className}`;
+  button.dataset[options.datasetKey] = options.datasetValue;
+  button.innerHTML = `
+    <span class="picker-card-art">${options.previewMarkup}</span>
+    <span class="picker-card-copy">
+      <strong>${options.title}</strong>
+      <span>${options.subtitle}</span>
+    </span>
+    ${options.stateText ? `<span class="picker-card-state">${options.stateText}</span>` : ''}
+  `;
+  button.addEventListener('click', options.onClick);
+  return button;
+}
+
 function buildAchievementsModal() {
   if (!achievementsList) return;
   achievementsList.innerHTML = '';
 
   for (const asset of cloudStampAssets) {
-    const button = document.createElement('button');
-    button.type = 'button';
-    button.className = 'achievement-card';
-    button.dataset.assetId = asset.id;
-    button.innerHTML = `
-      <span class="achievement-card-art">${asset.previewMarkup}</span>
-      <span class="achievement-card-copy">
-        <strong>${asset.name}</strong>
-        <span>Stamp</span>
-      </span>
-    `;
-    button.addEventListener('click', () => {
-      if (!canEdit()) return;
-      activateStampPlacement(asset);
-      closeAchievementsModal();
+    const button = createPickerCard({
+      className: 'achievement-card',
+      datasetKey: 'assetId',
+      datasetValue: asset.id,
+      previewMarkup: asset.previewMarkup,
+      title: asset.name,
+      subtitle: 'Stamp',
+      onClick: () => {
+        if (!canEdit()) return;
+        activateStampPlacement(asset);
+        closeAchievementsModal();
+      },
     });
     achievementsList.appendChild(button);
   }
@@ -720,14 +812,16 @@ function buildAchievementsModal() {
   syncAchievementsSelection();
 }
 
-achievementsButton?.addEventListener('click', () => {
-  if (!canEdit()) return;
-  if (document.body.classList.contains('achievements-open')) {
-    closeAchievementsModal();
-    return;
-  }
-  openAchievementsModal();
-});
+for (const button of achievementsButtons) {
+  button.addEventListener('click', () => {
+    if (!canEdit()) return;
+    if (document.body.classList.contains('achievements-open')) {
+      closeAchievementsModal();
+      return;
+    }
+    openAchievementsModal();
+  });
+}
 achievementsClose?.addEventListener('click', () => closeAchievementsModal());
 achievementsOverlay?.addEventListener('click', (event) => {
   if (event.target === achievementsOverlay) {
@@ -742,6 +836,233 @@ window.addEventListener('keydown', (event) => {
 
 buildAchievementsModal();
 syncAchievementsButton();
+
+const generatorsButtons = Array.from(
+  document.querySelectorAll<HTMLButtonElement>('[data-generators-trigger]'),
+);
+const generatorsOverlay = document.getElementById('generators-overlay') as HTMLElement | null;
+const generatorsClose = document.getElementById('generators-close') as HTMLButtonElement | null;
+const generatorsList = document.getElementById('generators-list') as HTMLElement | null;
+const generatorDetailTitle = document.getElementById('generator-detail-title') as HTMLElement | null;
+const generatorDetailText = document.getElementById('generator-detail-text') as HTMLElement | null;
+const generatorDetailPreview = document.getElementById('generator-detail-preview') as HTMLElement | null;
+const generatorControls = document.getElementById('generator-controls') as HTMLElement | null;
+const generatorStats = document.getElementById('generator-stats') as HTMLElement | null;
+const generatorActivate = document.getElementById('generator-activate') as HTMLButtonElement | null;
+
+function openGeneratorsModal() {
+  if (!generatorsOverlay) return;
+  closeAchievementsModal();
+  document.body.classList.add('generators-open');
+  syncGeneratorsButton();
+}
+
+function closeGeneratorsModal() {
+  document.body.classList.remove('generators-open');
+  syncGeneratorsButton();
+}
+
+function syncGeneratorsButton() {
+  const active = activeGeneratorId !== null || document.body.classList.contains('generators-open');
+  for (const button of generatorsButtons) {
+    button.classList.toggle('active', active);
+    button.setAttribute('aria-pressed', active ? 'true' : 'false');
+  }
+}
+
+function syncGeneratorSelection() {
+  if (!generatorsList) return;
+  generatorsList.querySelectorAll<HTMLButtonElement>('.generator-card').forEach((card) => {
+    const id = card.dataset.generatorId;
+    const active = id === selectedGeneratorId;
+    const placing = id === activeGeneratorId;
+    card.classList.toggle('active', active);
+    card.classList.toggle('placing', placing);
+    const state = card.querySelector<HTMLElement>('.picker-card-state');
+    if (state) {
+      state.textContent = placing ? 'Placing' : active ? 'Selected' : 'Ready';
+    }
+  });
+}
+
+function updateGeneratorDetailSummary(asset: GeneratorAsset, settings: GeneratorSettings) {
+  if (generatorDetailTitle) generatorDetailTitle.textContent = asset.name;
+  if (generatorDetailText) generatorDetailText.textContent = asset.description;
+  if (generatorDetailPreview) {
+    generatorDetailPreview.innerHTML = buildGeneratorPreviewMarkup(asset, settings);
+  }
+
+  const segments = asset.createSegments(settings);
+  const bounds = computeGeneratedSegmentBounds(segments);
+  if (generatorStats) {
+    generatorStats.innerHTML = '';
+    for (const value of [
+      `${segments.length} lines`,
+      `${Math.round(bounds.width)} × ${Math.round(bounds.height)}u`,
+      `${GENERATOR_LINE_TYPE_LABELS[currentLineType]} output`,
+    ]) {
+      const chip = document.createElement('span');
+      chip.textContent = value;
+      generatorStats.appendChild(chip);
+    }
+    const dimensionChip = generatorStats.children[1];
+    if (dimensionChip instanceof HTMLElement) {
+      dimensionChip.textContent = `${Math.round(bounds.width)} x ${Math.round(bounds.height)}u`;
+    }
+  }
+
+  if (generatorActivate) {
+    generatorActivate.textContent = activeGeneratorId === asset.id ? 'Resume Placing' : 'Start Placing';
+  }
+}
+
+function renderGeneratorDetail() {
+  const asset = getGeneratorAssetById(selectedGeneratorId);
+  const settings = getGeneratorSettingsState(selectedGeneratorId);
+  if (!asset || !settings) return;
+
+  updateGeneratorDetailSummary(asset, settings);
+
+  if (!generatorControls) return;
+  generatorControls.innerHTML = '';
+
+  for (const control of asset.controls) {
+    const row = document.createElement('label');
+    row.className = 'generator-control';
+
+    const header = document.createElement('span');
+    header.className = 'generator-control-head';
+
+    const title = document.createElement('strong');
+    title.textContent = control.label;
+    const value = document.createElement('span');
+    value.textContent = formatGeneratorControlValue(control, settings[control.key] ?? control.defaultValue);
+    header.append(title, value);
+
+    const input = document.createElement('input');
+    input.type = 'range';
+    input.min = `${control.min}`;
+    input.max = `${control.max}`;
+    input.step = `${control.step}`;
+    input.value = `${settings[control.key] ?? control.defaultValue}`;
+    input.addEventListener('input', () => {
+      const current = getGeneratorSettingsState(asset.id) ?? asset.defaultSettings;
+      const next = sanitizeGeneratorSettings(asset, {
+        ...current,
+        [control.key]: Number(input.value),
+      });
+      generatorSettingsById.set(asset.id, next);
+      input.value = `${next[control.key]}`;
+      value.textContent = formatGeneratorControlValue(control, next[control.key]);
+      updateGeneratorDetailSummary(asset, next);
+      syncGeneratorSelection();
+    });
+
+    row.append(header, input);
+    generatorControls.appendChild(row);
+  }
+
+  if (generatorActivate) {
+    generatorActivate.onclick = () => {
+      if (!canEdit()) return;
+      activateGeneratorPlacement(asset);
+      closeGeneratorsModal();
+    };
+  }
+}
+
+function buildGeneratorsModal() {
+  if (!generatorsList) return;
+  generatorsList.innerHTML = '';
+
+  for (const asset of generatorAssets) {
+    const button = createPickerCard({
+      className: 'generator-card',
+      datasetKey: 'generatorId',
+      datasetValue: asset.id,
+      previewMarkup: asset.previewMarkup,
+      title: asset.name,
+      subtitle: `${asset.controls.length} controls`,
+      stateText: 'Ready',
+      onClick: () => {
+        selectedGeneratorId = asset.id;
+        syncGeneratorSelection();
+        renderGeneratorDetail();
+      },
+    });
+    generatorsList.appendChild(button);
+  }
+
+  syncGeneratorSelection();
+  renderGeneratorDetail();
+}
+
+for (const button of generatorsButtons) {
+  button.addEventListener('click', () => {
+    if (!canEdit()) return;
+    if (document.body.classList.contains('generators-open')) {
+      closeGeneratorsModal();
+      return;
+    }
+    openGeneratorsModal();
+  });
+}
+generatorsClose?.addEventListener('click', () => closeGeneratorsModal());
+generatorsOverlay?.addEventListener('click', (event) => {
+  if (event.target === generatorsOverlay) {
+    closeGeneratorsModal();
+  }
+});
+window.addEventListener('keydown', (event) => {
+  if (event.code === 'Escape' && document.body.classList.contains('generators-open')) {
+    closeGeneratorsModal();
+  }
+});
+
+buildGeneratorsModal();
+syncGeneratorsButton();
+
+const settingsButtons = Array.from(
+  document.querySelectorAll<HTMLButtonElement>('[data-settings-trigger]'),
+);
+const hotkeysClose = document.getElementById('hotkeys-close') as HTMLButtonElement | null;
+
+function openSettingsPanel() {
+  closeAchievementsModal();
+  closeGeneratorsModal();
+  document.body.classList.add('hotkeys-open');
+  syncSettingsButtons();
+}
+
+function closeSettingsPanel() {
+  document.body.classList.remove('hotkeys-open');
+  syncSettingsButtons();
+}
+
+function syncSettingsButtons() {
+  const active = document.body.classList.contains('hotkeys-open');
+  for (const button of settingsButtons) {
+    button.classList.toggle('active', active);
+    button.setAttribute('aria-pressed', active ? 'true' : 'false');
+  }
+}
+
+for (const button of settingsButtons) {
+  button.addEventListener('click', () => {
+    if (document.body.classList.contains('hotkeys-open')) {
+      closeSettingsPanel();
+      return;
+    }
+    openSettingsPanel();
+  });
+}
+hotkeysClose?.addEventListener('click', () => closeSettingsPanel());
+window.addEventListener('keydown', (event) => {
+  if (event.code === 'Escape' && document.body.classList.contains('hotkeys-open')) {
+    closeSettingsPanel();
+  }
+});
+syncSettingsButtons();
 
 const vehiclePickerOverlay = document.getElementById('vehicle-picker-overlay') as HTMLElement | null;
 const vehiclePickerClose = document.getElementById('vehicle-picker-close') as HTMLButtonElement | null;
@@ -872,6 +1193,9 @@ loadInput.addEventListener('change', async () => {
 
 function switchTool(name: string) {
   clearStampPlacementState();
+  clearGeneratorPlacementState();
+  closeAchievementsModal();
+  closeGeneratorsModal();
   currentToolName = name;
   currentTool = resolveToolByName(name);
   if (name !== 'pencil' && name !== 'line') {
@@ -899,6 +1223,8 @@ function clearStampPlacementState() {
 }
 
 function activateStampPlacement(asset: StampAsset) {
+  clearGeneratorPlacementState();
+  closeGeneratorsModal();
   if (activeStampAssetId === null) {
     stampResumeToolName = currentToolName;
   }
@@ -915,6 +1241,40 @@ function cancelStampPlacement() {
   if (activeStampAssetId === null) return;
   clearStampPlacementState();
   currentToolName = stampResumeToolName;
+  currentTool = resolveToolByName(currentToolName);
+  input.setTool(currentTool);
+  toolbar.setActiveTool(currentToolName);
+}
+
+function clearGeneratorPlacementState() {
+  activeGeneratorId = null;
+  generatorTool.clearAsset();
+  syncGeneratorsButton();
+  syncGeneratorSelection();
+  renderGeneratorDetail();
+}
+
+function activateGeneratorPlacement(asset: GeneratorAsset) {
+  clearStampPlacementState();
+  closeAchievementsModal();
+  if (activeGeneratorId === null) {
+    generatorResumeToolName = currentToolName;
+  }
+  activeGeneratorId = asset.id;
+  selectedGeneratorId = asset.id;
+  generatorTool.setAsset(asset);
+  currentTool = generatorTool;
+  input.setTool(currentTool);
+  toolbar.setActiveTool(generatorResumeToolName);
+  syncGeneratorsButton();
+  syncGeneratorSelection();
+  renderGeneratorDetail();
+}
+
+function cancelGeneratorPlacement() {
+  if (activeGeneratorId === null) return;
+  clearGeneratorPlacementState();
+  currentToolName = generatorResumeToolName;
   currentTool = resolveToolByName(currentToolName);
   input.setTool(currentTool);
   toolbar.setActiveTool(currentToolName);
@@ -1121,13 +1481,14 @@ function saveTrack() {
   const trackData = store.serialize();
   (trackData as unknown as Record<string, unknown>).triggers = triggerStore.serialize();
   const data = JSON.stringify(trackData, null, 2);
-  const blob = new Blob([data], { type: 'application/json' });
-  const url = URL.createObjectURL(blob);
-  const anchor = document.createElement('a');
-  anchor.href = url;
-  anchor.download = 'line-rider.track.json';
-  anchor.click();
-  setTimeout(() => URL.revokeObjectURL(url), 0);
+  downloadBlob(new Blob([data], { type: 'application/json' }), 'line-rider.track.json');
+}
+
+function exportTrack() {
+  if (!canEdit()) return;
+
+  const svg = exportTrackAsSvg(store.lines, store.layers, store.startPosition, store.portals);
+  downloadBlob(new Blob([svg], { type: 'image/svg+xml;charset=utf-8' }), 'line-rider-track.svg');
 }
 
 function openLoadDialog() {
@@ -1135,6 +1496,25 @@ function openLoadDialog() {
   loadInput.value = '';
   loadInput.click();
 }
+
+function downloadBlob(blob: Blob, filename: string) {
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement('a');
+  anchor.href = url;
+  anchor.download = filename;
+  anchor.click();
+  setTimeout(() => URL.revokeObjectURL(url), 0);
+}
+
+const btnNewAction = document.getElementById('btn-new-action') as HTMLButtonElement | null;
+const btnOpenAction = document.getElementById('btn-open-action') as HTMLButtonElement | null;
+const btnSaveAction = document.getElementById('btn-save-action') as HTMLButtonElement | null;
+const btnExportAction = document.getElementById('btn-export-action') as HTMLButtonElement | null;
+
+btnNewAction?.addEventListener('click', () => confirmNewTrack());
+btnOpenAction?.addEventListener('click', () => openLoadDialog());
+btnSaveAction?.addEventListener('click', () => saveTrack());
+btnExportAction?.addEventListener('click', () => exportTrack());
 
 function cycleLayer(direction: 1 | -1) {
   if (gameLoop.state !== GameState.EDITING) return;
@@ -1494,13 +1874,22 @@ renderer.addRenderCallback((ctx) => {
   const audioOffsetInput = document.getElementById('audio-offset') as HTMLInputElement;
   const audioRemoveBtn = document.getElementById('audio-remove-btn')!;
   const audioStatus = document.getElementById('audio-status')!;
-  const btnSound = document.getElementById('btn-sound')!;
+  const audioButtons = Array.from(document.querySelectorAll<HTMLButtonElement>('[data-audio-trigger]'));
 
   function showAudioPanel() {
     document.body.classList.add('audio-open');
+    syncAudioButtons();
   }
   function hideAudioPanel() {
     document.body.classList.remove('audio-open');
+    syncAudioButtons();
+  }
+  function syncAudioButtons() {
+    const active = document.body.classList.contains('audio-open');
+    for (const button of audioButtons) {
+      button.classList.toggle('active', active);
+      button.setAttribute('aria-pressed', active ? 'true' : 'false');
+    }
   }
   let statusFadeTimer: ReturnType<typeof setTimeout> | null = null;
   function setAudioStatus(msg: string, type: 'info' | 'error' | 'success' = 'info') {
@@ -1541,13 +1930,16 @@ renderer.addRenderCallback((ctx) => {
   }
 
   // Open/close panel
-  btnSound.addEventListener('click', showAudioPanel);
+  for (const button of audioButtons) {
+    button.addEventListener('click', showAudioPanel);
+  }
   audioClose.addEventListener('click', hideAudioPanel);
   window.addEventListener('keydown', (e) => {
     if (e.code === 'Escape' && document.body.classList.contains('audio-open')) {
       hideAudioPanel();
     }
   });
+  syncAudioButtons();
 
   // File drop zone
   audioDropZone.addEventListener('click', () => audioFileInput.click());
