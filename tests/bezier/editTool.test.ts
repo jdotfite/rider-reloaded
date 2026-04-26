@@ -43,12 +43,13 @@ test('dragging a bezier line body keeps moving across multiple mouse moves', () 
   const store = new TrackStore();
   const path = createCurve(store);
   const originalPositions = path.anchors.map(anchor => anchor.position.clone());
-  const segment = store.lines.find(line => line.id === path.lineIds[0]);
+  const middleLineId = path.lineIds[Math.floor(path.lineIds.length / 2)];
+  const segment = store.lines.find(line => line.id === middleLineId);
   assert.ok(segment);
 
   const editTool = new EditTool(store, () => 1, () => false);
   const start = segment!.p1.lerp(segment!.p2, 0.5);
-
+  editTool.setActivePath(path.id);
   editTool.onMouseDown(start);
   editTool.onMouseMove(start.add(new Vec2(12, 6)));
   editTool.onMouseMove(start.add(new Vec2(24, 12)));

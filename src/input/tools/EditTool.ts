@@ -130,10 +130,23 @@ export class EditTool implements Tool {
 
   canStartInteraction(worldPos: Vec2): boolean {
     const hitRadius = this.worldHandleRadius();
+    const inactiveEndpointRadius = Math.max(hitRadius, SNAP_RADIUS);
     if (this.findBezierHandleHit(worldPos, hitRadius)) return true;
     if (this.findAnchorHit(worldPos, hitRadius)) return true;
-    if (this.findNonBezierHandle(worldPos, hitRadius)) return true;
-    return this.store.getLineAt(worldPos, SELECT_RADIUS / this.getZoom()) !== null;
+    const straightHandleHit = this.findNonBezierHandle(worldPos, inactiveEndpointRadius);
+    if (straightHandleHit) {
+      return straightHandleHit.lineId === this.activeLineId;
+    }
+
+    const line = this.store.getLineAt(worldPos, SELECT_RADIUS / this.getZoom());
+    if (!line) return false;
+
+    const path = this.store.findBezierPathForLine(line.id);
+    if (path && path.id !== this.activePathId && this.isNearPathEndpoint(path, worldPos, inactiveEndpointRadius)) {
+      return false;
+    }
+
+    return true;
   }
 
   onKeyDown(e: KeyboardEvent) {
@@ -291,9 +304,14 @@ export class EditTool implements Tool {
     const line = this.store.getLineAt(worldPos, SELECT_RADIUS / this.getZoom());
     if (line) {
       const path = this.store.findBezierPathForLine(line.id);
+      const wasActive = path ? this.activePathId === path.id : this.activeLineId === line.id;
       this.activePathId = path ? path.id : null;
       this.activeLineId = path ? null : line.id;
       this.selectedAnchor = null;
+      if (!wasActive) {
+        this.hoveredLineId = line.id;
+        return;
+      }
 
       this.state = 'dragging-line';
       this.dragPathId = path ? path.id : null;
@@ -703,6 +721,16 @@ export class EditTool implements Tool {
     const line = this.store.getLineAt(worldPos, SELECT_RADIUS / this.getZoom());
     if (!line) return null;
     return this.store.findBezierPathForLine(line.id);
+  }
+
+  private isNearPathEndpoint(path: BezierPath, worldPos: Vec2, radius: number): boolean {
+    if (path.anchors.length === 0) return false;
+    const radiusSq = radius * radius;
+    const first = path.anchors[0]?.position;
+    const last = path.anchors[path.anchors.length - 1]?.position;
+    if (first && worldPos.distanceToSq(first) <= radiusSq) return true;
+    if (last && last !== first && worldPos.distanceToSq(last) <= radiusSq) return true;
+    return false;
   }
 
   private findNonBezierHandle(worldPos: Vec2, radius: number): HandleHit | null {

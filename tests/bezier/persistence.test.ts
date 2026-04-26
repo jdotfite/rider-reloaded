@@ -51,11 +51,13 @@ test('serialized bezier paths keep segment ownership after reload', () => {
     assert.equal(restored.findBezierPathForLine(lineId)?.id, restoredPath.id);
   }
 
-  const firstSegment = restored.lines.find(line => line.id === restoredPath.lineIds[0]);
-  assert.ok(firstSegment);
+  const middleLineId = restoredPath.lineIds[Math.floor(restoredPath.lineIds.length / 2)];
+  const middleSegment = restored.lines.find(line => line.id === middleLineId);
+  assert.ok(middleSegment);
 
   const editTool = new EditTool(restored, () => 1, () => false);
-  const start = firstSegment!.p1.lerp(firstSegment!.p2, 0.5);
+  const start = middleSegment!.p1.lerp(middleSegment!.p2, 0.5);
+  editTool.setActivePath(restoredPath.id);
   editTool.onMouseDown(start);
   editTool.onMouseMove(start.add(new Vec2(18, 9)));
   editTool.onMouseUp();

@@ -97,12 +97,13 @@ test('edit tool snaps dragged bezier path bodies to grid intersections', () => {
     },
   ];
   const path = store.addBezierPath(anchors, LineType.SOLID, store.activeLayerId);
-  const segment = store.lines.find(line => line.id === path.lineIds[0]);
+  const middleLineId = path.lineIds[Math.floor(path.lineIds.length / 2)];
+  const segment = store.lines.find(line => line.id === middleLineId);
   assert.ok(segment);
 
   const editTool = new EditTool(store, () => 1, () => true, () => true, () => 20);
   const start = segment!.p1.lerp(segment!.p2, 0.5);
-
+  editTool.setActivePath(path.id);
   editTool.onMouseDown(start);
   editTool.onMouseMove(start.add(new Vec2(13, 31)));
   editTool.onMouseUp();

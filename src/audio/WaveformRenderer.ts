@@ -12,12 +12,13 @@ export class WaveformRenderer {
   private audioDuration = 0; // seconds
 
   // Colors
-  private barColor = 'rgba(0,0,0,0.15)';
-  private playedColor = 'rgba(0,0,0,0.3)';
-  private durationBarColor = 'rgba(0,0,0,0.06)';
-  private durationPlayedColor = 'rgba(0,0,0,0.1)';
-  private beatColor = 'rgba(0,0,0,0.35)';
-  private beatSubColor = 'rgba(0,0,0,0.12)';
+  private barColor = 'rgba(17,24,39,0.42)';
+  private playedColor = 'rgba(17,24,39,0.9)';
+  private durationBarColor = 'rgba(17,24,39,0.18)';
+  private durationPlayedColor = 'rgba(17,24,39,0.42)';
+  private beatColor = 'rgba(214,150,34,0.95)';
+  private beatSubColor = 'rgba(214,150,34,0.3)';
+  private centerLineColor = 'rgba(17,24,39,0.16)';
 
   // Beat grid
   private _bpm = 0;
@@ -28,8 +29,10 @@ export class WaveformRenderer {
   private lastFrame = -1;
   private lastMaxFrame = -1;
   private lastWidth = 0;
+  private lastHeight = 0;
   private lastBpm = -1;
   private lastBeatOffset = -1;
+  private lastBeatSnap = -1;
 
   constructor(canvas: HTMLCanvasElement) {
     this.canvas = canvas;
@@ -49,7 +52,10 @@ export class WaveformRenderer {
   }
 
   get beatSnap(): number { return this._beatSnap; }
-  set beatSnap(v: number) { this._beatSnap = v; }
+  set beatSnap(v: number) {
+    this._beatSnap = v;
+    this.lastBeatSnap = -1;
+  }
 
   /**
    * Snap a physics frame to the nearest beat (or sub-beat).
@@ -123,6 +129,7 @@ export class WaveformRenderer {
     this.lastFrame = -1;
     this.lastMaxFrame = -1;
     this.lastWidth = 0;
+    this.lastHeight = 0;
     this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
   }
 
@@ -150,16 +157,20 @@ export class WaveformRenderer {
       currentFrame === this.lastFrame &&
       maxFrame === this.lastMaxFrame &&
       w === this.lastWidth &&
+      h === this.lastHeight &&
       this._bpm === this.lastBpm &&
-      this._beatOffset === this.lastBeatOffset
+      this._beatOffset === this.lastBeatOffset &&
+      this._beatSnap === this.lastBeatSnap
     ) {
       return;
     }
     this.lastFrame = currentFrame;
     this.lastMaxFrame = maxFrame;
     this.lastWidth = w;
+    this.lastHeight = h;
     this.lastBpm = this._bpm;
     this.lastBeatOffset = this._beatOffset;
+    this.lastBeatSnap = this._beatSnap;
 
     ctx.clearRect(0, 0, w, h);
 
@@ -170,6 +181,10 @@ export class WaveformRenderer {
 
     const currentSeconds = currentFrame / fps;
     const playheadX = Math.round((currentSeconds / timelineSeconds) * w);
+    const halfH = h / 2;
+
+    ctx.fillStyle = this.centerLineColor;
+    ctx.fillRect(0, halfH - Math.max(1, dpr), w, Math.max(1, dpr * 2));
 
     if (peaks && peaks.length > 0) {
       // Draw waveform peaks (local audio)
@@ -178,8 +193,6 @@ export class WaveformRenderer {
 
       const samplesPerPixel = (audioSeconds / timelineSeconds) * (totalAudioSamples / w);
       const audioPixels = Math.min(w, Math.round((audioSeconds / timelineSeconds) * w));
-
-      const halfH = h / 2;
 
       for (let px = 0; px < audioPixels; px++) {
         const sampleStart = Math.floor(px * samplesPerPixel);
@@ -199,7 +212,7 @@ export class WaveformRenderer {
     } else if (this.audioDuration > 0) {
       // No peaks (YouTube) — draw a simple audio duration bar
       const audioPixels = Math.min(w, Math.round((this.audioDuration / timelineSeconds) * w));
-      const barH = Math.round(h * 0.4);
+      const barH = Math.round(h * 0.5);
       const barY = Math.round((h - barH) / 2);
 
       // Played portion
@@ -242,7 +255,7 @@ export class WaveformRenderer {
           if (Math.abs(relToBeat - Math.round(relToBeat)) > 0.01) {
             const px = Math.round((t / timelineSeconds) * w);
             if (px >= 0 && px < w) {
-              ctx.fillRect(px, h * 0.3, Math.max(1, dpr), h * 0.4);
+              ctx.fillRect(px, h * 0.22, Math.max(1, dpr), h * 0.56);
             }
           }
         }
@@ -260,9 +273,19 @@ export class WaveformRenderer {
         if (px >= 0 && px < w) {
           // Downbeat (every 4 beats) gets full height, others shorter
           const isDownbeat = beatNum % 4 === 0;
-          const lineH = isDownbeat ? h : h * 0.6;
+          const lineH = isDownbeat ? h : h * 0.68;
           const lineY = (h - lineH) / 2;
-          ctx.fillRect(px, lineY, Math.max(1, dpr), lineH);
+          ctx.fillRect(px, lineY, Math.max(isDownbeat ? 2 : 1, dpr), lineH);
+
+          if (isDownbeat && h >= 40 * dpr) {
+            ctx.save();
+            ctx.fillStyle = 'rgba(214,150,34,0.95)';
+            ctx.font = `600 ${10 * dpr}px ui-monospace, monospace`;
+            ctx.textAlign = 'left';
+            ctx.textBaseline = 'top';
+            ctx.fillText(String(Math.floor(beatNum / 4) + 1), Math.min(px + 4 * dpr, w - 12 * dpr), 4 * dpr);
+            ctx.restore();
+          }
         }
       }
       t += beatInterval;

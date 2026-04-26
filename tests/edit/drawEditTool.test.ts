@@ -39,7 +39,31 @@ function createDrawEditTool(store: TrackStore) {
   return new DrawEditTool('line', rawLineTool, editTool);
 }
 
-test('drawing mode drags an existing straight line without converting it to bezier', () => {
+test('dragging an already active straight line in draw mode moves it without converting it to bezier', () => {
+  installWindowStub();
+
+  const store = new TrackStore();
+  store.addLine(new Vec2(0, 0), new Vec2(100, 0), LineType.SOLID);
+  const tool = createDrawEditTool(store);
+
+  const activate = new Vec2(50, 0);
+  const dragStart = new Vec2(60, 0);
+  const dragEnd = new Vec2(70, 12);
+  tool.onMouseDown(activate, activate, 0);
+  tool.onMouseUp(activate, activate, 0);
+  tool.onMouseDown(dragStart, dragStart, 0);
+  tool.onMouseMove(dragEnd, dragEnd);
+  tool.onMouseUp(dragEnd, dragEnd, 0);
+
+  assert.equal(store.lines.length, 1);
+  assert.equal(store.bezierPaths.length, 0);
+  assert.equal(store.lines[0].p1.x, 10);
+  assert.equal(store.lines[0].p1.y, 12);
+  assert.equal(store.lines[0].p2.x, 110);
+  assert.equal(store.lines[0].p2.y, 12);
+});
+
+test('clicking an inactive line body does not drag until the next deliberate edit gesture', () => {
   installWindowStub();
 
   const store = new TrackStore();
@@ -53,11 +77,34 @@ test('drawing mode drags an existing straight line without converting it to bezi
   tool.onMouseUp(end, end, 0);
 
   assert.equal(store.lines.length, 1);
-  assert.equal(store.bezierPaths.length, 0);
-  assert.equal(store.lines[0].p1.x, 10);
-  assert.equal(store.lines[0].p1.y, 12);
-  assert.equal(store.lines[0].p2.x, 110);
-  assert.equal(store.lines[0].p2.y, 12);
+  assert.equal(store.lines[0].p1.x, 0);
+  assert.equal(store.lines[0].p1.y, 0);
+  assert.equal(store.lines[0].p2.x, 100);
+  assert.equal(store.lines[0].p2.y, 0);
+});
+
+test('clicking an inactive line endpoint starts a connected line instead of grabbing the existing line', () => {
+  installWindowStub();
+
+  const store = new TrackStore();
+  store.addLine(new Vec2(0, 0), new Vec2(100, 0), LineType.SOLID);
+  const tool = createDrawEditTool(store);
+
+  const sharedEndpoint = new Vec2(100, 0);
+  const drawEnd = new Vec2(140, 16);
+  tool.onMouseDown(sharedEndpoint, sharedEndpoint, 0);
+  tool.onMouseMove(drawEnd, drawEnd);
+  tool.onMouseUp(drawEnd, drawEnd, 0);
+
+  assert.equal(store.lines.length, 2);
+  assert.equal(store.lines[0].p1.x, 0);
+  assert.equal(store.lines[0].p1.y, 0);
+  assert.equal(store.lines[0].p2.x, 100);
+  assert.equal(store.lines[0].p2.y, 0);
+  assert.equal(store.lines[1].p1.x, 100);
+  assert.equal(store.lines[1].p1.y, 0);
+  assert.equal(store.lines[1].p2.x, 140);
+  assert.equal(store.lines[1].p2.y, 16);
 });
 
 test('clicking a drawn line activates its handles, then empty space still starts a new line', () => {

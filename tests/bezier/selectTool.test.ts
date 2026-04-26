@@ -7,6 +7,32 @@ import { TrackStore } from '../../src/store/TrackStore';
 import { SelectTool } from '../../src/input/tools/SelectTool';
 import { BezierAnchor } from '../../src/store/BezierPath';
 
+function installWindowStub() {
+  const listeners = new Map<string, Array<(event: KeyboardEvent) => void>>();
+  const stub = {
+    addEventListener(type: string, listener: (event: KeyboardEvent) => void) {
+      const existing = listeners.get(type) ?? [];
+      existing.push(listener);
+      listeners.set(type, existing);
+    },
+    removeEventListener(type: string, listener: (event: KeyboardEvent) => void) {
+      const existing = listeners.get(type) ?? [];
+      listeners.set(type, existing.filter((candidate) => candidate !== listener));
+    },
+    dispatch(type: string, event: KeyboardEvent) {
+      for (const listener of listeners.get(type) ?? []) {
+        listener(event);
+      }
+    },
+  };
+  Object.defineProperty(globalThis, 'window', {
+    value: stub,
+    configurable: true,
+    writable: true,
+  });
+  return stub;
+}
+
 function createSampleCurve(store: TrackStore) {
   const anchors: BezierAnchor[] = [
     {
@@ -25,7 +51,26 @@ function createSampleCurve(store: TrackStore) {
   return store.addBezierPath(anchors, LineType.SOLID, store.activeLayerId);
 }
 
+function createStraightPath(store: TrackStore) {
+  const anchors: BezierAnchor[] = [
+    {
+      position: new Vec2(0, 0),
+      handleIn: new Vec2(0, 0),
+      handleOut: new Vec2(0, 0),
+      smooth: true,
+    },
+    {
+      position: new Vec2(100, 50),
+      handleIn: new Vec2(0, 0),
+      handleOut: new Vec2(0, 0),
+      smooth: true,
+    },
+  ];
+  return store.addBezierPath(anchors, LineType.SOLID, store.activeLayerId);
+}
+
 test('partial bezier type change upgrades to the whole curve without dropping path ownership', () => {
+  installWindowStub();
   const store = new TrackStore();
   const path = createSampleCurve(store);
 
@@ -45,6 +90,7 @@ test('partial bezier type change upgrades to the whole curve without dropping pa
 });
 
 test('selecting a bezier segment expands to the full curve and duplicate keeps it editable', () => {
+  installWindowStub();
   const store = new TrackStore();
   const original = createSampleCurve(store);
   const selectTool = new SelectTool(store);
@@ -76,6 +122,7 @@ test('selecting a bezier segment expands to the full curve and duplicate keeps i
 });
 
 test('smoothing a selected line chain keeps the result editable as a bezier path', () => {
+  installWindowStub();
   const store = new TrackStore();
   store.addLine(new Vec2(0, 0), new Vec2(40, 20), LineType.SOLID);
   store.addLine(new Vec2(40, 20), new Vec2(80, -10), LineType.SOLID);
@@ -96,4 +143,134 @@ test('smoothing a selected line chain keeps the result editable as a bezier path
   assert.equal(store.bezierPaths.length, 1);
   assert.ok(store.bezierPaths[0].anchors.length >= 2);
   assert.equal(selectTool.getSelectedCount(), store.bezierPaths[0].lineIds.length);
+});
+
+test('select tool scales a selected line uniformly from a corner handle by default', () => {
+  installWindowStub();
+  const store = new TrackStore();
+  store.addLine(new Vec2(0, 0), new Vec2(100, 50), LineType.SOLID);
+
+  const selectTool = new SelectTool(store);
+  selectTool.onMouseDown(new Vec2(50, 25), new Vec2(50, 25));
+  selectTool.onMouseDown(new Vec2(100, 50), new Vec2(100, 50));
+  selectTool.onMouseMove(new Vec2(200, 100), new Vec2(200, 100));
+  selectTool.onMouseUp(new Vec2(200, 100), new Vec2(200, 100));
+
+  assert.equal(store.lines[0].p1.x, 0);
+  assert.equal(store.lines[0].p1.y, 0);
+  assert.equal(store.lines[0].p2.x, 200);
+  assert.equal(store.lines[0].p2.y, 100);
+});
+
+test('holding shift while scaling breaks aspect ratio', () => {
+  const windowStub = installWindowStub();
+  const store = new TrackStore();
+  store.addLine(new Vec2(0, 0), new Vec2(100, 50), LineType.SOLID);
+
+  const selectTool = new SelectTool(store);
+  selectTool.onMouseDown(new Vec2(50, 25), new Vec2(50, 25));
+  windowStub.dispatch('keydown', {
+    key: 'Shift',
+    shiftKey: true,
+    ctrlKey: false,
+    altKey: false,
+    metaKey: false,
+  } as KeyboardEvent);
+  selectTool.onMouseDown(new Vec2(100, 50), new Vec2(100, 50));
+  selectTool.onMouseMove(new Vec2(200, 50), new Vec2(200, 50));
+  selectTool.onMouseUp(new Vec2(200, 50), new Vec2(200, 50));
+  windowStub.dispatch('keyup', {
+    key: 'Shift',
+    shiftKey: false,
+    ctrlKey: false,
+    altKey: false,
+    metaKey: false,
+  } as KeyboardEvent);
+
+  assert.equal(store.lines[0].p2.x, 200);
+  assert.equal(store.lines[0].p2.y, 50);
+});
+
+test('grid snap affects select-tool scaling handles', () => {
+  installWindowStub();
+  const store = new TrackStore();
+  store.addLine(new Vec2(0, 0), new Vec2(100, 50), LineType.SOLID);
+
+  const selectTool = new SelectTool(store, () => true, () => 20, () => 1);
+  selectTool.onMouseDown(new Vec2(50, 25), new Vec2(50, 25));
+  selectTool.onMouseDown(new Vec2(100, 50), new Vec2(100, 50));
+  selectTool.onMouseMove(new Vec2(191, 91), new Vec2(191, 91));
+  selectTool.onMouseUp(new Vec2(191, 91), new Vec2(191, 91));
+
+  assert.equal(store.lines[0].p2.x, 200);
+  assert.equal(store.lines[0].p2.y, 100);
+});
+
+test('select tool rotates a selected line around its center using the rotate handle', () => {
+  installWindowStub();
+  const store = new TrackStore();
+  store.addLine(new Vec2(0, 0), new Vec2(100, 0), LineType.SOLID);
+
+  const selectTool = new SelectTool(store, () => false, () => 24, () => 1);
+  selectTool.onMouseDown(new Vec2(50, 0), new Vec2(50, 0));
+  selectTool.onMouseDown(new Vec2(50, -28), new Vec2(50, -28));
+  selectTool.onMouseMove(new Vec2(100, 0), new Vec2(100, 0));
+  selectTool.onMouseUp(new Vec2(100, 0), new Vec2(100, 0));
+
+  assert.ok(Math.abs(store.lines[0].p1.x - 50) < 1e-6);
+  assert.ok(Math.abs(store.lines[0].p1.y + 50) < 1e-6);
+  assert.ok(Math.abs(store.lines[0].p2.x - 50) < 1e-6);
+  assert.ok(Math.abs(store.lines[0].p2.y - 50) < 1e-6);
+});
+
+test('scaling a selected bezier path keeps it editable and updates path ownership', () => {
+  installWindowStub();
+  const store = new TrackStore();
+  const path = createStraightPath(store);
+  const selectTool = new SelectTool(store);
+
+  selectTool.onMouseDown(new Vec2(50, 25), new Vec2(50, 25));
+  selectTool.onMouseDown(new Vec2(100, 50), new Vec2(100, 50));
+  selectTool.onMouseMove(new Vec2(200, 100), new Vec2(200, 100));
+  selectTool.onMouseUp(new Vec2(200, 100), new Vec2(200, 100));
+
+  assert.equal(store.bezierPaths.length, 1);
+  assert.equal(store.bezierPaths[0].id, path.id);
+  assert.equal(store.bezierPaths[0].anchors[0].position.x, 0);
+  assert.equal(store.bezierPaths[0].anchors[0].position.y, 0);
+  assert.equal(store.bezierPaths[0].anchors[1].position.x, 200);
+  assert.equal(store.bezierPaths[0].anchors[1].position.y, 100);
+  assert.equal(selectTool.getSelectedCount(), store.bezierPaths[0].lineIds.length);
+});
+
+test('select tool flips selected straight lines', () => {
+  installWindowStub();
+  const store = new TrackStore();
+  store.addLine(new Vec2(0, 0), new Vec2(100, 0), LineType.SOLID);
+
+  const selectTool = new SelectTool(store);
+  selectTool.onMouseDown(new Vec2(50, 0), new Vec2(50, 0));
+  selectTool.flipSelected();
+
+  assert.equal(store.lines[0].flipped, true);
+});
+
+test('select tool flips every segment in a selected bezier path without losing ownership', () => {
+  installWindowStub();
+  const store = new TrackStore();
+  const path = createSampleCurve(store);
+  const selectTool = new SelectTool(store);
+
+  const pickedLine = store.lines.find((line) => line.id === path.lineIds[0]);
+  assert.ok(pickedLine);
+  const midpoint = pickedLine!.p1.lerp(pickedLine!.p2, 0.5);
+  selectTool.onMouseDown(midpoint, midpoint);
+  selectTool.flipSelected();
+
+  assert.equal(store.bezierPaths.length, 1);
+  assert.equal(store.bezierPaths[0].id, path.id);
+  assert.equal(
+    store.bezierPaths[0].lineIds.every((lineId) => store.lines.find((line) => line.id === lineId)?.flipped === true),
+    true,
+  );
 });
