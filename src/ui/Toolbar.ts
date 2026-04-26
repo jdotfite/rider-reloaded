@@ -134,6 +134,9 @@ export class Toolbar {
   private playBtn!: HTMLButtonElement;
   private pauseBtn!: HTMLButtonElement;
   private stopBtn!: HTMLButtonElement;
+  private activeToolName = 'pencil';
+  private currentSelectedCount = 0;
+  private currentSelectionSmoothing = false;
 
   // Layer state
   private layerRows: HTMLElement[] = [];
@@ -665,15 +668,13 @@ export class Toolbar {
   }
 
   setActiveTool(name: string) {
+    this.activeToolName = name;
     for (const [n, btn] of this.toolButtons) {
       btn.classList.toggle('active', n === name);
     }
-    if (this.smoothContainer) {
-      this.smoothContainer.style.display = name === 'select' ? '' : 'none';
-      if (name !== 'select') this.hideSmoothSlider();
-    }
+    this.syncSelectionPanelVisibility();
     if (this.portalSettings) {
-      this.portalSettings.style.display = name === 'portal' ? '' : 'none';
+      this.portalSettings.style.display = name === 'portal' ? 'block' : 'none';
     }
   }
 
@@ -714,6 +715,10 @@ export class Toolbar {
   }
 
   setSelectedLineState(count: number, smoothing: boolean) {
+    this.currentSelectedCount = count;
+    this.currentSelectionSmoothing = smoothing;
+    this.syncSelectionPanelVisibility();
+
     const hasSelection = count > 0;
     if (this.selectedCount) {
       this.selectedCount.textContent = smoothing
@@ -728,6 +733,19 @@ export class Toolbar {
     }
     if (this.smoothBtn) {
       this.smoothBtn.disabled = !hasSelection || smoothing;
+    }
+  }
+
+  private syncSelectionPanelVisibility() {
+    if (!this.smoothContainer) return;
+
+    const shouldShow = this.activeToolName === 'select'
+      || this.currentSelectedCount > 0
+      || this.currentSelectionSmoothing;
+
+    this.smoothContainer.style.display = shouldShow ? 'block' : 'none';
+    if (!shouldShow) {
+      this.hideSmoothSlider();
     }
   }
 

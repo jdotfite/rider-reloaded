@@ -57,13 +57,14 @@ export function resamplePolyline(points: Vec2[], count: number): Vec2[] {
 /**
  * Smooth a polyline using Chaikin subdivision.
  * @param points - Input polyline (at least 3 points for any effect)
- * @param amount - 0 to 1 smoothing amount. Maps to 0-3 iterations with fractional interpolation.
+ * @param amount - 0 to 1 smoothing amount. Maps to 0-6 iterations with fractional interpolation,
+ * front-loading the effect so mid slider values feel more substantial.
  * @returns Smoothed polyline with anchored first/last points
  */
 export function chaikinSmooth(points: Vec2[], amount: number): Vec2[] {
   if (points.length < 3 || amount <= 0) return points.map(p => p.clone());
 
-  const maxIterations = 3;
+  const maxIterations = 6;
   const continuous = Math.min(amount, 1) * maxIterations;
   const fullIterations = Math.floor(continuous);
   const frac = continuous - fullIterations;

@@ -453,7 +453,7 @@ const gameLoop = new GameLoop(physics, () => {
   // Update stats in canvas HUD
   const speed = rider.getCenterSpeed() * (1000 / TIMESTEP);
   toolbar.updateStats(store.lines.length, speed);
-  toolbar.setSelectedLineState(currentTool === selectTool ? selectTool.getSelectedCount() : 0, selectTool.isSmoothing());
+  toolbar.setSelectedLineState(selectTool.getSelectedCount(), selectTool.isSmoothing());
   const portalDiagnostics = currentTool === portalTool ? portalTool.getDiagnostics() : null;
   toolbar.setPortalState(
     currentTool === portalTool,
