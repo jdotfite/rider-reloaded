@@ -559,7 +559,7 @@ export class Toolbar {
     const toolRailKey = 'line-rider-tool-rail-mode';
     const sidebarInspectorKey = 'line-rider-sidebar-inspector-open';
     let toolRailMode: 'left' | 'top' = 'left';
-    let sidebarInspectorOpen = false;
+    let sidebarInspectorOpen = true;
     const isDesktopViewport = () => window.matchMedia('(min-width: 900px)').matches;
 
     const mountToolGrid = () => {
@@ -598,7 +598,10 @@ export class Toolbar {
       if (savedMode === 'top') toolRailMode = 'top';
     } catch {}
     try {
-      sidebarInspectorOpen = window.localStorage.getItem(sidebarInspectorKey) === 'true';
+      const savedInspectorState = window.localStorage.getItem(sidebarInspectorKey);
+      if (savedInspectorState !== null) {
+        sidebarInspectorOpen = savedInspectorState === 'true';
+      }
     } catch {}
     applyToolRailMode(toolRailMode);
     btnToolRailToggle?.addEventListener('click', () => {
