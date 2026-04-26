@@ -1039,7 +1039,7 @@ export class SelectTool implements Tool {
   }
 
   private isRotationSnapModifierHeld(): boolean {
-    return this.ctrlHeld || this.altHeld || this.metaHeld;
+    return this.shiftHeld;
   }
 
   private onWindowKeyDown = (event: KeyboardEvent) => {
