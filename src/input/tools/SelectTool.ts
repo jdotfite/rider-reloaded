@@ -24,6 +24,7 @@ interface ClipboardLine {
   p2: { x: number; y: number };
   type: LineType;
   flipped: boolean;
+  accelFlipped?: boolean;
   leftExtended: boolean;
   rightExtended: boolean;
   multiplier?: number;
@@ -39,6 +40,8 @@ interface ClipboardBezierAnchor {
 interface ClipboardBezierPath {
   anchors: ClipboardBezierAnchor[];
   type: LineType;
+  flipped: boolean;
+  accelFlipped: boolean;
 }
 
 interface ClipboardSelection {
@@ -50,6 +53,8 @@ interface SmoothChain {
   lineIds: number[];
   points: Vec2[];
   type: LineType;
+  flipped: boolean;
+  accelFlipped: boolean;
   layer: number;
 }
 
@@ -352,14 +357,48 @@ export class SelectTool implements Tool {
     if (this.selectedIds.size === 0 || this.state !== 'idle') return;
     this.selectedIds = this.expandSelection(this.selectedIds);
     this.store.beginTransaction();
+    const flippedPathIds = new Set<number>();
+    for (const path of this.store.getBezierPathsForLineSelection(this.selectedIds)) {
+      this.store.flipBezierPath(path.id);
+      flippedPathIds.add(path.id);
+    }
     for (const lineId of this.selectedIds) {
+      if (flippedPathIds.has(this.store.findBezierPathForLine(lineId)?.id ?? -1)) continue;
       this.store.flipLine(lineId);
     }
     this.store.endTransaction();
   }
 
+  reverseAccelSelected() {
+    if (this.selectedIds.size === 0 || this.state !== 'idle') return;
+    this.selectedIds = this.expandSelection(this.selectedIds);
+    this.store.beginTransaction();
+    let changed = false;
+    const reversedPathIds = new Set<number>();
+    for (const path of this.store.getBezierPathsForLineSelection(this.selectedIds)) {
+      if (this.store.reverseBezierPathAccel(path.id)) {
+        reversedPathIds.add(path.id);
+        changed = true;
+      }
+    }
+    for (const lineId of this.selectedIds) {
+      if (reversedPathIds.has(this.store.findBezierPathForLine(lineId)?.id ?? -1)) continue;
+      if (this.store.reverseAccelLine(lineId)) {
+        changed = true;
+      }
+    }
+    this.store.endTransaction();
+    if (!changed) return;
+  }
+
   getSelectedCount(): number {
     return this.selectedIds.size;
+  }
+
+  hasSelectedAccelerationLines(): boolean {
+    if (this.selectedIds.size === 0) return false;
+    const expanded = this.expandSelection(this.selectedIds);
+    return [...expanded].some((lineId) => this.store.lines.find((line) => line.id === lineId)?.type === LineType.ACC);
   }
 
   copySelected() {
@@ -595,6 +634,8 @@ export class SelectTool implements Tool {
         lineIds: [...backwardIds, ...forwardIds],
         points: [...backwardPoints, ...forwardPoints],
         type: startLine.type,
+        flipped: startLine.flipped,
+        accelFlipped: startLine instanceof AccLine ? startLine.accelFlipped : false,
         layer: startLine.layer,
       });
     }
@@ -626,7 +667,10 @@ export class SelectTool implements Tool {
         const smoothed = this.smoothPreviewPoints[ci];
         const anchors = this.fitBezierAnchors(smoothed);
         if (anchors) {
-          const addedPath = this.store.addBezierPath(anchors, chain.type, chain.layer);
+          const addedPath = this.store.addBezierPath(anchors, chain.type, chain.layer, {
+            flipped: chain.flipped,
+            accelFlipped: chain.accelFlipped,
+          });
           for (const id of addedPath.lineIds) {
             newIds.add(id);
           }
@@ -639,6 +683,8 @@ export class SelectTool implements Tool {
             p1: segment.p1,
             p2: segment.p2,
             type: chain.type,
+            flipped: chain.flipped,
+            accelFlipped: chain.accelFlipped,
             leftExtended: index > 0,
             rightExtended: index < segments.length - 1,
             layer: chain.layer,
@@ -940,6 +986,7 @@ export class SelectTool implements Tool {
           p2: { x: line.p2.x, y: line.p2.y },
           type: line.type,
           flipped: line.flipped,
+          accelFlipped: line instanceof AccLine ? line.accelFlipped : undefined,
           leftExtended: line.leftExtended,
           rightExtended: line.rightExtended,
           multiplier: line instanceof AccLine ? line.multiplier : undefined,
@@ -952,6 +999,8 @@ export class SelectTool implements Tool {
           smooth: anchor.smooth,
         })),
         type: path.lineType,
+        flipped: path.flipped,
+        accelFlipped: path.accelFlipped,
       })),
     };
   }
@@ -968,6 +1017,7 @@ export class SelectTool implements Tool {
       p2: new Vec2(line.p2.x + dx, line.p2.y + dy),
       type: line.type,
       flipped: line.flipped,
+      accelFlipped: line.accelFlipped,
       leftExtended: line.leftExtended,
       rightExtended: line.rightExtended,
       multiplier: line.multiplier,
@@ -978,7 +1028,10 @@ export class SelectTool implements Tool {
 
     for (const path of selection.bezierPaths) {
       const anchors = path.anchors.map((anchor) => this.createClipboardAnchor(anchor, dx, dy));
-      const addedPath = this.store.addBezierPath(anchors, path.type, this.store.activeLayerId);
+      const addedPath = this.store.addBezierPath(anchors, path.type, this.store.activeLayerId, {
+        flipped: path.flipped,
+        accelFlipped: path.accelFlipped,
+      });
       for (const id of addedPath.lineIds) {
         newIds.add(id);
       }

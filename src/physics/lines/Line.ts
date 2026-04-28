@@ -7,6 +7,7 @@ let nextLineId = 0;
 export interface LineOptions {
   id?: number;
   flipped?: boolean;
+  accelFlipped?: boolean;
   leftExtended?: boolean;
   rightExtended?: boolean;
   layer?: number;

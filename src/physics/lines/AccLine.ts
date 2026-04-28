@@ -8,10 +8,12 @@ export class AccLine extends Line {
   readonly friction: number = 0.1;
   readonly multiplier: number;
   readonly accMultiplier: number;
+  readonly accelFlipped: boolean;
 
   constructor(p1: Vec2, p2: Vec2, options: LineOptions = {}) {
     super(p1, p2, LineType.ACC, options);
     this.multiplier = options.multiplier ?? 1;
     this.accMultiplier = ACC_LINE_BOOST * this.multiplier;
+    this.accelFlipped = options.accelFlipped ?? false;
   }
 }

@@ -56,6 +56,7 @@ import { exportTrackAsSvg } from './export/svgExport';
 interface EditorPreferences {
   endpointSnapEnabled: boolean;
   paperGrid: EditorGridSettings;
+  cameraFollowStrength: number;
 }
 
 const EDITOR_PREFERENCES_KEY = 'line-rider-editor-preferences';
@@ -74,6 +75,7 @@ function loadEditorPreferences(): EditorPreferences {
       size: DEFAULT_EDITOR_GRID_SIZE,
       majorEvery: DEFAULT_EDITOR_GRID_MAJOR_EVERY,
     },
+    cameraFollowStrength: 50,
   };
 
   try {
@@ -91,6 +93,11 @@ function loadEditorPreferences(): EditorPreferences {
         size: clampEditorGridSize(parsed.paperGrid?.size ?? defaults.paperGrid.size),
         majorEvery: Math.max(2, Math.round(parsed.paperGrid?.majorEvery ?? defaults.paperGrid.majorEvery)),
       },
+      cameraFollowStrength: clampCameraFollowStrength(
+        typeof parsed.cameraFollowStrength === 'number'
+          ? parsed.cameraFollowStrength
+          : defaults.cameraFollowStrength,
+      ),
     };
   } catch {
     return defaults;
@@ -101,6 +108,15 @@ function saveEditorPreferences(preferences: EditorPreferences) {
   try {
     window.localStorage.setItem(EDITOR_PREFERENCES_KEY, JSON.stringify(preferences));
   } catch { /* ignore */ }
+}
+
+function clampCameraFollowStrength(value: number) {
+  if (!Number.isFinite(value)) return 50;
+  return Math.max(0, Math.min(100, Math.round(value)));
+}
+
+function lerp(a: number, b: number, t: number) {
+  return a + (b - a) * t;
 }
 
 // Core
@@ -361,6 +377,7 @@ let cameraFollowing = false;
 let onionSkinning = false;
 let savedCameraPos: Vec2 | null = null;
 let savedCameraZoom: number = 1;
+let cameraFollowStrength = clampCameraFollowStrength(editorPreferences.cameraFollowStrength);
 let gridDirty = false; // Track changes made while paused
 
 function canEdit(): boolean {
@@ -390,6 +407,7 @@ function persistEditorPreferences() {
   saveEditorPreferences({
     endpointSnapEnabled,
     paperGrid: { ...paperGrid },
+    cameraFollowStrength,
   });
 }
 
@@ -453,7 +471,11 @@ const gameLoop = new GameLoop(physics, () => {
   // Update stats in canvas HUD
   const speed = rider.getCenterSpeed() * (1000 / TIMESTEP);
   toolbar.updateStats(store.lines.length, speed);
-  toolbar.setSelectedLineState(selectTool.getSelectedCount(), selectTool.isSmoothing());
+  toolbar.setSelectedLineState(
+    selectTool.getSelectedCount(),
+    selectTool.isSmoothing(),
+    selectTool.hasSelectedAccelerationLines(),
+  );
   const portalDiagnostics = currentTool === portalTool ? portalTool.getDiagnostics() : null;
   toolbar.setPortalState(
     currentTool === portalTool,
@@ -562,6 +584,11 @@ toolbar.onFlipSelection = () => {
     selectTool.flipSelected();
   }
 };
+toolbar.onReverseAccelSelection = () => {
+  if (currentTool === selectTool) {
+    selectTool.reverseAccelSelected();
+  }
+};
 toolbar.onConvertSelectedType = (type) => {
   if (currentTool === selectTool) {
     selectTool.changeSelectedType(type);
@@ -636,7 +663,17 @@ toolbar.onRedo = () => {
 };
 toolbar.onSave = () => saveTrack();
 toolbar.onLoad = () => openLoadDialog();
-toolbar.onPlay = () => startPlayback();
+toolbar.onPlay = () => {
+  if (gameLoop.state === GameState.EDITING) {
+    startPlayback();
+    return;
+  }
+  if (gameLoop.state === GameState.PAUSED) {
+    ensureGridFresh();
+    gameLoop.play();
+    audioPlay();
+  }
+};
 toolbar.onPause = () => { gameLoop.pause(); audioPause(); };
 toolbar.onStop = () => stopPlayback();
 toolbar.onFit = () => fitView();
@@ -650,7 +687,7 @@ toolbar.onLayerMoveNext = () => moveLayer(1);
 toolbar.onLayerRename = () => renameLayer();
 toolbar.onLayerDelete = () => deleteLayer();
 toolbar.onLayerReorder = (from, to) => {
-  if (gameLoop.state !== GameState.EDITING) return;
+  if (!canEdit()) return;
   store.reorderLayer(from, to);
 };
 
@@ -1026,6 +1063,30 @@ const settingsButtons = Array.from(
   document.querySelectorAll<HTMLButtonElement>('[data-settings-trigger]'),
 );
 const hotkeysClose = document.getElementById('hotkeys-close') as HTMLButtonElement | null;
+const cameraFollowSlider = document.getElementById('camera-follow-slider') as HTMLInputElement | null;
+const cameraFollowValue = document.getElementById('camera-follow-value') as HTMLElement | null;
+const cameraFollowLabel = document.getElementById('camera-follow-label') as HTMLElement | null;
+
+function describeCameraFollowStrength(value: number) {
+  if (value <= 25) return 'Very calm';
+  if (value <= 45) return 'Calm';
+  if (value <= 65) return 'Balanced';
+  if (value <= 85) return 'Active';
+  return 'Dynamic';
+}
+
+function syncCameraFollowControls() {
+  const value = clampCameraFollowStrength(cameraFollowStrength);
+  if (cameraFollowSlider) cameraFollowSlider.value = String(value);
+  if (cameraFollowValue) cameraFollowValue.textContent = `${value}%`;
+  if (cameraFollowLabel) cameraFollowLabel.textContent = describeCameraFollowStrength(value);
+}
+
+function setCameraFollowStrength(value: number) {
+  cameraFollowStrength = clampCameraFollowStrength(value);
+  syncCameraFollowControls();
+  persistEditorPreferences();
+}
 
 function openSettingsPanel() {
   closeAchievementsModal();
@@ -1062,6 +1123,10 @@ window.addEventListener('keydown', (event) => {
     closeSettingsPanel();
   }
 });
+cameraFollowSlider?.addEventListener('input', () => {
+  setCameraFollowStrength(parseInt(cameraFollowSlider.value || '50', 10));
+});
+syncCameraFollowControls();
 syncSettingsButtons();
 
 const vehiclePickerOverlay = document.getElementById('vehicle-picker-overlay') as HTMLElement | null;
@@ -1118,7 +1183,7 @@ function buildVehiclePicker() {
     `;
     card.disabled = !available;
     card.addEventListener('click', () => {
-      if (gameLoop.state !== GameState.EDITING) return;
+      if (!canEdit()) return;
       if (!available) return;
       setVehicle(vehicle.id);
       closeVehiclePicker();
@@ -1129,7 +1194,7 @@ function buildVehiclePicker() {
 }
 
 vehiclePickerButton?.addEventListener('click', () => {
-  if (gameLoop.state !== GameState.EDITING) return;
+  if (!canEdit()) return;
   openVehiclePicker();
 });
 vehiclePickerClose?.addEventListener('click', closeVehiclePicker);
@@ -1339,8 +1404,41 @@ window.addEventListener('keydown', (e) => {
   }
 });
 
+// --- Audio helpers ---
+function formatTimecode(seconds: number): string {
+  if (!Number.isFinite(seconds) || seconds < 0) return '0:00';
+  const m = Math.floor(seconds / 60);
+  const s = Math.floor(seconds % 60);
+  const ms = Math.round((seconds % 1) * 10);
+  return ms > 0 ? `${m}:${String(s).padStart(2, '0')}.${ms}` : `${m}:${String(s).padStart(2, '0')}`;
+}
+
+function parseTimecode(value: string): number {
+  const trimmed = value.trim();
+  if (!trimmed) return NaN;
+  // Try m:ss or m:ss.f format
+  const match = trimmed.match(/^(\d+):(\d{1,2})(?:\.(\d+))?$/);
+  if (match) {
+    const mins = parseInt(match[1], 10);
+    const secs = parseInt(match[2], 10);
+    const frac = match[3] ? parseInt(match[3], 10) / Math.pow(10, match[3].length) : 0;
+    return mins * 60 + secs + frac;
+  }
+  // Fallback: parse as plain number of seconds
+  const num = parseFloat(trimmed);
+  return Number.isFinite(num) ? num : NaN;
+}
+
+function getActiveAudioDuration(): number {
+  if (audioPlayer.loaded) return audioPlayer.duration;
+  if (ytPlayer.loaded) return ytPlayer.duration;
+  return 0;
+}
+
 // --- Audio state persistence ---
 const AUDIO_STATE_KEY = 'line-rider-audio';
+const YT_HISTORY_KEY = 'line-rider-yt-history';
+const YT_HISTORY_MAX = 10;
 
 interface AudioState {
   type: 'youtube' | 'none';
@@ -1350,10 +1448,38 @@ interface AudioState {
   offset: number;
   bpm: number;
   beatSnap: number;
+  clipStart?: number;
+  clipEnd?: number;
+}
+
+interface YtHistoryEntry {
+  id: string;
+  title: string;
+  addedAt: number;
+}
+
+function loadYtHistory(): YtHistoryEntry[] {
+  try {
+    const raw = localStorage.getItem(YT_HISTORY_KEY);
+    if (!raw) return [];
+    const arr = JSON.parse(raw);
+    return Array.isArray(arr) ? arr : [];
+  } catch { return []; }
+}
+
+function saveYtHistory(entries: YtHistoryEntry[]) {
+  try { localStorage.setItem(YT_HISTORY_KEY, JSON.stringify(entries.slice(0, YT_HISTORY_MAX))); } catch {}
+}
+
+function addYtHistoryEntry(id: string, title: string) {
+  const history = loadYtHistory().filter(e => e.id !== id);
+  history.unshift({ id, title, addedAt: Date.now() });
+  saveYtHistory(history.slice(0, YT_HISTORY_MAX));
 }
 
 function saveAudioState() {
   try {
+    const activePlayer = audioPlayer.loaded ? audioPlayer : ytPlayer;
     const state: AudioState = {
       type: ytPlayer.loaded ? 'youtube' : 'none',
       youtubeId: ytPlayer.videoId || undefined,
@@ -1362,6 +1488,8 @@ function saveAudioState() {
       offset: parseFloat((document.getElementById('audio-offset') as HTMLInputElement)?.value || '0'),
       bpm: waveformRenderer.bpm,
       beatSnap: waveformRenderer.beatSnap,
+      clipStart: activePlayer.clipStart > 0 ? activePlayer.clipStart : undefined,
+      clipEnd: Number.isFinite(activePlayer.clipEnd) ? activePlayer.clipEnd : undefined,
     };
     localStorage.setItem(AUDIO_STATE_KEY, JSON.stringify(state));
   } catch { /* ignore */ }
@@ -1409,6 +1537,18 @@ async function restoreAudioState() {
       if (snapSelect) snapSelect.value = String(state.beatSnap);
     }
 
+    // Restore clip bounds
+    if (state.clipStart != null || state.clipEnd != null) {
+      const cs = state.clipStart ?? 0;
+      const ce = state.clipEnd ?? Infinity;
+      audioPlayer.setClip(cs, ce);
+      ytPlayer.setClip(cs, ce);
+      const clipStartInput = document.getElementById('audio-clip-start') as HTMLInputElement;
+      const clipEndInput = document.getElementById('audio-clip-end') as HTMLInputElement;
+      if (clipStartInput && cs > 0) clipStartInput.value = formatTimecode(cs);
+      if (clipEndInput && Number.isFinite(ce)) clipEndInput.value = formatTimecode(ce);
+    }
+
     // Restore YouTube player
     if (state.type === 'youtube' && state.youtubeId) {
       try {
@@ -1416,6 +1556,9 @@ async function restoreAudioState() {
         waveformRenderer.setDuration(ytPlayer.duration);
         document.body.classList.add('has-waveform');
         document.body.classList.add('audio-loaded');
+        if (state.clipStart != null || state.clipEnd != null) {
+          ytPlayer.setClip(state.clipStart ?? 0, state.clipEnd ?? Infinity);
+        }
       } catch { /* video may no longer be available */ }
     }
   } catch { /* ignore corrupt state */ }
@@ -1517,38 +1660,38 @@ btnSaveAction?.addEventListener('click', () => saveTrack());
 btnExportAction?.addEventListener('click', () => exportTrack());
 
 function cycleLayer(direction: 1 | -1) {
-  if (gameLoop.state !== GameState.EDITING) return;
+  if (!canEdit()) return;
   store.cycleActiveLayer(direction);
 }
 
 function addLayer() {
-  if (gameLoop.state !== GameState.EDITING) return;
+  if (!canEdit()) return;
   store.createLayer();
 }
 
 function toggleLayerVisibility() {
-  if (gameLoop.state !== GameState.EDITING) return;
+  if (!canEdit()) return;
   store.toggleActiveLayerVisibility();
 }
 
 function toggleLayerEditability() {
-  if (gameLoop.state !== GameState.EDITING) return;
+  if (!canEdit()) return;
   store.toggleActiveLayerEditability();
 }
 
 function moveLayer(direction: 1 | -1) {
-  if (gameLoop.state !== GameState.EDITING) return;
+  if (!canEdit()) return;
   store.moveActiveLayer(direction);
 }
 
 function deleteLayer() {
-  if (gameLoop.state !== GameState.EDITING) return;
+  if (!canEdit()) return;
   if (store.layers.length <= 1) return;
   store.deleteActiveLayer();
 }
 
 function renameLayer() {
-  if (gameLoop.state !== GameState.EDITING || !layerRenameInput) return;
+  if (!canEdit() || !layerRenameInput) return;
 
   document.body.classList.add('layer-renaming');
   layerRenameInput.value = store.getActiveLayer().name;
@@ -1652,8 +1795,9 @@ renderer.addRenderCallback((ctx) => {
   // Draw flag
   flagRenderer.render(ctx, store.startPosition);
 
-  // Draw lines (show direction indicators when not playing)
-  lineRenderer.render(ctx, store.lines, store.layers, gameLoop.state !== GameState.PLAYING);
+  // Draw lines (show direction indicators when not playing, highlight hit lines when paused)
+  const hitIds = gameLoop.state === GameState.PAUSED ? physics.hitLines : undefined;
+  lineRenderer.render(ctx, store.lines, store.layers, gameLoop.state !== GameState.PLAYING, hitIds);
 
   while (portalFxEvents.length > 0 && performance.now() - portalFxEvents[0].startedAt > 280) {
     portalFxEvents.shift();
@@ -1692,6 +1836,37 @@ renderer.addRenderCallback((ctx) => {
   // Draw rider
   const renderData = rider.getRenderData(renderAlpha);
   renderVehicle(ctx, renderData);
+
+  // Debug overlays: momentum vectors and contact points (visible when paused)
+  if (gameLoop.state === GameState.PAUSED) {
+    const invZoomDbg = 1 / camera.zoom;
+    // Momentum vectors on collision points
+    ctx.strokeStyle = 'rgba(0, 200, 100, 0.7)';
+    ctx.lineWidth = 1.5 * invZoomDbg;
+    for (const cp of rider.collisionPoints) {
+      const scale = 8;
+      const ex = cp.pos.x + cp.momentum.x * scale;
+      const ey = cp.pos.y + cp.momentum.y * scale;
+      ctx.beginPath();
+      ctx.moveTo(cp.pos.x, cp.pos.y);
+      ctx.lineTo(ex, ey);
+      ctx.stroke();
+      // Arrowhead
+      ctx.fillStyle = 'rgba(0, 200, 100, 0.7)';
+      ctx.beginPath();
+      ctx.arc(ex, ey, 1.5 * invZoomDbg, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    // Contact point dots (on lines being touched)
+    if (physics.hitLines.size > 0) {
+      ctx.fillStyle = 'rgba(255, 60, 60, 0.8)';
+      for (const cp of rider.collisionPoints) {
+        ctx.beginPath();
+        ctx.arc(cp.pos.x, cp.pos.y, 2.5 * invZoomDbg, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
+  }
 
   // ── Beat markers on canvas ──
   // Draw markers at world positions where the rider will be on each beat
@@ -1820,6 +1995,19 @@ renderer.addRenderCallback((ctx) => {
   // Camera follow during playback + trigger evaluation
   if (cameraFollowing && gameLoop.state === GameState.PLAYING) {
     const center = rider.getCenter(renderAlpha);
+    const cameraFollowT = cameraFollowStrength / 100;
+
+    // Predictive camera: keep some anticipation, but bias toward comfort over
+    // aggressive leading so the camera feels steadier on longer rides.
+    const vel = rider.getCenterVelocity();
+    const speed = Math.sqrt(vel.x * vel.x + vel.y * vel.y);
+    const lookAheadFrames = lerp(0, 24, cameraFollowT);
+    const lookAheadStrength = Math.min(
+      lerp(0, 1.4, cameraFollowT),
+      speed * lerp(0, 3.2, cameraFollowT),
+    );
+    const predictedX = center.x + vel.x * lookAheadFrames * lookAheadStrength;
+    const predictedY = center.y + vel.y * lookAheadFrames * lookAheadStrength * lerp(0, 0.9, cameraFollowT);
 
     // Evaluate triggers
     const active = triggerStore.getActiveTriggers(center);
@@ -1839,8 +2027,8 @@ renderer.addRenderCallback((ctx) => {
       camera.zoom += (targetZoom - camera.zoom) * 0.05;
     }
 
-    let fx = focusTarget ? focusTarget.x : center.x;
-    let fy = focusTarget ? focusTarget.y : center.y;
+    let fx = focusTarget ? focusTarget.x : predictedX;
+    let fy = focusTarget ? focusTarget.y : predictedY;
     if (portalCameraBias && portalCameraBias.framesLeft > 0) {
       fx += (portalCameraBias.target.x - fx) * portalCameraBias.strength;
       fy += (portalCameraBias.target.y - fy) * portalCameraBias.strength;
@@ -1850,8 +2038,30 @@ renderer.addRenderCallback((ctx) => {
         portalCameraBias = null;
       }
     }
-    camera.position.x += (fx - camera.position.x) * 0.1;
-    camera.position.y += (fy - camera.position.y) * 0.1;
+    // Speed-adaptive smoothing: still responsive at speed, but calmer overall.
+    const smoothing = lerp(0.025, 0.065, cameraFollowT)
+      + Math.min(lerp(0.025, 0.105, cameraFollowT), speed * lerp(0.005, 0.035, cameraFollowT));
+    camera.position.x += (fx - camera.position.x) * smoothing;
+    camera.position.y += (fy - camera.position.y) * smoothing;
+
+    // Elliptical bounding box clamp (LRA-style) — prevent camera from drifting
+    // too far from rider center. Bounding box scales with speed.
+    const baseRadiusX = (camera.width * lerp(0.22, 0.48, cameraFollowT)) / camera.zoom;
+    const baseRadiusY = (camera.height * lerp(0.22, 0.48, cameraFollowT)) / camera.zoom;
+    const speedScale = 1 + Math.min(
+      lerp(1, 3, cameraFollowT),
+      speed * lerp(0.2, 0.8, cameraFollowT),
+    );
+    const rx = baseRadiusX * speedScale;
+    const ry = baseRadiusY * speedScale;
+    const dx = camera.position.x - center.x;
+    const dy = camera.position.y - center.y;
+    const ellipseDist = (dx * dx) / (rx * rx) + (dy * dy) / (ry * ry);
+    if (ellipseDist > 1) {
+      const scale = 1 / Math.sqrt(ellipseDist);
+      camera.position.x = center.x + dx * scale;
+      camera.position.y = center.y + dy * scale;
+    }
   }
 });
 
@@ -1974,6 +2184,7 @@ renderer.addRenderCallback((ctx) => {
       setAudioStatus('Loaded!', 'success');
       updateAudioUI();
       updateAudioLoadedIndicator();
+      updateTrimUI();
       saveAudioState();
       if (audioPlayer.audioBuffer) {
         waveformRenderer.loadBuffer(audioPlayer.audioBuffer);
@@ -2016,6 +2227,8 @@ renderer.addRenderCallback((ctx) => {
       setAudioStatus('Loaded!', 'success');
       updateAudioUI();
       updateAudioLoadedIndicator();
+      updateTrimUI();
+      addYtHistoryEntry(videoId, ytPlayer.name);
       saveAudioState();
       audioYtInput.value = '';
       // Auto-close panel after short delay
@@ -2121,8 +2334,220 @@ renderer.addRenderCallback((ctx) => {
     setAudioStatus('Audio removed', 'info');
     updateAudioUI();
     updateAudioLoadedIndicator();
+    updateTrimUI();
     try { localStorage.removeItem(AUDIO_STATE_KEY); } catch {}
   });
+
+  // ── YouTube History ──
+  const ytHistoryContainer = document.getElementById('audio-yt-history')!;
+  const ytHistoryList = document.getElementById('audio-yt-history-list')!;
+  const ytClearHistoryBtn = document.getElementById('audio-yt-clear-history')!;
+
+  function renderYtHistory() {
+    const history = loadYtHistory();
+    if (history.length === 0) {
+      ytHistoryContainer.style.display = 'none';
+      return;
+    }
+    ytHistoryContainer.style.display = '';
+    ytHistoryList.innerHTML = '';
+    for (const entry of history) {
+      const item = document.createElement('div');
+      item.className = 'audio-yt-history-item';
+      const safeTitle = entry.title.replace(/</g, '&lt;').replace(/>/g, '&gt;');
+      item.innerHTML = `<span class="yt-title">${safeTitle}</span><span class="yt-id">${entry.id}</span>`;
+      item.addEventListener('click', () => {
+        audioYtInput.value = entry.id;
+        loadFromYouTube();
+      });
+      ytHistoryList.appendChild(item);
+    }
+  }
+
+  ytClearHistoryBtn.addEventListener('click', () => {
+    try { localStorage.removeItem(YT_HISTORY_KEY); } catch {}
+    renderYtHistory();
+  });
+
+  // Render history when panel opens
+  const origShowAudioPanel = showAudioPanel;
+  function showAudioPanelWithHistory() {
+    origShowAudioPanel();
+    renderYtHistory();
+    updateTrimUI();
+  }
+  for (const button of audioButtons) {
+    button.removeEventListener('click', showAudioPanel);
+    button.addEventListener('click', showAudioPanelWithHistory);
+  }
+
+  // ── Trim / Clip Editor ──
+  const trimSection = document.getElementById('audio-trim-section')!;
+  const trimBar = document.getElementById('audio-trim-bar') as HTMLCanvasElement;
+  const clipStartInput = document.getElementById('audio-clip-start') as HTMLInputElement;
+  const clipEndInput = document.getElementById('audio-clip-end') as HTMLInputElement;
+  const trimResetBtn = document.getElementById('audio-trim-reset')!;
+
+  function updateTrimUI() {
+    const dur = getActiveAudioDuration();
+    if (dur <= 0) {
+      trimSection.style.display = 'none';
+      return;
+    }
+    trimSection.style.display = '';
+    const player = audioPlayer.loaded ? audioPlayer : ytPlayer;
+    clipStartInput.value = player.clipStart > 0 ? formatTimecode(player.clipStart) : '';
+    clipEndInput.value = Number.isFinite(player.clipEnd) ? formatTimecode(player.clipEnd) : '';
+    clipStartInput.placeholder = '0:00';
+    clipEndInput.placeholder = formatTimecode(dur);
+    updateTrimBar();
+  }
+
+  function applyClipFromInputs() {
+    const dur = getActiveAudioDuration();
+    if (dur <= 0) return;
+
+    const startVal = parseTimecode(clipStartInput.value);
+    const endVal = parseTimecode(clipEndInput.value);
+    const cs = Number.isFinite(startVal) ? Math.max(0, Math.min(startVal, dur)) : 0;
+    const ce = Number.isFinite(endVal) ? Math.max(0, Math.min(endVal, dur)) : Infinity;
+
+    audioPlayer.setClip(cs, ce);
+    ytPlayer.setClip(cs, ce);
+    updateTrimBar();
+    saveAudioState();
+  }
+
+  clipStartInput.addEventListener('change', applyClipFromInputs);
+  clipEndInput.addEventListener('change', applyClipFromInputs);
+
+  trimResetBtn.addEventListener('click', () => {
+    audioPlayer.resetClip();
+    ytPlayer.resetClip();
+    clipStartInput.value = '';
+    clipEndInput.value = '';
+    updateTrimBar();
+    saveAudioState();
+  });
+
+  function updateTrimBar() {
+    const dur = getActiveAudioDuration();
+    const rect = trimBar.getBoundingClientRect();
+    const dpr = window.devicePixelRatio || 1;
+    const w = Math.round(Math.max(1, rect.width) * dpr);
+    const h = Math.round(Math.max(1, rect.height) * dpr);
+    if (trimBar.width !== w) trimBar.width = w;
+    if (trimBar.height !== h) trimBar.height = h;
+    const ctx = trimBar.getContext('2d')!;
+    ctx.clearRect(0, 0, w, h);
+
+    if (dur <= 0) return;
+
+    const player = audioPlayer.loaded ? audioPlayer : ytPlayer;
+    const cs = player.clipStart;
+    const ce = Number.isFinite(player.clipEnd) ? player.clipEnd : dur;
+    const startPx = Math.round((cs / dur) * w);
+    const endPx = Math.round((ce / dur) * w);
+
+    // Dimmed background
+    ctx.fillStyle = 'rgba(17,17,17,0.06)';
+    ctx.fillRect(0, 0, w, h);
+
+    // Active clip region
+    ctx.fillStyle = 'rgba(46,125,50,0.12)';
+    ctx.fillRect(startPx, 0, endPx - startPx, h);
+
+    // Draw mini waveform if we have peaks
+    const peaks = audioPlayer.audioBuffer ? getPeaksFromBuffer(audioPlayer.audioBuffer, w) : null;
+    const halfH = h / 2;
+    if (peaks) {
+      for (let px = 0; px < w; px++) {
+        const barH = peaks[px] * halfH * 0.85;
+        if (barH < 0.5) continue;
+        const inClip = px >= startPx && px <= endPx;
+        ctx.fillStyle = inClip ? 'rgba(17,24,39,0.5)' : 'rgba(17,24,39,0.15)';
+        ctx.fillRect(px, halfH - barH, Math.max(1, dpr), barH * 2);
+      }
+    } else {
+      // No peaks (YouTube) — draw a simple bar
+      ctx.fillStyle = 'rgba(17,24,39,0.15)';
+      ctx.fillRect(0, halfH - 3, w, 6);
+      ctx.fillStyle = 'rgba(17,24,39,0.3)';
+      ctx.fillRect(startPx, halfH - 3, endPx - startPx, 6);
+    }
+
+    // Clip boundary handles
+    ctx.fillStyle = '#2e7d32';
+    if (cs > 0) {
+      ctx.fillRect(startPx - 1, 0, 2, h);
+    }
+    if (ce < dur) {
+      ctx.fillRect(endPx - 1, 0, 2, h);
+    }
+  }
+
+  function getPeaksFromBuffer(buffer: AudioBuffer, targetWidth: number): Float32Array {
+    const numChannels = buffer.numberOfChannels;
+    const length = buffer.length;
+    const result = new Float32Array(targetWidth);
+    const samplesPerPixel = length / targetWidth;
+    for (let px = 0; px < targetWidth; px++) {
+      const sStart = Math.floor(px * samplesPerPixel);
+      const sEnd = Math.min(Math.floor((px + 1) * samplesPerPixel), length);
+      let peak = 0;
+      for (let ch = 0; ch < numChannels; ch++) {
+        const data = buffer.getChannelData(ch);
+        for (let s = sStart; s < sEnd; s++) {
+          const abs = Math.abs(data[s]);
+          if (abs > peak) peak = abs;
+        }
+      }
+      result[px] = peak;
+    }
+    return result;
+  }
+
+  // Drag on trim bar to set clip region
+  let trimDragging: 'start' | 'end' | null = null;
+  trimBar.addEventListener('pointerdown', (e) => {
+    const dur = getActiveAudioDuration();
+    if (dur <= 0) return;
+    const rect = trimBar.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    const ratio = x / rect.width;
+    const player = audioPlayer.loaded ? audioPlayer : ytPlayer;
+    const csRatio = player.clipStart / dur;
+    const ceRatio = (Number.isFinite(player.clipEnd) ? player.clipEnd : dur) / dur;
+
+    // Determine which handle is closer
+    if (Math.abs(ratio - csRatio) < Math.abs(ratio - ceRatio)) {
+      trimDragging = 'start';
+    } else {
+      trimDragging = 'end';
+    }
+    trimBar.setPointerCapture(e.pointerId);
+  });
+
+  trimBar.addEventListener('pointermove', (e) => {
+    if (!trimDragging) return;
+    const dur = getActiveAudioDuration();
+    if (dur <= 0) return;
+    const rect = trimBar.getBoundingClientRect();
+    const ratio = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
+    const seconds = ratio * dur;
+
+    if (trimDragging === 'start') {
+      const cs = Math.max(0, seconds);
+      clipStartInput.value = cs > 0.1 ? formatTimecode(cs) : '';
+    } else {
+      const ce = Math.min(dur, seconds);
+      clipEndInput.value = ce < dur - 0.1 ? formatTimecode(ce) : '';
+    }
+    applyClipFromInputs();
+  });
+
+  trimBar.addEventListener('pointerup', () => { trimDragging = null; });
+  trimBar.addEventListener('lostpointercapture', () => { trimDragging = null; });
 }
 
 // Flush autosave on page unload so no pending changes are lost

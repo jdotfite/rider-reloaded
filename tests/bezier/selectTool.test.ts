@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 
 import { Vec2 } from '../../src/math/Vec2';
+import { AccLine } from '../../src/physics/lines/AccLine';
 import { LineType } from '../../src/physics/lines/LineTypes';
 import { TrackStore } from '../../src/store/TrackStore';
 import { SelectTool } from '../../src/input/tools/SelectTool';
@@ -253,6 +254,35 @@ test('select tool flips selected straight lines', () => {
   selectTool.flipSelected();
 
   assert.equal(store.lines[0].flipped, true);
+});
+
+test('select tool can reverse accel direction without flipping the rideable side', () => {
+  installWindowStub();
+  const store = new TrackStore();
+  store.addLine(new Vec2(0, 0), new Vec2(100, 0), LineType.ACC);
+
+  const selectTool = new SelectTool(store);
+  selectTool.onMouseDown(new Vec2(50, 0), new Vec2(50, 0));
+  selectTool.reverseAccelSelected();
+
+  assert.equal(store.lines[0].flipped, false);
+  assert.equal(store.lines[0] instanceof AccLine, true);
+  assert.equal((store.lines[0] as AccLine).accelFlipped, true);
+});
+
+test('flipping the rideable side preserves accel direction state on red lines', () => {
+  installWindowStub();
+  const store = new TrackStore();
+  store.addLine(new Vec2(0, 0), new Vec2(100, 0), LineType.ACC);
+
+  const selectTool = new SelectTool(store);
+  selectTool.onMouseDown(new Vec2(50, 0), new Vec2(50, 0));
+  selectTool.reverseAccelSelected();
+  selectTool.flipSelected();
+
+  assert.equal(store.lines[0].flipped, true);
+  assert.equal(store.lines[0] instanceof AccLine, true);
+  assert.equal((store.lines[0] as AccLine).accelFlipped, true);
 });
 
 test('select tool flips every segment in a selected bezier path without losing ownership', () => {

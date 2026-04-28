@@ -1812,6 +1812,79 @@
       border-color: #d32f2f;
     }
 
+    /* YouTube history */
+    #audio-yt-history {
+      background: var(--bg-alt);
+      border-radius: var(--radius-md);
+      overflow: hidden;
+    }
+    .audio-yt-history-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: var(--sp-1) var(--sp-2);
+      font: 600 var(--text-xs)/1 var(--font);
+      color: var(--ink-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+    }
+    .audio-yt-history-header button {
+      background: transparent;
+      border: none;
+      color: var(--ink-muted);
+      font: 500 var(--text-xs)/1 var(--font);
+      cursor: pointer;
+      padding: 2px 6px;
+      border-radius: var(--radius-sm);
+    }
+    .audio-yt-history-header button:hover {
+      color: #d32f2f;
+      background: rgba(211,47,47,0.08);
+    }
+    #audio-yt-history-list {
+      max-height: 120px;
+      overflow-y: auto;
+      scrollbar-width: thin;
+    }
+    .audio-yt-history-item {
+      display: flex;
+      align-items: center;
+      gap: var(--sp-1);
+      padding: 5px var(--sp-2);
+      cursor: pointer;
+      font: 500 var(--text-sm)/1.2 var(--font);
+      color: var(--ink-secondary);
+      border-top: 1px solid var(--border-light);
+      transition: background var(--transition-fast);
+    }
+    .audio-yt-history-item:first-child { border-top: none; }
+    .audio-yt-history-item:hover {
+      background: var(--bg-hover);
+      color: var(--ink);
+    }
+    .audio-yt-history-item .yt-title {
+      flex: 1;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .audio-yt-history-item .yt-id {
+      font: 500 var(--text-xs)/1 var(--font-mono);
+      color: var(--ink-muted);
+      flex-shrink: 0;
+    }
+
+    /* Audio trim section */
+    #audio-trim-section {
+      padding: var(--sp-1) 0;
+    }
+    #audio-trim-bar {
+      background: var(--bg-alt);
+      border: 1px solid var(--border-light);
+      display: block;
+      width: 100%;
+    }
+
     /* ══════════════════════════════════════════════
        HOTKEYS PANEL (modal)
        ══════════════════════════════════════════════ */
@@ -1854,6 +1927,45 @@
       padding: var(--sp-2) 0;
       overflow-y: auto;
       max-height: calc(80vh - 50px);
+    }
+    #settings-controls {
+      padding: var(--sp-3) var(--sp-4);
+      border-bottom: 1px solid var(--border);
+      background: var(--bg-alt);
+      display: grid;
+      gap: var(--sp-2);
+    }
+    .settings-group {
+      display: grid;
+      gap: 6px;
+    }
+    .settings-group-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: var(--sp-2);
+      font: 700 var(--text-sm)/1 var(--font);
+      color: var(--ink);
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+    }
+    .settings-inline-value {
+      font: 600 var(--text-xs)/1 var(--font);
+      color: var(--ink-muted);
+      letter-spacing: normal;
+      text-transform: none;
+    }
+    .settings-note {
+      font: 500 var(--text-sm)/1.4 var(--font);
+      color: var(--ink-secondary);
+    }
+    .settings-ends {
+      display: flex;
+      justify-content: space-between;
+      font: 600 var(--text-xs)/1 var(--font);
+      color: var(--ink-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
     }
     .hk-row {
       display: flex;
@@ -2011,479 +2123,332 @@
       }
     }
 
+    #mobile-panel-toggle { display: none; }
+
     /* ══════════════════════════════════════════════
-       RESPONSIVE: <=899 px
+       RESPONSIVE: <=899 px  — Canvas-First Mobile
        ══════════════════════════════════════════════ */
     @media (max-width: 899px) {
-      :root {
-        --topbar-h: 0px;
-      }
-      .generator-modal-body {
-        grid-template-columns: 1fr;
-      }
-      #generator-detail-preview svg {
-        height: 72px;
-      }
-      #main {
-        grid-template-columns: 1fr;
-        position: relative;
-      }
-      #sidebar-left {
-        display: none;
-      }
+      :root { --topbar-h: 0px; }
+
+      /* --- Layout Reset --- */
+      #main { grid-template-columns: 1fr; position: relative; }
+      #sidebar-left { display: none; }
       #topbar {
-        height: 0;
-        padding: 0;
-        border-bottom: none;
-        background: transparent;
-        backdrop-filter: none;
-        overflow: visible;
+        height: 0; padding: 0; border-bottom: none;
+        background: transparent; overflow: visible;
       }
-      #brand-lockup,
-      #top-center-slot,
-      #desktop-action-strip {
-        display: none;
-      }
-      #topbar-right {
-        display: contents;
-      }
+      #brand-lockup, #top-center-slot, #desktop-action-strip { display: none; }
+      #topbar-right { display: contents; }
+
+      /* --- Top-right floating actions --- */
       #topbar-actions {
-        display: flex;
-        position: fixed;
+        display: flex; position: fixed;
         top: max(10px, calc(env(safe-area-inset-top) + 10px));
         right: max(10px, calc(env(safe-area-inset-right) + 10px));
-        z-index: 36;
-        flex-direction: column;
-        gap: 6px;
+        z-index: 36; flex-direction: column; gap: 6px;
       }
       #topbar-actions button {
-        width: 36px;
-        height: 36px;
-        min-width: 36px;
-        min-height: 36px;
+        width: 36px; height: 36px; min-width: 36px; min-height: 36px;
         border-radius: 12px;
-        background: rgba(255,255,255,0.78);
-        border-color: rgba(17,17,17,0.08);
-        box-shadow: 0 10px 22px rgba(17,17,17,0.08);
+        background: rgba(255,255,255,0.82);
+        border-color: rgba(17,17,17,0.06);
+        box-shadow: 0 4px 14px rgba(17,17,17,0.07);
         backdrop-filter: blur(14px);
       }
-      #topbar-actions button:hover {
-        background: rgba(255,255,255,0.96);
-      }
-      #btn-mobile-dock {
-        display: inline-flex;
-      }
-      body.mobile-dock-edge #btn-mobile-dock {
-        background: var(--ink);
-        border-color: var(--ink);
-        color: var(--ink-inverse);
-      }
+      #topbar-actions button:hover { background: rgba(255,255,255,0.96); }
+      #btn-mobile-dock { display: none; }
 
+      /* --- Floating Toolbar Pill --- */
       #sidebar-right {
-        display: flex;
+        display: flex; flex-wrap: wrap; align-items: center;
         position: fixed;
-        z-index: 30;
-        background: transparent;
-        border: none;
-        overflow: visible;
-        opacity: 1;
-        pointer-events: none;
-        scrollbar-width: none;
-      }
-      #sidebar-right > * {
-        pointer-events: auto;
-      }
-      #file-actions .separator {
-        display: none;
-      }
-      #file-actions .btn-icon {
-        flex: none;
-        width: 32px;
-        height: 32px;
-        min-width: 32px;
-        min-height: 32px;
-      }
-
-      #sidebar-right {
-        top: max(8px, calc(env(safe-area-inset-top) + 8px));
-        left: 50%;
+        top: max(10px, calc(env(safe-area-inset-top) + 10px));
+        left: 50%; right: auto; bottom: auto;
         transform: translateX(-50%);
-        width: min(320px, calc(100vw - 24px));
-        display: grid;
-        grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-        grid-template-areas:
-          "actions actions"
-          "types vehicle"
-          "tools tools"
-          "options options"
-          "layers layers";
-        gap: 4px 6px;
-        align-items: stretch;
-        padding: 6px;
-        border: 1px solid rgba(17,17,17,0.1);
-        border-radius: 24px;
-        background: linear-gradient(180deg, rgba(255,255,255,0.96), rgba(248,248,248,0.88));
-        box-shadow: 0 14px 34px rgba(17,17,17,0.12);
+        width: auto; max-width: calc(100vw - 80px);
+        opacity: 1; pointer-events: auto;
+        padding: 5px; gap: 3px;
+        border: 1px solid rgba(17,17,17,0.08);
+        border-radius: 18px;
+        background: rgba(255,255,255,0.92);
+        box-shadow: 0 4px 20px rgba(17,17,17,0.1);
         backdrop-filter: blur(20px);
+        z-index: 30; overflow: visible;
+        transition: max-width 0.2s ease, border-radius 0.2s ease;
       }
-      body.mobile-dock-edge #sidebar-right {
-        left: auto;
-        right: max(10px, calc(env(safe-area-inset-right) + 8px));
-        transform: none;
-        width: min(280px, calc(100vw - 18px));
+      body.sidebar-inspector-open #sidebar-right {
+        transform: translateX(-50%);
       }
-      #sidebar-right .section-label {
-        display: none;
-      }
+      #sidebar-right .section-label { display: none; }
 
-      #file-actions,
-      #tool-grid,
-      #track-type-panel,
-      #vehicle-panel,
-      #layers-panel {
-        background: transparent;
-        border: none;
-        box-shadow: none;
-        backdrop-filter: none;
-      }
-      #file-actions {
-        grid-area: actions;
-        display: grid;
-        grid-template-columns: repeat(5, minmax(0, 1fr));
-        gap: 4px;
-        padding: 0;
-      }
-
+      /* --- Tool Grid (compact horizontal) --- */
       #tool-grid {
-        grid-area: tools;
-        display: grid;
-        grid-template-columns: repeat(7, minmax(0, 1fr));
-        gap: 4px;
-        padding: 0;
+        display: flex !important; flex-direction: row !important;
+        align-items: center; gap: 2px; padding: 0;
+        width: auto; order: 0;
       }
       #tool-grid button {
-        width: auto;
-        min-height: 38px;
-        aspect-ratio: 1;
-        padding: 0;
-        border-radius: 14px;
-        background: rgba(255,255,255,0.84);
-        border: 1px solid rgba(17,17,17,0.08);
+        width: 38px; height: 38px; min-width: 38px; min-height: 38px;
+        padding: 0; border-radius: 11px;
+        background: transparent; border: 1px solid transparent;
+        color: var(--ink-secondary); aspect-ratio: auto;
       }
       #tool-grid button:hover {
-        background: rgba(255,255,255,0.98);
-        border-color: rgba(17,17,17,0.16);
+        background: rgba(17,17,17,0.05);
+        border-color: rgba(17,17,17,0.06);
       }
       #tool-grid button.active {
-        background: rgba(17,17,17,0.94);
-        border-color: rgba(17,17,17,0.94);
+        background: rgba(17,17,17,0.92);
+        border-color: rgba(17,17,17,0.92);
         color: var(--ink-inverse);
       }
-      #tool-grid button.active .icon {
-        stroke: var(--ink-inverse);
+      #tool-grid button.active .icon { stroke: var(--ink-inverse); }
+      #tool-grid .tool-label { display: none; }
+      #tool-grid .tool-icon { width: 17px; height: 17px; }
+
+      /* --- Mobile Panel Toggle --- */
+      #mobile-panel-toggle {
+        display: flex; align-items: center; justify-content: center;
+        width: 38px; height: 38px; min-width: 38px; min-height: 38px;
+        padding: 0; border-radius: 11px; flex-shrink: 0;
+        background: transparent; border: 1px solid transparent;
+        color: var(--ink-muted); order: 1;
+        transition: background 0.15s ease;
       }
-      #tool-grid .tool-label {
-        display: none;
-      }
-      #tool-grid .tool-icon {
-        width: 18px;
-        height: 18px;
+      #mobile-panel-toggle:hover { background: rgba(17,17,17,0.05); }
+      body.mobile-panel-open #mobile-panel-toggle {
+        background: rgba(17,17,17,0.08); color: var(--ink);
       }
 
+      /* --- Line Type Strip (always visible) --- */
       #track-type-panel {
-        grid-area: types;
-        border-top: none;
-        padding: 2px;
-        border-radius: 18px;
-        display: flex;
-        align-items: center;
-        background: rgba(17,17,17,0.05);
+        width: 100%; order: 2; border-top: none; padding: 0;
+        background: rgba(17,17,17,0.04); border-radius: 10px;
       }
       #line-type-strip {
-        width: 100%;
-        display: grid;
-        grid-template-columns: repeat(3, minmax(0, 1fr));
-        gap: 4px;
-        padding: 0;
+        display: flex; gap: 2px; padding: 2px; width: 100%;
       }
       #line-type-strip button {
-        min-height: 32px;
-        padding: 0 6px;
-        font-size: 9px;
-        font-weight: 700;
-        letter-spacing: 0.06em;
-        text-transform: uppercase;
-        border-radius: 999px;
-        border: 1px solid rgba(17,17,17,0.08);
-        background: rgba(255,255,255,0.72);
-        color: var(--ink-secondary);
-        white-space: nowrap;
+        flex: 1; min-height: 26px; padding: 0 6px;
+        font-size: 9px; font-weight: 700;
+        letter-spacing: 0.06em; text-transform: uppercase;
+        border-radius: 8px; border: none;
+        background: transparent; color: var(--ink-secondary);
       }
       #line-type-strip button.active {
-        background: rgba(17,17,17,0.94);
-        border-color: rgba(17,17,17,0.94);
-        color: var(--ink-inverse);
+        background: rgba(17,17,17,0.92); color: var(--ink-inverse);
       }
 
-      #vehicle-panel {
-        grid-area: vehicle;
-        padding: 0;
-      }
-      #vehicle-picker-btn {
-        width: 100%;
-        margin: 0;
-        min-height: 36px;
-        padding: 8px 10px;
-        border-radius: 18px;
-        border: 1px solid rgba(17,17,17,0.08);
-        background: rgba(255,255,255,0.84);
-        box-shadow: 0 10px 22px rgba(17,17,17,0.08);
-      }
-      #vehicle-picker-current-icon {
-        width: 28px;
-        height: 28px;
-        border-radius: 9px;
-      }
-      #vehicle-picker-current strong {
-        font-size: 10px;
-      }
-      #vehicle-picker-current span,
-      .vehicle-picker-chevron {
-        font-size: 9px;
-      }
-
+      /* --- Tool Options (contextual panels stay visible) --- */
       #tool-options {
-        grid-area: options;
-        display: block;
-        padding: 0;
-        border-top: none;
-        background: transparent;
-        border: none;
-        box-shadow: none;
-        backdrop-filter: none;
+        width: 100%; order: 3; display: block;
+        padding: 0; border-top: none;
+        background: transparent; border: none;
       }
-      #tool-options > .tool-option-label {
-        display: none;
-      }
+      #tool-options > .tool-option-label { display: none; }
+      #tool-options > #grid-settings-panel { display: none; }
+
       #smooth-container {
-        width: 100%;
-        margin-top: 0;
-        padding: 10px;
-        border-radius: 16px;
+        margin-top: 0; padding: 8px; border-radius: 12px;
         border: 1px solid rgba(17,17,17,0.08);
-        background: linear-gradient(180deg, rgba(244,247,252,0.98), rgba(255,255,255,0.92));
-        box-shadow: 0 10px 22px rgba(17,17,17,0.08);
+        background: rgba(244,247,252,0.95);
+        box-shadow: 0 4px 14px rgba(17,17,17,0.06);
       }
-      #grid-settings-panel {
-        width: 100%;
-        margin-top: 0;
-        padding: 10px;
-        border-radius: 16px;
-        border: 1px solid rgba(17,17,17,0.08);
-        background: linear-gradient(180deg, rgba(246,243,236,0.98), rgba(255,255,255,0.92));
-        box-shadow: 0 10px 22px rgba(17,17,17,0.08);
-      }
-      #grid-settings-panel .tool-option-label {
-        display: flex;
-        padding: 8px 0;
-      }
-      .grid-settings-shortcuts,
-      .grid-settings-hint,
-      .grid-size-row {
-        font-size: 10px;
-      }
-      .select-action-header {
-        margin-bottom: 6px;
-      }
-      #convert-type-strip {
-        gap: 4px;
-        margin-bottom: 6px;
-      }
-      #convert-type-strip button,
-      #smooth-btn,
+      .select-action-header { margin-bottom: 4px; }
+      #convert-type-strip { gap: 3px; margin-bottom: 4px; }
+      #convert-type-strip button, #smooth-btn, #reverse-btn,
       #smooth-slider-row button {
-        min-height: 32px;
-        font-size: 11px;
-        border-radius: 12px;
+        min-height: 30px; font-size: 11px; border-radius: 10px;
       }
-      .select-action-hint {
-        font-size: 10px;
-      }
-      #smooth-slider-row > div:first-child {
-        margin-top: 6px;
-      }
-      #smooth-slider-row > div:last-child {
-        margin-top: 6px;
-      }
+      .select-action-hint { font-size: 10px; }
+      #settings-controls { padding: 10px 14px; }
+      .settings-note { font-size: 10px; }
+      .settings-ends,
+      .settings-inline-value { font-size: 9px; }
+      #smooth-slider-row > div:first-child { margin-top: 4px; }
+      #smooth-slider-row > div:last-child { margin-top: 4px; }
+
       #portal-settings {
-        width: 100%;
-        margin-top: 0;
-        padding: 10px;
-        border-radius: 16px;
+        margin-top: 0; padding: 8px; border-radius: 12px;
         border: 1px solid rgba(17,17,17,0.08);
-        background: linear-gradient(180deg, rgba(244,247,252,0.98), rgba(255,255,255,0.92));
-        box-shadow: 0 10px 22px rgba(17,17,17,0.08);
+        background: rgba(244,247,252,0.95);
+        box-shadow: 0 4px 14px rgba(17,17,17,0.06);
       }
-      #portal-settings .tool-option-label {
-        display: flex;
-        padding: 8px;
-      }
+      #portal-settings .tool-option-label { display: flex; padding: 6px; }
       .portal-field {
-        grid-template-columns: 58px minmax(0, 1fr) auto;
-        gap: 6px;
+        grid-template-columns: 55px minmax(0,1fr) auto; gap: 5px;
       }
-      .portal-field span,
-      .portal-panel-title,
-      #portal-selection-status,
-      #portal-empty-hint,
-      .portal-shortcuts,
-      #portal-warning-box {
-        font-size: 10px;
-      }
-      .portal-segmented button {
-        min-height: 32px;
-        font-size: 10px;
-      }
-      .portal-panel-header {
-        align-items: stretch;
-      }
-      .portal-detail-toggle {
-        min-width: 116px;
-      }
-      .portal-inline-value {
-        min-width: 34px;
-        font-size: 10px;
-      }
-      .portal-checkbox-grid {
-        grid-template-columns: 1fr;
-      }
+      .portal-field span, .portal-panel-title,
+      #portal-selection-status, #portal-empty-hint,
+      .portal-shortcuts, #portal-warning-box { font-size: 10px; }
+      .portal-segmented button { min-height: 30px; font-size: 10px; }
+      .portal-panel-header { align-items: stretch; }
+      .portal-detail-toggle { min-width: 110px; }
+      .portal-inline-value { min-width: 30px; font-size: 10px; }
+      .portal-checkbox-grid { grid-template-columns: 1fr; }
 
+      /* --- Collapsible Panels (hidden by default) --- */
+      #file-actions {
+        display: none; width: 100%; order: 4; padding: 0;
+      }
+      #file-actions .separator { display: none; }
+      #vehicle-panel {
+        display: none; width: 100%; order: 5; padding: 0;
+      }
       #layers-panel {
-        grid-area: layers;
-        display: block;
-        margin-top: 0;
-        padding: 8px;
-        border-radius: 16px;
-        border: 1px solid rgba(17,17,17,0.08);
-        background: linear-gradient(180deg, rgba(255,255,255,0.9), rgba(248,248,248,0.86));
-        box-shadow: 0 10px 22px rgba(17,17,17,0.08);
-      }
-      #layer-list {
-        max-height: 92px;
-        overflow-y: auto;
-        padding: 0;
-      }
-      #layer-controls {
-        padding: 6px 0 0;
-      }
-      .layer-row {
-        padding: 6px 8px;
+        display: none; width: 100%; order: 6;
+        margin-top: 0; padding: 0;
       }
 
-      #canvas-hud {
-        top: calc(env(safe-area-inset-top) + 102px);
-        right: max(12px, calc(env(safe-area-inset-right) + 12px));
-        gap: 4px;
+      /* --- Expanded State --- */
+      body.mobile-panel-open #sidebar-right {
+        max-width: min(320px, calc(100vw - 24px));
+        max-height: calc(100dvh - 100px);
+        overflow-y: auto; overflow-x: hidden;
+        scrollbar-width: thin; border-radius: 20px;
       }
-      body.mobile-dock-edge #canvas-hud {
-        top: calc(env(safe-area-inset-top) + 124px);
+      body.mobile-panel-open #file-actions {
+        display: flex; gap: 3px;
+        padding: 6px 2px 4px;
+        border-top: 1px solid rgba(17,17,17,0.06);
+      }
+      body.mobile-panel-open #file-actions .btn-icon {
+        flex: 1; width: 34px; height: 34px;
+        min-width: 34px; min-height: 34px;
+      }
+      body.mobile-panel-open #tool-options > .tool-option-label {
+        display: flex;
+      }
+      body.mobile-panel-open #tool-options > #grid-settings-panel {
+        display: block;
+      }
+      body.mobile-panel-open #grid-settings-panel {
+        padding: 8px; border-radius: 12px;
+        border: 1px solid rgba(17,17,17,0.08);
+        background: rgba(246,243,236,0.95);
+      }
+      body.mobile-panel-open #grid-settings-panel .tool-option-label {
+        display: flex; padding: 6px 0;
+      }
+      body.mobile-panel-open .grid-settings-shortcuts,
+      body.mobile-panel-open .grid-settings-hint,
+      body.mobile-panel-open .grid-size-row { font-size: 10px; }
+      body.mobile-panel-open #vehicle-panel {
+        display: block; padding: 6px 0;
+        border-top: 1px solid rgba(17,17,17,0.06);
+      }
+      body.mobile-panel-open #vehicle-picker-btn {
+        width: 100%; margin: 0; min-height: 38px; padding: 6px 10px;
+        border-radius: 12px; border: 1px solid rgba(17,17,17,0.06);
+        background: rgba(255,255,255,0.7);
+      }
+      body.mobile-panel-open #vehicle-picker-current-icon {
+        width: 26px; height: 26px; border-radius: 8px;
+      }
+      body.mobile-panel-open #vehicle-picker-current strong {
+        font-size: 10px;
+      }
+      body.mobile-panel-open #vehicle-picker-current span,
+      body.mobile-panel-open .vehicle-picker-chevron { font-size: 9px; }
+      body.mobile-panel-open #layers-panel {
+        display: block; padding: 6px 2px;
+        border-top: 1px solid rgba(17,17,17,0.06);
+      }
+      body.mobile-panel-open #layer-list {
+        max-height: 80px; overflow-y: auto; padding: 0;
+      }
+      body.mobile-panel-open #layer-controls { padding: 4px 0 0; }
+      body.mobile-panel-open .layer-row { padding: 5px 6px; }
+
+      /* --- Canvas HUD --- */
+      #canvas-hud {
+        top: max(56px, calc(env(safe-area-inset-top) + 56px));
+        right: max(12px, calc(env(safe-area-inset-right) + 12px));
+        gap: 3px;
       }
       #canvas-hud div {
-        padding: 4px 8px;
-        border-radius: 999px;
+        padding: 3px 8px; border-radius: 999px;
         background: rgba(255,255,255,0.72);
         backdrop-filter: blur(12px);
-        color: rgba(0,0,0,0.48);
-        box-shadow: 0 6px 18px rgba(0,0,0,0.06);
-      }
-
-      #bottom-bar {
-        position: relative;
-        z-index: 35;
-        padding: 8px 12px calc(12px + env(safe-area-inset-bottom));
-        background: rgba(255,255,255,0.94);
-        border-top: 1px solid rgba(17,17,17,0.08);
-        box-shadow: 0 -14px 24px rgba(17,17,17,0.08);
-        backdrop-filter: blur(20px);
-      }
-      #timeline {
-        gap: 6px;
-      }
-      #timeline-start,
-      #timeline-end {
-        min-width: 38px;
+        color: rgba(0,0,0,0.44);
+        box-shadow: 0 4px 12px rgba(0,0,0,0.05);
         font-size: 10px;
       }
-      #frame-display {
-        display: none;
+
+      /* --- Bottom Bar (compact) --- */
+      #bottom-bar {
+        position: relative; z-index: 35;
+        padding: 6px 12px calc(6px + env(safe-area-inset-bottom));
+        background: rgba(255,255,255,0.94);
+        border-top: 1px solid rgba(17,17,17,0.06);
+        box-shadow: 0 -6px 16px rgba(17,17,17,0.05);
+        backdrop-filter: blur(20px);
+        gap: 3px;
       }
-      #timeline-track {
-        height: 8px;
+      #timeline { gap: 6px; }
+      #timeline-start, #timeline-end {
+        min-width: 32px; font-size: 10px;
       }
-      body.has-waveform #timeline-track {
-        height: 52px;
-      }
-      body.has-waveform #timeline-scrubber {
-        margin-top: 22px;
-      }
+      #frame-display { display: none; }
+      #timeline-track { height: 6px; }
+      body.has-waveform #timeline-track { height: 48px; }
+      body.has-waveform #timeline-scrubber { margin-top: 20px; }
 
       #transport-row {
-        flex-wrap: wrap;
-        gap: 8px;
-        justify-content: space-between;
+        display: flex; align-items: center; gap: 6px;
+        flex-wrap: nowrap; justify-content: center;
       }
-      #transport {
-        gap: 4px;
-      }
-      #transport button,
-      #transport-right .btn-icon {
-        width: 36px;
-        height: 36px;
-        min-width: 36px;
-        min-height: 36px;
-        padding: 0;
-        border-radius: 50%;
+      #transport { gap: 2px; }
+      #transport button, #transport-right .btn-icon {
+        width: 32px; height: 32px; min-width: 32px; min-height: 32px;
+        padding: 0; border-radius: 50%;
       }
       #play-btn {
-        width: 44px;
-        height: 44px;
-        min-width: 44px;
-        min-height: 44px;
+        width: 40px; height: 40px;
+        min-width: 40px; min-height: 40px;
       }
-      #transport-right {
-        margin-left: auto;
-      }
-      #playback-secondary {
-        order: 3;
-        width: 100%;
-        margin-left: 0;
-        justify-content: center;
-        flex-wrap: wrap;
-        gap: 6px;
-      }
-      #speed-presets {
-        margin-left: 0;
-        justify-content: center;
-        gap: 4px;
-      }
-      #mobile-playback-toggles {
-        display: flex;
-      }
-      #mobile-playback-toggles button {
-        min-height: 28px;
-        padding: 4px 10px;
-      }
-      #speed-presets::-webkit-scrollbar {
-        display: none;
-      }
-      .speed-label {
-        display: none;
-      }
+      #transport-right { margin-left: auto; }
+      #playback-secondary { margin-left: 0; gap: 4px; }
+      #speed-presets { gap: 2px; margin-left: 0; }
+      .speed-label { display: none; }
       .speed-btn {
-        min-height: 28px;
-        padding: 4px 10px;
+        min-height: 26px; padding: 2px 8px; font-size: 10px;
+      }
+      #mobile-playback-toggles { display: flex; gap: 3px; }
+      #mobile-playback-toggles button {
+        min-height: 26px; padding: 2px 8px; font-size: 10px;
+      }
+
+      /* --- Modals --- */
+      .generator-modal-body { grid-template-columns: 1fr; }
+      #generator-detail-preview svg { height: 72px; }
+    }
+
+    /* Phone-specific (<=480px) */
+    @media (max-width: 480px) {
+      #sidebar-right {
+        max-width: calc(100vw - 70px);
+        padding: 4px;
+      }
+      #tool-grid button {
+        width: 34px; height: 34px;
+        min-width: 34px; min-height: 34px;
+        border-radius: 10px;
+      }
+      #mobile-panel-toggle {
+        width: 34px; height: 34px;
+        min-width: 34px; min-height: 34px;
+        border-radius: 10px;
+      }
+      #tool-grid .tool-icon { width: 16px; height: 16px; }
+      #line-type-strip button { font-size: 8px; min-height: 24px; }
+      #transport-row { flex-wrap: wrap; }
+      #playback-secondary {
+        width: 100%; justify-content: center; order: 3;
       }
     }
+
   </style>
 </head>
 <body>
@@ -2606,6 +2571,9 @@
 
       <!-- RIGHT SIDEBAR -->
       <aside id="sidebar-right">
+        <button id="mobile-panel-toggle" type="button" aria-label="More options" aria-pressed="false">
+          <svg class="icon" viewBox="0 0 24 24"><circle cx="12" cy="6" r="1.5" fill="currentColor" stroke="none"/><circle cx="12" cy="12" r="1.5" fill="currentColor" stroke="none"/><circle cx="12" cy="18" r="1.5" fill="currentColor" stroke="none"/></svg>
+        </button>
         <div id="file-actions"></div>
 
         <div id="track-type-panel">
@@ -2654,9 +2622,11 @@
             </div>
             <div class="select-action-hint">Convert existing lines without redrawing them. Keyboard: Q / W / E.</div>
             <div id="select-utility-strip">
-              <button id="reverse-btn" type="button" style="padding:var(--sp-1) var(--sp-2); background:var(--bg-hover); border:1px solid var(--border); border-radius:4px; cursor:pointer; color:var(--ink);" title="Reverse selected lines (F)">Reverse (F)</button>
+              <button id="reverse-btn" type="button" style="padding:var(--sp-1) var(--sp-2); background:var(--bg-hover); border:1px solid var(--border); border-radius:4px; cursor:pointer; color:var(--ink);" title="Flip the rideable side of the selected lines (F)">Flip Ride Side (F)</button>
+              <button id="reverse-accel-btn" type="button" style="padding:var(--sp-1) var(--sp-2); background:var(--bg-hover); border:1px solid var(--border); border-radius:4px; cursor:pointer; color:var(--ink);" title="Reverse acceleration direction on selected red lines">Reverse Accel</button>
               <button id="smooth-btn" type="button" style="padding:var(--sp-1) var(--sp-2); background:var(--bg-hover); border:1px solid var(--border); border-radius:4px; cursor:pointer; color:var(--ink);" title="Select lines then click to smooth (S)">Smooth (S)</button>
             </div>
+            <div class="select-action-hint">Blue/red lines can now split rideable side from red-line boost direction.</div>
             <div id="smooth-slider-row" style="display:none;">
               <div style="display:flex; align-items:center; gap:var(--sp-1); margin-top:var(--sp-1);">
                 <input type="range" id="smooth-slider" min="0" max="100" value="0" style="flex:1; accent-color:#4488cc;" />
@@ -2815,9 +2785,6 @@
 
       <div id="transport-row">
         <div id="transport">
-          <button id="pause-btn" class="subtle" title="Pause" aria-label="Pause">
-            <svg class="icon icon-sm" viewBox="0 0 24 24"><rect x="6" y="4" width="4" height="16" fill="currentColor" stroke="none"/><rect x="14" y="4" width="4" height="16" fill="currentColor" stroke="none"/></svg>
-          </button>
           <button id="play-btn" title="Play" aria-label="Play">
             <svg class="icon icon-sm" viewBox="0 0 24 24"><polygon points="6,4 20,12 6,20" fill="currentColor" stroke="none"/></svg>
           </button>
@@ -2877,6 +2844,14 @@
           <button id="audio-yt-btn">Load</button>
         </div>
 
+        <div id="audio-yt-history" style="display:none;">
+          <div class="audio-yt-history-header">
+            <span>Recent</span>
+            <button id="audio-yt-clear-history" type="button">Clear</button>
+          </div>
+          <div id="audio-yt-history-list"></div>
+        </div>
+
         <div id="audio-status"></div>
 
         <div id="audio-file-info" style="display:none;">
@@ -2900,6 +2875,22 @@
             <label>Offset</label>
             <input type="number" id="audio-offset" value="0" step="0.1" style="max-width:80px;" />
             <span style="font:500 var(--text-xs)/1 var(--font); color:var(--ink-muted);">seconds</span>
+          </div>
+
+          <div style="border-top:1px solid var(--border-light); margin:var(--sp-1) 0;"></div>
+
+          <div id="audio-trim-section">
+            <div class="audio-row" style="margin-bottom:var(--sp-1);">
+              <label>Trim</label>
+              <canvas id="audio-trim-bar" height="32" style="flex:1; border-radius:var(--radius-sm); cursor:crosshair;"></canvas>
+            </div>
+            <div class="audio-row">
+              <label>Start</label>
+              <input type="text" id="audio-clip-start" placeholder="0:00" style="max-width:64px; text-align:center;" />
+              <label style="min-width:auto;">End</label>
+              <input type="text" id="audio-clip-end" placeholder="0:00" style="max-width:64px; text-align:center;" />
+              <button id="audio-trim-reset" type="button" style="min-width:auto; min-height:var(--control-h-sm); padding:var(--sp-1) var(--sp-2); font-size:var(--text-xs);">Reset</button>
+            </div>
           </div>
 
           <div style="border-top:1px solid var(--border-light); margin:var(--sp-1) 0;"></div>
@@ -2975,10 +2966,24 @@
     <!-- Hotkeys panel -->
     <div id="hotkeys-panel" role="dialog" aria-label="Keyboard shortcuts">
       <div id="hotkeys-header">
-        <span>Keyboard Shortcuts</span>
+        <span>Settings &amp; Shortcuts</span>
         <button id="hotkeys-close" aria-label="Close">
           <svg class="icon icon-sm" viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
         </button>
+      </div>
+      <div id="settings-controls">
+        <div class="settings-group">
+          <div class="settings-group-header">
+            <span>Camera Follow</span>
+            <span class="settings-inline-value"><span id="camera-follow-value">50%</span> · <span id="camera-follow-label">Balanced</span></span>
+          </div>
+          <input type="range" id="camera-follow-slider" min="0" max="100" step="1" value="50" />
+          <div class="settings-ends">
+            <span>Calm</span>
+            <span>Dynamic</span>
+          </div>
+          <p class="settings-note">Lower values keep the rider centered and steadier. Higher values lead farther into motion and turns.</p>
+        </div>
       </div>
       <div id="hotkeys-list">
         <div class="hk-row"><kbd>Space</kbd><span>Play / Pause</span></div>
@@ -2999,7 +3004,7 @@
         <div class="hk-row"><kbd>Dbl-click</kbd><span>Toggle smooth/corner anchor on the active curve</span></div>
         <div class="hk-row"><kbd>Dbl-click</kbd><span>Add anchor on the active curve segment</span></div>
         <div class="hk-row"><kbd>Delete</kbd><span>Remove selected anchor on the active curve</span></div>
-        <div class="hk-row"><kbd>F</kbd><span>Flip selected lines, flip hovered/active line direction, or fit view when nothing is active</span></div>
+        <div class="hk-row"><kbd>F</kbd><span>Flip rideable side on selected lines, flip hovered/active line direction, or fit view when nothing is active</span></div>
         <div class="hk-row"><kbd>Q</kbd><span>Solid line type or convert selection to solid</span></div>
         <div class="hk-row"><kbd>W</kbd><span>Accel line type or convert selection to accel</span></div>
         <div class="hk-row"><kbd>E</kbd><span>Scenery line type or convert selection to scenery</span></div>

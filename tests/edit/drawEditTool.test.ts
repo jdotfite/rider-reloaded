@@ -168,3 +168,33 @@ test('double-clicking a straight line in draw mode converts it to a bezier path'
   assert.equal(store.bezierPaths.length, 1);
   assert.equal(store.bezierPaths[0].anchors.length, 2);
 });
+
+test('double-click conversion preserves flipped ride side on the new curve', () => {
+  installWindowStub();
+
+  const store = new TrackStore();
+  const line = store.addLine(new Vec2(0, 0), new Vec2(100, 0), LineType.SOLID);
+  assert.ok(line);
+  store.flipLine(line!.id);
+  const tool = createDrawEditTool(store);
+
+  const originalNow = Date.now;
+  let now = 1000;
+  Date.now = () => now;
+
+  try {
+    const midpoint = new Vec2(50, 0);
+    tool.onMouseDown(midpoint, midpoint, 0);
+    tool.onMouseUp(midpoint, midpoint, 0);
+
+    now = 1100;
+    tool.onMouseDown(midpoint, midpoint, 0);
+    tool.onMouseUp(midpoint, midpoint, 0);
+  } finally {
+    Date.now = originalNow;
+  }
+
+  assert.equal(store.bezierPaths.length, 1);
+  assert.equal(store.bezierPaths[0].flipped, true);
+  assert.equal(store.bezierPaths[0].lineIds.every((lineId) => store.lines.find((candidate) => candidate.id === lineId)?.flipped === true), true);
+});

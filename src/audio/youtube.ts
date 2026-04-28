@@ -118,6 +118,10 @@ export class YouTubePlayer {
   private _playbackRate = 1.0;
   private _videoId = '';
 
+  // Clip region (trim)
+  private _clipStart = 0;
+  private _clipEnd = Infinity;
+
   // Drift correction — YT player has inherent latency, use a generous threshold
   // to avoid constant re-seeking which causes crackling
   private static readonly DRIFT_THRESHOLD = 0.15; // 150ms
@@ -158,6 +162,22 @@ export class YouTubePlayer {
 
   set offset(v: number) {
     this._offset = v;
+  }
+
+  get clipStart(): number { return this._clipStart; }
+  get clipEnd(): number { return this._clipEnd; }
+
+  setClip(start: number, end: number) {
+    this._clipStart = Math.max(0, start);
+    this._clipEnd = end <= 0 || !Number.isFinite(end) ? Infinity : end;
+    if (this._clipEnd !== Infinity && this._clipEnd <= this._clipStart) {
+      this._clipEnd = Infinity;
+    }
+  }
+
+  resetClip() {
+    this._clipStart = 0;
+    this._clipEnd = Infinity;
   }
 
   get playbackRate(): number {
@@ -263,7 +283,10 @@ export class YouTubePlayer {
 
   seekToFrame(frame: number): void {
     const seconds = (frame * TIMESTEP) / 1000 + this._offset;
-    this.seekToTime(Math.max(0, seconds));
+    // Clamp to clip region
+    const effectiveEnd = this._clipEnd !== Infinity ? this._clipEnd : this.duration;
+    const clamped = Math.max(this._clipStart, Math.min(seconds, effectiveEnd));
+    this.seekToTime(Math.max(0, clamped));
   }
 
   seekToTime(seconds: number): void {
@@ -283,8 +306,16 @@ export class YouTubePlayer {
 
     const physicsTime = (frame * TIMESTEP) / 1000 + this._offset;
     const ytTime = this.player.getCurrentTime();
-    const drift = Math.abs(ytTime - physicsTime);
 
+    // Auto-pause at clip end
+    const effectiveEnd = this._clipEnd !== Infinity ? this._clipEnd : this.duration;
+    if (ytTime >= effectiveEnd) {
+      this.player.pauseVideo();
+      this.player.seekTo(Math.max(0, this._clipStart + this._offset), true);
+      return;
+    }
+
+    const drift = Math.abs(ytTime - physicsTime);
     if (drift > YouTubePlayer.DRIFT_THRESHOLD) {
       this.player.seekTo(Math.max(0, physicsTime), true);
     }
@@ -299,5 +330,6 @@ export class YouTubePlayer {
     this._videoId = '';
     this.name = '';
     this.duration = 0;
+    this.resetClip();
   }
 }

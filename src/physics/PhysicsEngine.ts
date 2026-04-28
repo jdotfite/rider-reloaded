@@ -29,6 +29,8 @@ export class PhysicsEngine {
   rider: Rider;
   grid: SpatialGrid;
   onPortalTeleport: ((event: PortalTeleportEvent) => void) | null = null;
+  /** Line IDs that had active collisions during the last step */
+  hitLines: Set<number> = new Set();
   private getPortals: () => PortalPair[];
 
   constructor(rider: Rider, grid: SpatialGrid, getPortals: () => PortalPair[] = () => []) {
@@ -39,6 +41,7 @@ export class PhysicsEngine {
 
   step() {
     this.rider.tickTransientState();
+    this.hitLines.clear();
 
     // 1. Verlet integration (stores momentum for collision checks)
     const gs = this.rider.gravityScale;
@@ -116,6 +119,7 @@ export class PhysicsEngine {
     if (linePos < line.leftBound || linePos > line.rightBound) return;
 
     // --- COLLISION RESPONSE ---
+    this.hitLines.add(line.id);
 
     // Project point onto line surface (remove perpendicular component)
     const newPosX = cp.pos.x - line.normal.x * perpComp;
@@ -143,10 +147,13 @@ export class PhysicsEngine {
     // Acceleration line boost: shift prevPos along line direction
     if (line.type === LineType.ACC) {
       const accLine = line as AccLine;
-      // acc direction = normal.rotCW() = (-normal.y, normal.x) ... that's the line direction
-      // The live game also supports per-line accel multipliers on top of the base 0.1 boost.
-      const accX = -line.normal.y * accLine.accMultiplier;
-      const accY = line.normal.x * accLine.accMultiplier;
+      // Keep accel direction independent from the rideable-side flip.
+      // Base direction matches the legacy unflipped red-line behavior.
+      const accelDirection = accLine.accelFlipped ? 1 : -1;
+      const tangentX = line.length > 0 ? (line.delta.x / line.length) * accelDirection : 0;
+      const tangentY = line.length > 0 ? (line.delta.y / line.length) * accelDirection : 0;
+      const accX = tangentX * accLine.accMultiplier;
+      const accY = tangentY * accLine.accMultiplier;
       cp.prevPos.x += accX;
       cp.prevPos.y += accY;
     }

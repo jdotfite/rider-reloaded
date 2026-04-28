@@ -107,8 +107,10 @@ export class InputManager {
 
   private onKeyDown = (e: KeyboardEvent) => {
     const target = e.target as HTMLElement | null;
+    const isTimelineScrubber = target?.tagName === 'INPUT' && target.id === 'timeline-scrubber';
     if (
       target &&
+      !isTimelineScrubber &&
       (
         target.tagName === 'INPUT' ||
         target.tagName === 'TEXTAREA' ||

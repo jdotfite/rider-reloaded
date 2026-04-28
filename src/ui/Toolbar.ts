@@ -11,6 +11,9 @@ import type {
   PortalVisibility,
 } from '../store/PortalTypes';
 
+const PLAY_ICON = '<svg class="icon icon-sm" viewBox="0 0 24 24"><polygon points="6,4 20,12 6,20" fill="currentColor" stroke="none"/></svg>';
+const PAUSE_ICON = '<svg class="icon icon-sm" viewBox="0 0 24 24"><rect x="6" y="4" width="4" height="16" fill="currentColor" stroke="none"/><rect x="14" y="4" width="4" height="16" fill="currentColor" stroke="none"/></svg>';
+
 export class Toolbar {
   // Sidebar
   private fileActions: HTMLElement;
@@ -69,6 +72,7 @@ export class Toolbar {
   onSmoothApply: (() => void) | null = null;
   onSmoothCancel: (() => void) | null = null;
   onFlipSelection: (() => void) | null = null;
+  onReverseAccelSelection: (() => void) | null = null;
   onPortalModeChange: ((mode: PortalMode) => void) | null = null;
   onPortalThemeChange: ((theme: PortalColorTheme) => void) | null = null;
   onPortalVelocityModeChange: ((mode: PortalVelocityMode) => void) | null = null;
@@ -89,6 +93,7 @@ export class Toolbar {
   private smoothContainer!: HTMLElement;
   private smoothBtn!: HTMLButtonElement;
   private reverseBtn: HTMLButtonElement | null = null;
+  private reverseAccelBtn: HTMLButtonElement | null = null;
   private smoothSliderRow!: HTMLElement;
   private smoothSlider!: HTMLInputElement;
   private smoothValue!: HTMLElement;
@@ -132,11 +137,12 @@ export class Toolbar {
   private lineTypeButtons: Map<LineType, HTMLButtonElement> = new Map();
   private convertTypeButtons: Map<LineType, HTMLButtonElement> = new Map();
   private playBtn!: HTMLButtonElement;
-  private pauseBtn!: HTMLButtonElement;
   private stopBtn!: HTMLButtonElement;
   private activeToolName = 'pencil';
   private currentSelectedCount = 0;
   private currentSelectionSmoothing = false;
+  private currentSelectionHasAccel = false;
+  private currentPlaybackState: GameState = GameState.EDITING;
 
   // Layer state
   private layerRows: HTMLElement[] = [];
@@ -272,6 +278,7 @@ export class Toolbar {
     this.smoothContainer = document.getElementById('smooth-container') as HTMLElement;
     this.smoothBtn = document.getElementById('smooth-btn') as HTMLButtonElement;
     this.reverseBtn = document.getElementById('reverse-btn') as HTMLButtonElement | null;
+    this.reverseAccelBtn = document.getElementById('reverse-accel-btn') as HTMLButtonElement | null;
     this.smoothSliderRow = document.getElementById('smooth-slider-row') as HTMLElement;
     this.smoothSlider = document.getElementById('smooth-slider') as HTMLInputElement;
     this.smoothValue = document.getElementById('smooth-value') as HTMLElement;
@@ -303,6 +310,9 @@ export class Toolbar {
     }
     if (this.reverseBtn) {
       this.reverseBtn.addEventListener('click', () => this.onFlipSelection?.());
+    }
+    if (this.reverseAccelBtn) {
+      this.reverseAccelBtn.addEventListener('click', () => this.onReverseAccelSelection?.());
     }
     if (this.smoothSlider) {
       this.smoothSlider.addEventListener('input', () => {
@@ -439,13 +449,17 @@ export class Toolbar {
     this.setPortalState(false, null, false);
 
     // Transport buttons
-    this.pauseBtn = this.requireElement('pause-btn') as HTMLButtonElement;
     this.playBtn = this.requireElement('play-btn') as HTMLButtonElement;
     this.stopBtn = this.requireElement('stop-btn') as HTMLButtonElement;
     const fitBtn = this.requireElement('btn-zoom') as HTMLButtonElement;
 
-    this.pauseBtn.addEventListener('click', () => this.onPause?.());
-    this.playBtn.addEventListener('click', () => this.onPlay?.());
+    this.playBtn.addEventListener('click', () => {
+      if (this.currentPlaybackState === GameState.PLAYING) {
+        this.onPause?.();
+        return;
+      }
+      this.onPlay?.();
+    });
     this.stopBtn.addEventListener('click', () => this.onStop?.());
     fitBtn.addEventListener('click', () => this.onFit?.());
   }
@@ -565,8 +579,22 @@ export class Toolbar {
     let sidebarInspectorOpen = true;
     const isDesktopViewport = () => window.matchMedia('(min-width: 900px)').matches;
 
+    const sidebarRight = document.getElementById('sidebar-right') as HTMLElement | null;
+    const mobilePanelToggle = document.getElementById('mobile-panel-toggle') as HTMLButtonElement | null;
+
     const mountToolGrid = () => {
-      const target = isDesktopViewport() && toolRailMode === 'top'
+      if (!isDesktopViewport() && sidebarRight) {
+        // Mobile: put tool-grid inside sidebar-right, before the toggle button
+        if (this.toolGrid.parentElement !== sidebarRight) {
+          if (mobilePanelToggle) {
+            sidebarRight.insertBefore(this.toolGrid, mobilePanelToggle);
+          } else {
+            sidebarRight.prepend(this.toolGrid);
+          }
+        }
+        return;
+      }
+      const target = toolRailMode === 'top'
         ? topToolRail ?? leftDockTools
         : leftDockTools ?? topToolRail;
       if (target && this.toolGrid.parentElement !== target) {
@@ -654,6 +682,21 @@ export class Toolbar {
       } catch {}
     });
 
+    // Mobile panel toggle (expand/collapse secondary panels)
+    mobilePanelToggle?.addEventListener('click', () => {
+      document.body.classList.toggle('mobile-panel-open');
+      const isOpen = document.body.classList.contains('mobile-panel-open');
+      mobilePanelToggle.setAttribute('aria-pressed', isOpen ? 'true' : 'false');
+    });
+
+    // Close mobile panel when tapping the canvas
+    document.getElementById('canvas-container')?.addEventListener('pointerdown', () => {
+      if (document.body.classList.contains('mobile-panel-open')) {
+        document.body.classList.remove('mobile-panel-open');
+        mobilePanelToggle?.setAttribute('aria-pressed', 'false');
+      }
+    }, { passive: true });
+
     const stepFwd = document.getElementById('step-fwd-btn');
     const stepBack = document.getElementById('step-back-btn');
     stepFwd?.addEventListener('click', () => this.onStepForward?.());
@@ -714,9 +757,10 @@ export class Toolbar {
     if (this.smoothSliderRow) this.smoothSliderRow.style.display = 'none';
   }
 
-  setSelectedLineState(count: number, smoothing: boolean) {
+  setSelectedLineState(count: number, smoothing: boolean, hasAccelSelection = false) {
     this.currentSelectedCount = count;
     this.currentSelectionSmoothing = smoothing;
+    this.currentSelectionHasAccel = hasAccelSelection;
     this.syncSelectionPanelVisibility();
 
     const hasSelection = count > 0;
@@ -730,6 +774,9 @@ export class Toolbar {
     }
     if (this.reverseBtn) {
       this.reverseBtn.disabled = !hasSelection || smoothing;
+    }
+    if (this.reverseAccelBtn) {
+      this.reverseAccelBtn.disabled = !hasSelection || smoothing || !hasAccelSelection;
     }
     if (this.smoothBtn) {
       this.smoothBtn.disabled = !hasSelection || smoothing;
@@ -845,10 +892,13 @@ export class Toolbar {
   }
 
   setPlaybackState(state: GameState) {
-    this.playBtn.disabled = state === GameState.PLAYING;
-    this.pauseBtn.disabled = state !== GameState.PLAYING;
+    this.currentPlaybackState = state;
+    const playing = state === GameState.PLAYING;
+    this.playBtn.innerHTML = playing ? PAUSE_ICON : PLAY_ICON;
+    this.playBtn.title = playing ? 'Pause' : 'Play';
+    this.playBtn.setAttribute('aria-label', playing ? 'Pause' : 'Play');
+    this.playBtn.classList.toggle('active', playing);
     this.stopBtn.disabled = state === GameState.EDITING;
-    this.pauseBtn.classList.toggle('active', state === GameState.PAUSED);
   }
 
   setLayerState(layers: Array<{ id: number; name: string; visible: boolean; editable: boolean }>, activeIndex: number) {

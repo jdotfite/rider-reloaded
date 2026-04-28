@@ -37,6 +37,7 @@ export interface SerializedTrackLine {
   x2: number;
   y2: number;
   flipped?: 1;
+  accelFlipped?: 0 | 1;
   extended?: 1;
   leftExtended?: 1;
   rightExtended?: 1;
@@ -98,6 +99,7 @@ interface NormalizedTrackLine {
   x2: number;
   y2: number;
   flipped: boolean;
+  accelFlipped: boolean;
   leftExtended: boolean;
   rightExtended: boolean;
   layer: number;
@@ -158,6 +160,7 @@ export class TrackStore {
     p2: Vec2;
     type: LineType;
     flipped?: boolean;
+    accelFlipped?: boolean;
     leftExtended?: boolean;
     rightExtended?: boolean;
     multiplier?: number;
@@ -169,6 +172,7 @@ export class TrackStore {
     for (const line of lines) {
       const pastedLine = this.createLine(line.p1, line.p2, line.type, {
         flipped: line.flipped,
+        accelFlipped: line.accelFlipped,
         leftExtended: line.leftExtended,
         rightExtended: line.rightExtended,
         layer: line.layer ?? this.activeLayerId,
@@ -187,6 +191,7 @@ export class TrackStore {
     const flipped = this.createLine(existing.p1, existing.p2, existing.type, {
       id: existing.id,
       flipped: !existing.flipped,
+      accelFlipped: existing instanceof AccLine ? existing.accelFlipped : undefined,
       leftExtended: existing.leftExtended,
       rightExtended: existing.rightExtended,
       layer: existing.layer,
@@ -196,6 +201,23 @@ export class TrackStore {
     return flipped;
   }
 
+  reverseAccelLine(lineId: number): Line | null {
+    const existing = this.lines.find(l => l.id === lineId);
+    if (!(existing instanceof AccLine)) return null;
+    this.beginMutation();
+    const reversed = this.createLine(existing.p1, existing.p2, existing.type, {
+      id: existing.id,
+      flipped: existing.flipped,
+      accelFlipped: !existing.accelFlipped,
+      leftExtended: existing.leftExtended,
+      rightExtended: existing.rightExtended,
+      layer: existing.layer,
+      multiplier: existing.multiplier,
+    });
+    this.lines = this.lines.map(l => l.id === lineId ? reversed : l);
+    return reversed;
+  }
+
   replaceLine(lineId: number, p1: Vec2, p2: Vec2): Line | null {
     const existing = this.lines.find(l => l.id === lineId);
     if (!existing) return null;
@@ -203,6 +225,7 @@ export class TrackStore {
     const replacement = this.createLine(p1, p2, existing.type, {
       id: existing.id,
       flipped: existing.flipped,
+      accelFlipped: existing instanceof AccLine ? existing.accelFlipped : undefined,
       leftExtended: existing.leftExtended,
       rightExtended: existing.rightExtended,
       layer: existing.layer,
@@ -405,7 +428,7 @@ export class TrackStore {
 
   serialize(): SerializedTrack {
     return {
-      version: '6.4',
+      version: '6.5',
       label: 'Untitled Track',
       creator: 'Rider Reloaded',
       startPosition: {
@@ -427,6 +450,7 @@ export class TrackStore {
         x2: line.p2.x,
         y2: line.p2.y,
         flipped: line.flipped ? 1 : undefined,
+        accelFlipped: line instanceof AccLine ? (line.accelFlipped ? 1 : 0) : undefined,
         extended: line.leftExtended || line.rightExtended ? 1 : undefined,
         leftExtended: line.leftExtended ? 1 : undefined,
         rightExtended: line.rightExtended ? 1 : undefined,
@@ -437,6 +461,8 @@ export class TrackStore {
         id: p.id,
         anchors: p.anchors.map(serializeAnchor),
         lineType: this.encodeLineType(p.lineType),
+        flipped: p.flipped,
+        accelFlipped: p.accelFlipped,
         layer: p.layer,
         lineIds: [...p.lineIds],
       })),
@@ -455,6 +481,7 @@ export class TrackStore {
       {
         id: line.id,
         flipped: line.flipped,
+        accelFlipped: line.accelFlipped,
         leftExtended: line.leftExtended,
         rightExtended: line.rightExtended,
         layer: line.layer,
@@ -474,10 +501,15 @@ export class TrackStore {
           Array.isArray(sp.lineIds)) {
           const lineType = this.decodeLineType(sp.lineType);
           if (!lineType) continue;
+          const firstLine = loadedLines.find(l => sp.lineIds.includes(l.id));
+          const inferredFlipped = firstLine?.flipped ?? false;
+          const inferredAccelFlipped = firstLine instanceof AccLine ? firstLine.accelFlipped : inferredFlipped;
           loadedPaths.push({
             id: sp.id,
             anchors: sp.anchors.map((a: any) => deserializeAnchor(a)),
             lineType,
+            flipped: typeof sp.flipped === 'boolean' ? sp.flipped : inferredFlipped,
+            accelFlipped: typeof sp.accelFlipped === 'boolean' ? sp.accelFlipped : inferredAccelFlipped,
             layer: typeof sp.layer === 'number' ? sp.layer : 0,
             lineIds: sp.lineIds,
           });
@@ -494,6 +526,8 @@ export class TrackStore {
           // Find the line type from existing lines
           const firstLine = loadedLines.find(l => g.lineIds.includes(l.id));
           const lineType = firstLine?.type ?? LineType.SOLID;
+          const flipped = firstLine?.flipped ?? false;
+          const accelFlipped = firstLine instanceof AccLine ? firstLine.accelFlipped : flipped;
           const layer = firstLine?.layer ?? 0;
 
           const start = new Vec2(g.startPoint.x, g.startPoint.y);
@@ -518,6 +552,8 @@ export class TrackStore {
               },
             ],
             lineType,
+            flipped,
+            accelFlipped,
             layer,
             lineIds: [...g.lineIds],
           });
@@ -541,11 +577,18 @@ export class TrackStore {
 
   // ── BezierPath methods ──
 
-  addBezierPath(anchors: BezierAnchor[], lineType: LineType, layer: number): BezierPath {
+  addBezierPath(
+    anchors: BezierAnchor[],
+    lineType: LineType,
+    layer: number,
+    options: Partial<Pick<BezierPath, 'flipped' | 'accelFlipped'>> = {},
+  ): BezierPath {
     const path: BezierPath = {
       id: this.nextBezierPathId++,
       anchors,
       lineType,
+      flipped: options.flipped ?? false,
+      accelFlipped: options.accelFlipped ?? false,
       layer,
       lineIds: [],
     };
@@ -557,6 +600,8 @@ export class TrackStore {
     for (let i = 0; i < segments.length; i++) {
       const seg = segments[i];
       const line = this.createLine(seg.p1, seg.p2, lineType, {
+        flipped: path.flipped,
+        accelFlipped: path.accelFlipped,
         leftExtended: i > 0,
         rightExtended: i < segments.length - 1,
         layer,
@@ -592,6 +637,8 @@ export class TrackStore {
     for (let i = 0; i < segments.length; i++) {
       const seg = segments[i];
       const line = this.createLine(seg.p1, seg.p2, lineType, {
+        flipped: path.flipped,
+        accelFlipped: path.accelFlipped,
         leftExtended: i > 0,
         rightExtended: i < segments.length - 1,
         layer,
@@ -603,6 +650,24 @@ export class TrackStore {
     path.lineIds = added;
     this.bezierPaths.push(path);
     this.onMutation?.();
+  }
+
+  flipBezierPath(pathId: number): boolean {
+    const path = this.bezierPaths.find(p => p.id === pathId);
+    if (!path) return false;
+    this.beginMutation();
+    path.flipped = !path.flipped;
+    this.regenerateBezierPathLines(path.id);
+    return true;
+  }
+
+  reverseBezierPathAccel(pathId: number): boolean {
+    const path = this.bezierPaths.find(p => p.id === pathId);
+    if (!path || path.lineType !== LineType.ACC) return false;
+    this.beginMutation();
+    path.accelFlipped = !path.accelFlipped;
+    this.regenerateBezierPathLines(path.id);
+    return true;
   }
 
   findBezierPathForLine(lineId: number): BezierPath | null {
@@ -995,9 +1060,15 @@ export class TrackStore {
         return null;
       }
 
+      const accelFlipped = this.toBoolean(line.accelFlipped);
+      if (line.accelFlipped != null && accelFlipped == null) {
+        return null;
+      }
+
       const extended = this.toBoolean(line.extended) ?? false;
       const leftExtended = this.toBoolean(line.leftExtended) ?? extended;
       const rightExtended = this.toBoolean(line.rightExtended) ?? extended;
+      const flipped = this.toBoolean(line.flipped) ?? false;
 
       normalizedLines.push({
         id:
@@ -1009,7 +1080,8 @@ export class TrackStore {
         y1: line.y1,
         x2: line.x2,
         y2: line.y2,
-        flipped: this.toBoolean(line.flipped) ?? false,
+        flipped,
+        accelFlipped: type === LineType.ACC ? (accelFlipped ?? flipped) : false,
         leftExtended,
         rightExtended,
         layer:
@@ -1332,6 +1404,7 @@ export class TrackStore {
         {
           id: line.id,
           flipped: line.flipped,
+          accelFlipped: line instanceof AccLine ? line.accelFlipped : undefined,
           leftExtended: line.leftExtended,
           rightExtended: line.rightExtended,
           layer: line.layer,
@@ -1354,12 +1427,23 @@ export class TrackStore {
     if (expandedIds.size === 0) return;
     const hasTypeChange = this.lines.some(line => expandedIds.has(line.id) && line.type !== newType);
     if (!hasTypeChange) return;
+    const accelDefaults = new Map<number, boolean>();
+    if (newType === LineType.ACC) {
+      for (const line of this.lines) {
+        if (!expandedIds.has(line.id)) continue;
+        accelDefaults.set(
+          line.id,
+          line instanceof AccLine ? line.accelFlipped : line.flipped,
+        );
+      }
+    }
     this.beginMutation();
     this.lines = this.lines.map(line => {
       if (!expandedIds.has(line.id) || line.type === newType) return line;
       return this.createLine(line.p1, line.p2, newType, {
         id: line.id,
         flipped: line.flipped,
+        accelFlipped: accelDefaults.get(line.id),
         leftExtended: line.leftExtended,
         rightExtended: line.rightExtended,
         layer: line.layer,
@@ -1370,6 +1454,9 @@ export class TrackStore {
       const hasSelectedLine = path.lineIds.some(id => expandedIds.has(id));
       if (!hasSelectedLine) return true;
       path.lineType = newType;
+      if (newType === LineType.ACC) {
+        path.accelFlipped = path.flipped;
+      }
       return true;
     });
   }
@@ -1384,6 +1471,7 @@ export class TrackStore {
       p2: line.p2.add(offset),
       type: line.type,
       flipped: line.flipped,
+      accelFlipped: line instanceof AccLine ? line.accelFlipped : undefined,
       leftExtended: line.leftExtended,
       rightExtended: line.rightExtended,
       multiplier: line instanceof AccLine ? line.multiplier : undefined,

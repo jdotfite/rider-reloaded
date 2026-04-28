@@ -16,6 +16,11 @@ export class AudioPlayer {
   private _offset = 0; // seconds — user-configurable song offset
   private _playbackRate = 1.0;
 
+  // Clip region (trim)
+  private _clipStart = 0;       // seconds — start of playable region
+  private _clipEnd = Infinity;  // seconds — end of playable region
+  private clipStopTimer: ReturnType<typeof setTimeout> | null = null;
+
   // Timing
   private startContextTime = 0; // AudioContext.currentTime when playback started
   private startOffset = 0; // position in the buffer when playback started (seconds)
@@ -57,6 +62,23 @@ export class AudioPlayer {
 
   set offset(v: number) {
     this._offset = v;
+  }
+
+  get clipStart(): number { return this._clipStart; }
+  get clipEnd(): number { return this._clipEnd; }
+
+  setClip(start: number, end: number) {
+    this._clipStart = Math.max(0, start);
+    this._clipEnd = end <= 0 || !Number.isFinite(end) ? Infinity : end;
+    if (this._clipEnd !== Infinity && this._clipEnd <= this._clipStart) {
+      this._clipEnd = Infinity;
+    }
+  }
+
+  resetClip() {
+    this._clipStart = 0;
+    this._clipEnd = Infinity;
+    if (this.clipStopTimer) { clearTimeout(this.clipStopTimer); this.clipStopTimer = null; }
   }
 
   get playbackRate(): number {
@@ -124,11 +146,17 @@ export class AudioPlayer {
       ctx.resume();
     }
 
+    // Clamp start offset to clip region
+    if (this._clipStart > 0 && this.startOffset < this._clipStart) {
+      this.startOffset = this._clipStart;
+    }
+
     this.createSource();
     const songPosition = this.startOffset + this._offset;
+    const effectiveEnd = this._clipEnd !== Infinity ? this._clipEnd : this.duration;
 
-    if (songPosition >= this.duration) {
-      // Past end of song — nothing to play
+    if (songPosition >= effectiveEnd) {
+      // Past end of clip — nothing to play
       return;
     }
 
@@ -141,6 +169,21 @@ export class AudioPlayer {
 
     this.startContextTime = ctx.currentTime;
     this._playing = true;
+
+    // Schedule auto-stop at clip end
+    if (this.clipStopTimer) { clearTimeout(this.clipStopTimer); this.clipStopTimer = null; }
+    if (this._clipEnd !== Infinity) {
+      const remaining = (effectiveEnd - Math.max(0, songPosition)) / this._playbackRate;
+      if (remaining > 0) {
+        this.clipStopTimer = setTimeout(() => {
+          this.clipStopTimer = null;
+          if (this._playing) {
+            this.pause();
+            this.startOffset = this._clipStart;
+          }
+        }, remaining * 1000);
+      }
+    }
   }
 
   /** Pause playback, preserving position */
@@ -169,10 +212,13 @@ export class AudioPlayer {
   seekToTime(seconds: number): void {
     const wasPlaying = this._playing;
     if (wasPlaying) {
+      if (this.clipStopTimer) { clearTimeout(this.clipStopTimer); this.clipStopTimer = null; }
       this.destroySource();
       this._playing = false;
     }
-    this.startOffset = seconds;
+    // Clamp to clip region
+    const effectiveEnd = this._clipEnd !== Infinity ? this._clipEnd : this.duration;
+    this.startOffset = Math.max(this._clipStart, Math.min(seconds, effectiveEnd));
     if (wasPlaying) {
       this.play();
     }
@@ -233,10 +279,12 @@ export class AudioPlayer {
   /** Remove the loaded audio */
   unload(): void {
     this.stop();
+    if (this.clipStopTimer) { clearTimeout(this.clipStopTimer); this.clipStopTimer = null; }
     this.buffer = null;
     this.duration = 0;
     this.name = '';
     this.startOffset = 0;
+    this.resetClip();
   }
 
   private createSource(): void {

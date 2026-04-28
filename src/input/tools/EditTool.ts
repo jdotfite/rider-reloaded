@@ -3,6 +3,7 @@ import { Tool } from './Tool';
 import { TrackStore } from '../../store/TrackStore';
 import { HANDLE_SIZE, HANDLE_HIT_SIZE, SNAP_RADIUS, SELECT_RADIUS } from '../../constants';
 import { BezierPath, BezierAnchor } from '../../store/BezierPath';
+import { AccLine } from '../../physics/lines/AccLine';
 import { cubicBezierPoint } from '../../math/bezier';
 import {
   PointSnapResult,
@@ -872,7 +873,10 @@ export class EditTool implements Tool {
     this.store.removeLines(new Set([line.id]));
 
     const anchors = this.buildLineAnchors(line.p1.clone(), line.p2.clone());
-    const newPath = this.store.addBezierPath(anchors, line.type, line.layer);
+    const newPath = this.store.addBezierPath(anchors, line.type, line.layer, {
+      flipped: line.flipped,
+      accelFlipped: line instanceof AccLine ? line.accelFlipped : false,
+    });
     this.activePathId = newPath.id;
     this.activeLineId = null;
 

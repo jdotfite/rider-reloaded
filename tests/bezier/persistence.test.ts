@@ -66,3 +66,50 @@ test('serialized bezier paths keep segment ownership after reload', () => {
   assert.equal(restored.bezierPaths[0].anchors[0].position.x, 18);
   assert.equal(restored.bezierPaths[0].anchors[0].position.y, 9);
 });
+
+test('serialized accel lines preserve ride-side flip separately from accel direction', () => {
+  installWindowStub();
+
+  const store = new TrackStore();
+  const line = store.addLine(new Vec2(0, 0), new Vec2(100, 0), LineType.ACC);
+  assert.ok(line);
+  store.flipLine(line!.id);
+  store.reverseAccelLine(line!.id);
+
+  const serialized = store.serialize();
+  const restored = new TrackStore();
+  assert.equal(restored.load(serialized), true);
+  assert.equal(restored.lines.length, 1);
+  assert.equal(restored.lines[0].flipped, true);
+  assert.equal(restored.lines[0].type, LineType.ACC);
+  assert.equal((restored.lines[0] as any).accelFlipped, true);
+});
+
+test('legacy accel lines fall back to flipped when explicit accel direction is missing', () => {
+  installWindowStub();
+
+  const legacyTrack = {
+    version: '6.4',
+    label: 'Legacy',
+    creator: 'Test',
+    startPosition: { x: 0, y: 0 },
+    layers: [{ id: 0, name: 'Main', visible: true, editable: true }],
+    lines: [{
+      id: 1,
+      type: 1,
+      x1: 0,
+      y1: 0,
+      x2: 100,
+      y2: 0,
+      flipped: 1,
+      layer: 0,
+    }],
+  };
+
+  const restored = new TrackStore();
+  assert.equal(restored.load(legacyTrack), true);
+  assert.equal(restored.lines.length, 1);
+  assert.equal(restored.lines[0].flipped, true);
+  assert.equal(restored.lines[0].type, LineType.ACC);
+  assert.equal((restored.lines[0] as any).accelFlipped, true);
+});

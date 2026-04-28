@@ -12,6 +12,8 @@ export interface BezierPath {
   id: number;
   anchors: BezierAnchor[];
   lineType: LineType;
+  flipped: boolean;
+  accelFlipped: boolean;
   layer: number;
   lineIds: number[];  // generated physics line segments
 }
@@ -27,6 +29,8 @@ export interface SerializedBezierPath {
   id: number;
   anchors: SerializedBezierAnchor[];
   lineType: number;
+  flipped?: boolean;
+  accelFlipped?: boolean;
   layer: number;
   lineIds: number[];
 }
@@ -63,6 +67,8 @@ export function cloneBezierPath(p: BezierPath): BezierPath {
     id: p.id,
     anchors: p.anchors.map(cloneAnchor),
     lineType: p.lineType,
+    flipped: p.flipped,
+    accelFlipped: p.accelFlipped,
     layer: p.layer,
     lineIds: [...p.lineIds],
   };

@@ -23,7 +23,7 @@ function coordsMatch(ax: number, ay: number, bx: number, by: number): boolean {
 }
 
 export class LineRenderer {
-  render(ctx: CanvasRenderingContext2D, lines: Line[], layers: TrackLayer[], showIndicators = false) {
+  render(ctx: CanvasRenderingContext2D, lines: Line[], layers: TrackLayer[], showIndicators = false, hitLineIds?: Set<number>) {
     for (const layer of layers) {
       if (!layer.visible) continue;
 
@@ -92,6 +92,26 @@ export class LineRenderer {
           prevEndY = line.p2.y;
         }
         ctx.stroke();
+      }
+
+      // Hit-test highlight: glow on lines the rider is touching
+      if (hitLineIds && hitLineIds.size > 0) {
+        const hitBatch = layerLines.filter(line => hitLineIds.has(line.id));
+        if (hitBatch.length > 0) {
+          ctx.save();
+          ctx.strokeStyle = 'rgba(255, 220, 40, 0.8)';
+          ctx.lineWidth = LINE_WIDTH * 3;
+          ctx.lineCap = 'round';
+          ctx.lineJoin = 'round';
+          ctx.globalCompositeOperation = 'lighter';
+          ctx.beginPath();
+          for (const line of hitBatch) {
+            ctx.moveTo(line.p1.x, line.p1.y);
+            ctx.lineTo(line.p2.x, line.p2.y);
+          }
+          ctx.stroke();
+          ctx.restore();
+        }
       }
     }
   }
