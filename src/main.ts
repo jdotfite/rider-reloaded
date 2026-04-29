@@ -211,7 +211,7 @@ const vehicleRenderers = new Map<string, VehicleRenderer>(
 );
 
 // Vehicle state
-let activeVehicle = getVehicleManifest('sled');
+let activeVehicle = getVehicleManifest(localStorage.getItem('line-rider-vehicle') ?? 'sled');
 
 function resetVehicleRenderers() {
   for (const renderer of vehicleRenderers.values()) {
@@ -223,6 +223,7 @@ function setVehicle(id: string) {
   const vehicle = getVehicleManifest(id);
   if (vehicle.available === false) return;
   activeVehicle = vehicle;
+  localStorage.setItem('line-rider-vehicle', id);
   resetVehicleRenderers();
   rider.setVehicle(vehicle.physics);
   // Update topbar sled info
@@ -2190,8 +2191,6 @@ renderer.addRenderCallback((ctx) => {
         waveformRenderer.loadBuffer(audioPlayer.audioBuffer);
         document.body.classList.add('has-waveform');
       }
-      // Auto-close panel after short delay
-      setTimeout(hideAudioPanel, 800);
     } catch (err) {
       setAudioStatus(`Failed to load: ${(err as Error).message}`, 'error');
     }
@@ -2231,8 +2230,6 @@ renderer.addRenderCallback((ctx) => {
       addYtHistoryEntry(videoId, ytPlayer.name);
       saveAudioState();
       audioYtInput.value = '';
-      // Auto-close panel after short delay
-      setTimeout(hideAudioPanel, 800);
     } catch (err) {
       setAudioStatus(`YouTube error: ${(err as Error).message}`, 'error');
     } finally {
@@ -2383,7 +2380,6 @@ renderer.addRenderCallback((ctx) => {
 
   // ── Trim / Clip Editor ──
   const trimSection = document.getElementById('audio-trim-section')!;
-  const trimBar = document.getElementById('audio-trim-bar') as HTMLCanvasElement;
   const clipStartInput = document.getElementById('audio-clip-start') as HTMLInputElement;
   const clipEndInput = document.getElementById('audio-clip-end') as HTMLInputElement;
   const trimResetBtn = document.getElementById('audio-trim-reset')!;
@@ -2400,7 +2396,6 @@ renderer.addRenderCallback((ctx) => {
     clipEndInput.value = Number.isFinite(player.clipEnd) ? formatTimecode(player.clipEnd) : '';
     clipStartInput.placeholder = '0:00';
     clipEndInput.placeholder = formatTimecode(dur);
-    updateTrimBar();
   }
 
   function applyClipFromInputs() {
@@ -2414,7 +2409,6 @@ renderer.addRenderCallback((ctx) => {
 
     audioPlayer.setClip(cs, ce);
     ytPlayer.setClip(cs, ce);
-    updateTrimBar();
     saveAudioState();
   }
 
@@ -2426,128 +2420,8 @@ renderer.addRenderCallback((ctx) => {
     ytPlayer.resetClip();
     clipStartInput.value = '';
     clipEndInput.value = '';
-    updateTrimBar();
     saveAudioState();
   });
-
-  function updateTrimBar() {
-    const dur = getActiveAudioDuration();
-    const rect = trimBar.getBoundingClientRect();
-    const dpr = window.devicePixelRatio || 1;
-    const w = Math.round(Math.max(1, rect.width) * dpr);
-    const h = Math.round(Math.max(1, rect.height) * dpr);
-    if (trimBar.width !== w) trimBar.width = w;
-    if (trimBar.height !== h) trimBar.height = h;
-    const ctx = trimBar.getContext('2d')!;
-    ctx.clearRect(0, 0, w, h);
-
-    if (dur <= 0) return;
-
-    const player = audioPlayer.loaded ? audioPlayer : ytPlayer;
-    const cs = player.clipStart;
-    const ce = Number.isFinite(player.clipEnd) ? player.clipEnd : dur;
-    const startPx = Math.round((cs / dur) * w);
-    const endPx = Math.round((ce / dur) * w);
-
-    // Dimmed background
-    ctx.fillStyle = 'rgba(17,17,17,0.06)';
-    ctx.fillRect(0, 0, w, h);
-
-    // Active clip region
-    ctx.fillStyle = 'rgba(46,125,50,0.12)';
-    ctx.fillRect(startPx, 0, endPx - startPx, h);
-
-    // Draw mini waveform if we have peaks
-    const peaks = audioPlayer.audioBuffer ? getPeaksFromBuffer(audioPlayer.audioBuffer, w) : null;
-    const halfH = h / 2;
-    if (peaks) {
-      for (let px = 0; px < w; px++) {
-        const barH = peaks[px] * halfH * 0.85;
-        if (barH < 0.5) continue;
-        const inClip = px >= startPx && px <= endPx;
-        ctx.fillStyle = inClip ? 'rgba(17,24,39,0.5)' : 'rgba(17,24,39,0.15)';
-        ctx.fillRect(px, halfH - barH, Math.max(1, dpr), barH * 2);
-      }
-    } else {
-      // No peaks (YouTube) — draw a simple bar
-      ctx.fillStyle = 'rgba(17,24,39,0.15)';
-      ctx.fillRect(0, halfH - 3, w, 6);
-      ctx.fillStyle = 'rgba(17,24,39,0.3)';
-      ctx.fillRect(startPx, halfH - 3, endPx - startPx, 6);
-    }
-
-    // Clip boundary handles
-    ctx.fillStyle = '#2e7d32';
-    if (cs > 0) {
-      ctx.fillRect(startPx - 1, 0, 2, h);
-    }
-    if (ce < dur) {
-      ctx.fillRect(endPx - 1, 0, 2, h);
-    }
-  }
-
-  function getPeaksFromBuffer(buffer: AudioBuffer, targetWidth: number): Float32Array {
-    const numChannels = buffer.numberOfChannels;
-    const length = buffer.length;
-    const result = new Float32Array(targetWidth);
-    const samplesPerPixel = length / targetWidth;
-    for (let px = 0; px < targetWidth; px++) {
-      const sStart = Math.floor(px * samplesPerPixel);
-      const sEnd = Math.min(Math.floor((px + 1) * samplesPerPixel), length);
-      let peak = 0;
-      for (let ch = 0; ch < numChannels; ch++) {
-        const data = buffer.getChannelData(ch);
-        for (let s = sStart; s < sEnd; s++) {
-          const abs = Math.abs(data[s]);
-          if (abs > peak) peak = abs;
-        }
-      }
-      result[px] = peak;
-    }
-    return result;
-  }
-
-  // Drag on trim bar to set clip region
-  let trimDragging: 'start' | 'end' | null = null;
-  trimBar.addEventListener('pointerdown', (e) => {
-    const dur = getActiveAudioDuration();
-    if (dur <= 0) return;
-    const rect = trimBar.getBoundingClientRect();
-    const x = e.clientX - rect.left;
-    const ratio = x / rect.width;
-    const player = audioPlayer.loaded ? audioPlayer : ytPlayer;
-    const csRatio = player.clipStart / dur;
-    const ceRatio = (Number.isFinite(player.clipEnd) ? player.clipEnd : dur) / dur;
-
-    // Determine which handle is closer
-    if (Math.abs(ratio - csRatio) < Math.abs(ratio - ceRatio)) {
-      trimDragging = 'start';
-    } else {
-      trimDragging = 'end';
-    }
-    trimBar.setPointerCapture(e.pointerId);
-  });
-
-  trimBar.addEventListener('pointermove', (e) => {
-    if (!trimDragging) return;
-    const dur = getActiveAudioDuration();
-    if (dur <= 0) return;
-    const rect = trimBar.getBoundingClientRect();
-    const ratio = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
-    const seconds = ratio * dur;
-
-    if (trimDragging === 'start') {
-      const cs = Math.max(0, seconds);
-      clipStartInput.value = cs > 0.1 ? formatTimecode(cs) : '';
-    } else {
-      const ce = Math.min(dur, seconds);
-      clipEndInput.value = ce < dur - 0.1 ? formatTimecode(ce) : '';
-    }
-    applyClipFromInputs();
-  });
-
-  trimBar.addEventListener('pointerup', () => { trimDragging = null; });
-  trimBar.addEventListener('lostpointercapture', () => { trimDragging = null; });
 }
 
 // Flush autosave on page unload so no pending changes are lost

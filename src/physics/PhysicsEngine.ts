@@ -71,6 +71,9 @@ export class PhysicsEngine {
       chain.resolve();
     }
 
+    // 4. LRA-style wave flutter on scarf (after chains resolve)
+    this.rider.flutterScarf();
+
     this.resolvePortals();
   }
 

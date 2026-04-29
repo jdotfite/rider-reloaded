@@ -3,6 +3,7 @@ import { BUGGY_MANIFEST } from './buggy';
 import { BIRD_MANIFEST } from './bird';
 import { SLED_MANIFEST } from './sled';
 import { TRUCK_MANIFEST } from './truck';
+import { ROLLERCOASTER_MANIFEST } from './rollercoaster';
 
 export type { VehicleManifest, VehicleRenderer } from './VehicleManifest';
 
@@ -11,6 +12,7 @@ export const VEHICLE_MANIFESTS: VehicleManifest[] = [
   BIRD_MANIFEST,
   TRUCK_MANIFEST,
   BUGGY_MANIFEST,
+  ROLLERCOASTER_MANIFEST,
 ];
 
 export function getVehicleManifest(id: string): VehicleManifest {

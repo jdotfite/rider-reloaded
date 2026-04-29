@@ -1636,12 +1636,14 @@
       top: 50%; left: 50%;
       transform: translate(-50%, -50%);
       z-index: 200;
-      width: 400px;
+      width: 480px;
+      max-width: calc(100vw - 32px);
+      max-height: calc(100vh - 48px);
+      overflow-y: auto;
       background: var(--bg);
       border: 1px solid var(--border);
       border-radius: var(--radius-lg);
       box-shadow: 0 12px 40px rgba(0,0,0,0.15);
-      overflow: hidden;
     }
     body.audio-open #audio-panel { display: block; }
     #audio-header {
@@ -1877,12 +1879,6 @@
     /* Audio trim section */
     #audio-trim-section {
       padding: var(--sp-1) 0;
-    }
-    #audio-trim-bar {
-      background: var(--bg-alt);
-      border: 1px solid var(--border-light);
-      display: block;
-      width: 100%;
     }
 
     /* ══════════════════════════════════════════════
@@ -2880,14 +2876,10 @@
           <div style="border-top:1px solid var(--border-light); margin:var(--sp-1) 0;"></div>
 
           <div id="audio-trim-section">
-            <div class="audio-row" style="margin-bottom:var(--sp-1);">
-              <label>Trim</label>
-              <canvas id="audio-trim-bar" height="32" style="flex:1; border-radius:var(--radius-sm); cursor:crosshair;"></canvas>
-            </div>
             <div class="audio-row">
-              <label>Start</label>
+              <label>Trim</label>
               <input type="text" id="audio-clip-start" placeholder="0:00" style="max-width:64px; text-align:center;" />
-              <label style="min-width:auto;">End</label>
+              <span style="font:500 var(--text-xs)/1 var(--font); color:var(--ink-muted);">to</span>
               <input type="text" id="audio-clip-end" placeholder="0:00" style="max-width:64px; text-align:center;" />
               <button id="audio-trim-reset" type="button" style="min-width:auto; min-height:var(--control-h-sm); padding:var(--sp-1) var(--sp-2); font-size:var(--text-xs);">Reset</button>
             </div>

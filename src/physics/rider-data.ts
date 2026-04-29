@@ -1,7 +1,7 @@
 /**
- * Rider body definition matching lr-core / linerider-advanced reference.
- * 10 collision points + 7 scarf points = 17 total
- * 22 bones + 3 bind joints + 7 scarf chains = 32 constraints
+ * Rider body definition matching linerider-advanced reference.
+ * 10 collision points + 6 scarf points = 16 total
+ * 22 bones + 3 bind joints + 6 scarf chains = 31 constraints
  */
 
 export interface PointDef {
@@ -42,6 +42,7 @@ export interface ChainDef {
   type: 'chain';
   p1: number;
   p2: number;
+  restLength?: number;
 }
 
 export type ConstraintDef = StickDef | RepelDef | BindStickDef | SpringDef | ChainDef;
@@ -86,14 +87,14 @@ export const RIDER_POINTS: PointDef[] = [
   { x: 10,   y: 5,    type: 'collision', friction: 0.0 },   // 8: LFOOT
   { x: 10,   y: 5,    type: 'collision', friction: 0.0 },   // 9: RFOOT
 
-  // Scarf flutter points (10-16)
-  { x: 3,    y: -5.5, type: 'flutter', friction: 0 },       // 10
-  { x: 1,    y: -5.5, type: 'flutter', friction: 0 },       // 11
-  { x: -1,   y: -5.5, type: 'flutter', friction: 0 },       // 12
-  { x: -3,   y: -5.5, type: 'flutter', friction: 0 },       // 13
-  { x: -5,   y: -5.5, type: 'flutter', friction: 0 },       // 14
-  { x: -7,   y: -5.5, type: 'flutter', friction: 0 },       // 15
-  { x: -9,   y: -5.5, type: 'flutter', friction: 0 },       // 16
+  // Scarf flutter points (10-15) — matching LRA positions relative to shoulder (5, -5.5)
+  // LRA offsets from shoulder: (-2,-0.5), (-3.5,-0.5), (-5.5,-0.5), (-7,-0.5), (-9,-0.5), (-11.5,-0.5)
+  { x: 3,    y: -6, type: 'flutter', friction: 0 },         // 10
+  { x: 1.5,  y: -6, type: 'flutter', friction: 0 },         // 11
+  { x: -0.5, y: -6, type: 'flutter', friction: 0 },         // 12
+  { x: -2,   y: -6, type: 'flutter', friction: 0 },         // 13
+  { x: -4,   y: -6, type: 'flutter', friction: 0 },         // 14
+  { x: -6.5, y: -6, type: 'flutter', friction: 0 },         // 15
 ];
 
 /**
@@ -133,14 +134,13 @@ export const RIDER_CONSTRAINTS: ConstraintDef[] = [
   { type: 'repel', p1: SHOULDER, p2: LFOOT, lengthFactor: 0.5 },  // 20
   { type: 'repel', p1: SHOULDER, p2: RFOOT, lengthFactor: 0.5 },  // 21
 
-  // Scarf chains
-  { type: 'chain', p1: SHOULDER, p2: 10 },
-  { type: 'chain', p1: 10, p2: 11 },
-  { type: 'chain', p1: 11, p2: 12 },
-  { type: 'chain', p1: 12, p2: 13 },
-  { type: 'chain', p1: 13, p2: 14 },
-  { type: 'chain', p1: 14, p2: 15 },
-  { type: 'chain', p1: 15, p2: 16 },
+  // Scarf chains — alternating rest lengths matching LRA (even=1.5, odd=2.0)
+  { type: 'chain', p1: SHOULDER, p2: 10, restLength: 1.5 },
+  { type: 'chain', p1: 10, p2: 11, restLength: 2.0 },
+  { type: 'chain', p1: 11, p2: 12, restLength: 1.5 },
+  { type: 'chain', p1: 12, p2: 13, restLength: 2.0 },
+  { type: 'chain', p1: 13, p2: 14, restLength: 1.5 },
+  { type: 'chain', p1: 14, p2: 15, restLength: 2.0 },
 ];
 
 /**

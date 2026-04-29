@@ -135,7 +135,7 @@ export class Rider {
         );
         break;
       case 'chain':
-        this.chains.push(new DirectedChain(p[def.p1], p[def.p2]));
+        this.chains.push(new DirectedChain(p[def.p1], p[def.p2], def.restLength));
         break;
     }
   }
@@ -258,6 +258,58 @@ export class Rider {
       return this.getCenter(1).sub(this.getCenter(0));
     }
     return new Vec2(x / count, y / count);
+  }
+
+  /**
+   * LRA-style wave flutter for scarf points.
+   * Computes angle between consecutive scarf points, adds a sine-wave
+   * perturbation scaled by rider momentum, creating a coherent wave pattern.
+   * Called after chains resolve in the physics step.
+   */
+  private scarfFlutterFrame = 0;
+
+  flutterScarf() {
+    // No chains = no scarf (e.g. roller coaster has no flutter points)
+    if (this.chains.length === 0) return;
+
+    // Scarf points start after the 10 body points
+    const scarfStart = 10;
+    const scarfCount = this.points.length - scarfStart;
+    if (scarfCount < 2) return;
+
+    // Get rider momentum magnitude for flutter intensity
+    const shoulder = this.points[SHOULDER];
+    const momentum = Math.sqrt(
+      (shoulder.pos.x - shoulder.prevPos.x) ** 2 +
+      (shoulder.pos.y - shoulder.prevPos.y) ** 2,
+    );
+
+    // Progress rate scales with momentum (LRA behavior)
+    this.scarfFlutterFrame += Math.max(1, momentum * 2);
+
+    for (let i = scarfStart + 1; i < this.points.length; i++) {
+      const prev = this.points[i - 1];
+      const curr = this.points[i];
+
+      // Angle between consecutive scarf points
+      const dx = curr.pos.x - prev.pos.x;
+      const dy = curr.pos.y - prev.pos.y;
+      const angle = Math.atan2(dy, dx);
+
+      // LRA WaveFlutter: rotate by cos(angle) * 90 degrees, scale by sine wave
+      const scarfIndex = i - scarfStart;
+      const wavePhase = this.scarfFlutterFrame * 0.1 + scarfIndex * 1.5;
+      const waveAmount = Math.sin(wavePhase) * 2;
+
+      // Apply perpendicular flutter (rotated 90 degrees from segment direction)
+      const perpX = -Math.sin(angle) * waveAmount;
+      const perpY = Math.cos(angle) * waveAmount;
+
+      // Scale by momentum — no flutter when stationary
+      const scale = Math.min(1, momentum * 0.8);
+      curr.pos.x += perpX * scale;
+      curr.pos.y += perpY * scale;
+    }
   }
 
   tickTransientState() {

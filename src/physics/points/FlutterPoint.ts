@@ -1,7 +1,12 @@
 import { Point } from './Point';
 import { GRAVITY } from '../../constants';
 
-const AIR_FRICTION = 0.45;
+/**
+ * Scarf point with air friction matching linerider-advanced.
+ * LRA uses 0.9 friction multiplier on velocity (momentum *= 0.9).
+ * Wave-based flutter is applied separately via Rider.flutterScarf().
+ */
+const SCARF_FRICTION = 0.9;
 
 export class FlutterPoint extends Point {
   constructor(x: number, y: number) {
@@ -9,18 +14,13 @@ export class FlutterPoint extends Point {
   }
 
   step(gravityScale: number = 1) {
-    const vx = (this.pos.x - this.prevPos.x) * (1 - AIR_FRICTION);
-    const vy = (this.pos.y - this.prevPos.y) * (1 - AIR_FRICTION);
+    const vx = (this.pos.x - this.prevPos.x) * SCARF_FRICTION;
+    const vy = (this.pos.y - this.prevPos.y) * SCARF_FRICTION;
     const mx = vx + GRAVITY.x * gravityScale;
     const my = vy + GRAVITY.y * gravityScale;
     this.momentum.set(mx, my);
     this.prevPos.copyFrom(this.pos);
-
-    // Gentle flutter: small random wobble proportional to speed
-    const speed = Math.sqrt(mx * mx + my * my);
-    const flutter = (Math.random() - 0.5) * speed * 3;
-
-    this.pos.x += mx + flutter;
+    this.pos.x += mx;
     this.pos.y += my;
   }
 }
