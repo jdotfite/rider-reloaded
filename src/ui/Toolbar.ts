@@ -573,9 +573,9 @@ export class Toolbar {
     const leftDockTools = document.getElementById('left-dock-tools') as HTMLElement | null;
     const topToolRail = document.getElementById('top-tool-rail') as HTMLElement | null;
 
-    const toolRailKey = 'line-rider-tool-rail-mode';
+    const leftRailCollapsedKey = 'line-rider-left-rail-collapsed';
     const sidebarInspectorKey = 'line-rider-sidebar-inspector-open';
-    let toolRailMode: 'left' | 'top' = 'left';
+    let leftRailCollapsed = false;
     let sidebarInspectorOpen = true;
     const isDesktopViewport = () => window.matchMedia('(min-width: 900px)').matches;
 
@@ -594,9 +594,7 @@ export class Toolbar {
         }
         return;
       }
-      const target = toolRailMode === 'top'
-        ? topToolRail ?? leftDockTools
-        : leftDockTools ?? topToolRail;
+      const target = leftDockTools ?? topToolRail;
       if (target && this.toolGrid.parentElement !== target) {
         target.appendChild(this.toolGrid);
       }
@@ -612,21 +610,19 @@ export class Toolbar {
       dockInspectorBtn.setAttribute('aria-label', dockInspectorBtn.title);
     };
 
-    const applyToolRailMode = (mode: 'left' | 'top') => {
-      document.body.classList.toggle('tool-rail-top', mode === 'top');
+    const applyLeftRailCollapse = (collapsed: boolean) => {
+      document.body.classList.toggle('left-rail-collapsed', collapsed);
       mountToolGrid();
       applySidebarInspectorMode(sidebarInspectorOpen);
       if (!btnToolRailToggle) return;
-      const top = mode === 'top';
-      btnToolRailToggle.classList.toggle('active', top);
-      btnToolRailToggle.setAttribute('aria-pressed', top ? 'true' : 'false');
-      btnToolRailToggle.title = top ? 'Move tools to side rail' : 'Move tools to top bar';
+      btnToolRailToggle.setAttribute('aria-pressed', collapsed ? 'true' : 'false');
+      btnToolRailToggle.title = collapsed ? 'Expand side rail' : 'Collapse side rail';
       btnToolRailToggle.setAttribute('aria-label', btnToolRailToggle.title);
     };
 
     try {
-      const savedMode = window.localStorage.getItem(toolRailKey);
-      if (savedMode === 'top') toolRailMode = 'top';
+      const savedCollapsed = window.localStorage.getItem(leftRailCollapsedKey);
+      if (savedCollapsed === 'true') leftRailCollapsed = true;
     } catch {}
     try {
       const savedInspectorState = window.localStorage.getItem(sidebarInspectorKey);
@@ -634,12 +630,12 @@ export class Toolbar {
         sidebarInspectorOpen = savedInspectorState === 'true';
       }
     } catch {}
-    applyToolRailMode(toolRailMode);
+    applyLeftRailCollapse(leftRailCollapsed);
     btnToolRailToggle?.addEventListener('click', () => {
-      toolRailMode = toolRailMode === 'left' ? 'top' : 'left';
-      applyToolRailMode(toolRailMode);
+      leftRailCollapsed = !leftRailCollapsed;
+      applyLeftRailCollapse(leftRailCollapsed);
       try {
-        window.localStorage.setItem(toolRailKey, toolRailMode);
+        window.localStorage.setItem(leftRailCollapsedKey, leftRailCollapsed ? 'true' : 'false');
       } catch {}
     });
     dockInspectorBtn?.addEventListener('click', () => {

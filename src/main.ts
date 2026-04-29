@@ -647,6 +647,10 @@ selectTool.onSmoothRequest = () => {
 selectTool.onSmoothEnd = () => {
   toolbar.hideSmoothSlider();
 };
+selectTool.onSelectionChange = () => {
+  const selType = selectTool.getSelectedLineType();
+  toolbar.setActiveLineType(selType ?? currentLineType);
+};
 toolbar.onLineTypeSelect = (type) => {
   currentLineType = type;
   toolbar.setActiveLineType(type);
@@ -764,36 +768,9 @@ toolbar.onStepBack = () => {
   }
 };
 
-const achievementsButtons = Array.from(
-  document.querySelectorAll<HTMLButtonElement>('[data-achievements-trigger]'),
-);
-const achievementsOverlay = document.getElementById('achievements-overlay') as HTMLElement | null;
-const achievementsClose = document.getElementById('achievements-close') as HTMLButtonElement | null;
-const achievementsList = document.getElementById('achievements-list') as HTMLElement | null;
-
-function openAchievementsModal() {
-  if (!achievementsOverlay) return;
-  closeGeneratorsModal();
-  document.body.classList.add('achievements-open');
-  syncAchievementsButton();
-}
-
-function closeAchievementsModal() {
-  document.body.classList.remove('achievements-open');
-  syncAchievementsButton();
-}
-
-function syncAchievementsButton() {
-  const active = activeStampAssetId !== null || document.body.classList.contains('achievements-open');
-  for (const button of achievementsButtons) {
-    button.classList.toggle('active', active);
-    button.setAttribute('aria-pressed', active ? 'true' : 'false');
-  }
-}
-
-function syncAchievementsSelection() {
-  if (!achievementsList) return;
-  achievementsList.querySelectorAll<HTMLButtonElement>('.achievement-card').forEach(card => {
+function syncStampSelection() {
+  if (!generatorsList) return;
+  generatorsList.querySelectorAll<HTMLButtonElement>('.stamp-card').forEach(card => {
     card.classList.toggle('active', card.dataset.assetId === activeStampAssetId);
   });
 }
@@ -826,54 +803,6 @@ function createPickerCard(options: PickerCardOptions): HTMLButtonElement {
   return button;
 }
 
-function buildAchievementsModal() {
-  if (!achievementsList) return;
-  achievementsList.innerHTML = '';
-
-  for (const asset of cloudStampAssets) {
-    const button = createPickerCard({
-      className: 'achievement-card',
-      datasetKey: 'assetId',
-      datasetValue: asset.id,
-      previewMarkup: asset.previewMarkup,
-      title: asset.name,
-      subtitle: 'Stamp',
-      onClick: () => {
-        if (!canEdit()) return;
-        activateStampPlacement(asset);
-        closeAchievementsModal();
-      },
-    });
-    achievementsList.appendChild(button);
-  }
-
-  syncAchievementsSelection();
-}
-
-for (const button of achievementsButtons) {
-  button.addEventListener('click', () => {
-    if (!canEdit()) return;
-    if (document.body.classList.contains('achievements-open')) {
-      closeAchievementsModal();
-      return;
-    }
-    openAchievementsModal();
-  });
-}
-achievementsClose?.addEventListener('click', () => closeAchievementsModal());
-achievementsOverlay?.addEventListener('click', (event) => {
-  if (event.target === achievementsOverlay) {
-    closeAchievementsModal();
-  }
-});
-window.addEventListener('keydown', (event) => {
-  if (event.code === 'Escape' && document.body.classList.contains('achievements-open')) {
-    closeAchievementsModal();
-  }
-});
-
-buildAchievementsModal();
-syncAchievementsButton();
 
 const generatorsButtons = Array.from(
   document.querySelectorAll<HTMLButtonElement>('[data-generators-trigger]'),
@@ -890,7 +819,6 @@ const generatorActivate = document.getElementById('generator-activate') as HTMLB
 
 function openGeneratorsModal() {
   if (!generatorsOverlay) return;
-  closeAchievementsModal();
   document.body.classList.add('generators-open');
   syncGeneratorsButton();
 }
@@ -901,7 +829,7 @@ function closeGeneratorsModal() {
 }
 
 function syncGeneratorsButton() {
-  const active = activeGeneratorId !== null || document.body.classList.contains('generators-open');
+  const active = activeGeneratorId !== null || activeStampAssetId !== null || document.body.classList.contains('generators-open');
   for (const button of generatorsButtons) {
     button.classList.toggle('active', active);
     button.setAttribute('aria-pressed', active ? 'true' : 'false');
@@ -1009,10 +937,38 @@ function renderGeneratorDetail() {
   }
 }
 
+function addPickerSectionHeader(label: string): HTMLDivElement {
+  const header = document.createElement('div');
+  header.className = 'picker-section-header';
+  header.textContent = label;
+  return header;
+}
+
 function buildGeneratorsModal() {
   if (!generatorsList) return;
   generatorsList.innerHTML = '';
 
+  // Stamp section
+  generatorsList.appendChild(addPickerSectionHeader('Cloud Stamps'));
+  for (const asset of cloudStampAssets) {
+    const button = createPickerCard({
+      className: 'stamp-card',
+      datasetKey: 'assetId',
+      datasetValue: asset.id,
+      previewMarkup: asset.previewMarkup,
+      title: asset.name,
+      subtitle: 'Stamp',
+      onClick: () => {
+        if (!canEdit()) return;
+        activateStampPlacement(asset);
+        closeGeneratorsModal();
+      },
+    });
+    generatorsList.appendChild(button);
+  }
+
+  // Generator section
+  generatorsList.appendChild(addPickerSectionHeader('Shape Generators'));
   for (const asset of generatorAssets) {
     const button = createPickerCard({
       className: 'generator-card',
@@ -1032,6 +988,7 @@ function buildGeneratorsModal() {
   }
 
   syncGeneratorSelection();
+  syncStampSelection();
   renderGeneratorDetail();
 }
 
@@ -1090,7 +1047,6 @@ function setCameraFollowStrength(value: number) {
 }
 
 function openSettingsPanel() {
-  closeAchievementsModal();
   closeGeneratorsModal();
   document.body.classList.add('hotkeys-open');
   syncSettingsButtons();
@@ -1260,12 +1216,15 @@ loadInput.addEventListener('change', async () => {
 function switchTool(name: string) {
   clearStampPlacementState();
   clearGeneratorPlacementState();
-  closeAchievementsModal();
   closeGeneratorsModal();
   currentToolName = name;
   currentTool = resolveToolByName(name);
   if (name !== 'pencil' && name !== 'line') {
     editTool.clearSelection();
+  }
+  if (name !== 'select') {
+    // Restore the draw-mode line type indicator when leaving select tool
+    toolbar.setActiveLineType(currentLineType);
   }
   input.setTool(currentTool);
   toolbar.setActiveTool(name);
@@ -1284,8 +1243,8 @@ function resolveToolByName(name: string): Tool {
 function clearStampPlacementState() {
   activeStampAssetId = null;
   stampTool.clearAsset();
-  syncAchievementsButton();
-  syncAchievementsSelection();
+  syncGeneratorsButton();
+  syncStampSelection();
 }
 
 function activateStampPlacement(asset: StampAsset) {
@@ -1299,8 +1258,8 @@ function activateStampPlacement(asset: StampAsset) {
   currentTool = stampTool;
   input.setTool(currentTool);
   toolbar.setActiveTool(stampResumeToolName);
-  syncAchievementsButton();
-  syncAchievementsSelection();
+  syncGeneratorsButton();
+  syncStampSelection();
 }
 
 function cancelStampPlacement() {
@@ -1322,7 +1281,7 @@ function clearGeneratorPlacementState() {
 
 function activateGeneratorPlacement(asset: GeneratorAsset) {
   clearStampPlacementState();
-  closeAchievementsModal();
+  closeGeneratorsModal();
   if (activeGeneratorId === null) {
     generatorResumeToolName = currentToolName;
   }
@@ -2084,6 +2043,10 @@ renderer.addRenderCallback((ctx) => {
   const portalFxLabel = document.getElementById('portal-fx-label')!;
   const audioOffsetInput = document.getElementById('audio-offset') as HTMLInputElement;
   const audioRemoveBtn = document.getElementById('audio-remove-btn')!;
+  const audioLoadedRow = document.getElementById('audio-loaded-row')!;
+  const audioLoadedName = document.getElementById('audio-loaded-name')!;
+  const audioLoadedDuration = document.getElementById('audio-loaded-duration')!;
+  const audioLoadedRemove = document.getElementById('audio-loaded-remove')!;
   const audioStatus = document.getElementById('audio-status')!;
   const audioButtons = Array.from(document.querySelectorAll<HTMLButtonElement>('[data-audio-trigger]'));
 
@@ -2124,19 +2087,30 @@ renderer.addRenderCallback((ctx) => {
     audioControls.style.display = '';
     (audioRemoveBtn as HTMLButtonElement).disabled = !hasAny;
 
+    // Loaded-track banner at top of modal
+    audioLoadedRow.style.display = hasAny ? '' : 'none';
+
     if (hasLocal) {
       audioNameEl.textContent = audioPlayer.name;
+      audioLoadedName.textContent = audioPlayer.name;
       const mins = Math.floor(audioPlayer.duration / 60);
       const secs = Math.floor(audioPlayer.duration % 60);
-      audioDurationEl.textContent = `${mins}:${String(secs).padStart(2, '0')}`;
+      const durStr = `${mins}:${String(secs).padStart(2, '0')}`;
+      audioDurationEl.textContent = durStr;
+      audioLoadedDuration.textContent = durStr;
     } else if (hasYT) {
       audioNameEl.textContent = ytPlayer.name;
+      audioLoadedName.textContent = ytPlayer.name;
       const mins = Math.floor(ytPlayer.duration / 60);
       const secs = Math.floor(ytPlayer.duration % 60);
-      audioDurationEl.textContent = `${mins}:${String(secs).padStart(2, '0')}`;
+      const durStr = `${mins}:${String(secs).padStart(2, '0')}`;
+      audioDurationEl.textContent = durStr;
+      audioLoadedDuration.textContent = durStr;
     } else {
       audioNameEl.textContent = 'No audio loaded';
       audioDurationEl.textContent = '';
+      audioLoadedName.textContent = '';
+      audioLoadedDuration.textContent = '';
     }
   }
 
@@ -2322,8 +2296,8 @@ renderer.addRenderCallback((ctx) => {
     }
   });
 
-  // Remove
-  audioRemoveBtn.addEventListener('click', () => {
+  // Remove — shared handler used by both the panel button and the loaded-row X
+  function removeAudio() {
     audioPlayer.unload();
     ytPlayer.unload();
     waveformRenderer.clear();
@@ -2333,7 +2307,9 @@ renderer.addRenderCallback((ctx) => {
     updateAudioLoadedIndicator();
     updateTrimUI();
     try { localStorage.removeItem(AUDIO_STATE_KEY); } catch {}
-  });
+  }
+  audioRemoveBtn.addEventListener('click', removeAudio);
+  audioLoadedRemove.addEventListener('click', removeAudio);
 
   // ── YouTube History ──
   const ytHistoryContainer = document.getElementById('audio-yt-history')!;

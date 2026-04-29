@@ -182,11 +182,6 @@ export class InputManager {
       this.onStop?.();
     }
 
-    if (e.code === 'Delete' && !primaryModifier && !e.altKey) {
-      e.preventDefault();
-      this.onClearTrack?.();
-    }
-
     if (e.code === 'KeyF') {
       e.preventDefault();
       this.onFitView?.();

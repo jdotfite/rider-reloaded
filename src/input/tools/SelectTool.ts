@@ -153,6 +153,7 @@ export class SelectTool implements Tool {
 
   onSmoothRequest: (() => void) | null = null;
   onSmoothEnd: (() => void) | null = null;
+  onSelectionChange: (() => void) | null = null;
 
   constructor(
     store: TrackStore,
@@ -308,6 +309,7 @@ export class SelectTool implements Tool {
     if (this.state === 'box-selecting') {
       this.state = 'idle';
       this.hoveredHandle = this.getHandleAt(worldPos);
+      this.onSelectionChange?.();
       return;
     }
 
@@ -325,6 +327,9 @@ export class SelectTool implements Tool {
       this.hoveredHandle = this.getHandleAt(worldPos);
       return;
     }
+
+    // Single click: selection was set in onMouseDown
+    this.onSelectionChange?.();
   }
 
   getCursor(): string | null {
@@ -343,6 +348,7 @@ export class SelectTool implements Tool {
     this.hoveredHandle = null;
     this.activeHandle = null;
     this.cancelSmooth();
+    this.onSelectionChange?.();
   }
 
   deleteSelected() {
@@ -351,6 +357,7 @@ export class SelectTool implements Tool {
     this.selectedIds.clear();
     this.hoveredHandle = null;
     this.activeHandle = null;
+    this.onSelectionChange?.();
   }
 
   flipSelected() {
@@ -395,6 +402,22 @@ export class SelectTool implements Tool {
     return this.selectedIds.size;
   }
 
+  /** Returns the line type if all selected lines share the same type, else null. */
+  getSelectedLineType(): LineType | null {
+    if (this.selectedIds.size === 0) return null;
+    let type: LineType | null = null;
+    for (const id of this.selectedIds) {
+      const line = this.store.lines.find(l => l.id === id);
+      if (!line) continue;
+      if (type === null) {
+        type = line.type;
+      } else if (type !== line.type) {
+        return null; // mixed
+      }
+    }
+    return type;
+  }
+
   hasSelectedAccelerationLines(): boolean {
     if (this.selectedIds.size === 0) return false;
     const expanded = this.expandSelection(this.selectedIds);
@@ -416,6 +439,7 @@ export class SelectTool implements Tool {
     this.pasteOffset = nextOffset;
     this.selectedIds = newIds;
     this.hoveredHandle = null;
+    this.onSelectionChange?.();
   }
 
   duplicateSelected() {
@@ -426,12 +450,14 @@ export class SelectTool implements Tool {
     if (newIds.size === 0) return;
     this.selectedIds = newIds;
     this.hoveredHandle = null;
+    this.onSelectionChange?.();
   }
 
   changeSelectedType(newType: LineType) {
     if (this.selectedIds.size === 0 || this.state !== 'idle') return;
     this.selectedIds = this.expandSelection(this.selectedIds);
     this.store.changeLineTypes(this.selectedIds, newType);
+    this.onSelectionChange?.();
   }
 
   startSmooth(): boolean {

@@ -69,13 +69,15 @@ const RC_CONSTRAINTS: ConstraintDef[] = [
   { type: 'stick', p1: C1_LT, p2: C1_RB },
   { type: 'stick', p1: C1_RT, p2: C1_LB },
 
-  // Cart 3 → Cart 2 coupler — single bottom hitch so each cart can angle independently
-  { type: 'stick', p1: C3_RB, p2: C2_LB },
-  { type: 'repel', p1: C3_RT, p2: C2_LT, lengthFactor: 0.8 },
+  // Cart 3 → Cart 2 coupler — breakable stiff springs.
+  // Spring flex during normal riding; when sledIntact breaks, joints release
+  // so carts separate cleanly instead of flinging each other.
+  { type: 'bind_stick', p1: C3_RB, p2: C2_LB },
+  { type: 'bind_stick', p1: C3_RT, p2: C2_LT },
 
   // Cart 2 → Cart 1 coupler
-  { type: 'stick', p1: C2_RB, p2: C1_LB },
-  { type: 'repel', p1: C2_RT, p2: C1_LT, lengthFactor: 0.8 },
+  { type: 'bind_stick', p1: C2_RB, p2: C1_LB },
+  { type: 'bind_stick', p1: C2_RT, p2: C1_LT },
 
   // Driver to Cart 1 (breakable)
   { type: 'bind_stick', p1: C1_LT, p2: SEAT },

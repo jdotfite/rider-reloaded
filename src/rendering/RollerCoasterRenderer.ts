@@ -65,6 +65,19 @@ function pushToward(from: P2, to: P2, dist: number): P2 {
   return { x: from.x + dx / d * dist, y: from.y + dy / d * dist };
 }
 
+/**
+ * Outward unit normal of a cart face defined by two points (top → bottom).
+ * rightward=true  → right-hand normal (points right for a vertical face)
+ * rightward=false → left-hand normal
+ */
+function faceNormal(top: P2, bottom: P2, rightward: boolean): P2 {
+  const dx = bottom.x - top.x, dy = bottom.y - top.y;
+  const len = Math.hypot(dx, dy) || 1;
+  return rightward
+    ? { x:  dy / len, y: -dx / len }
+    : { x: -dy / len, y:  dx / len };
+}
+
 export class RollerCoasterRenderer {
   private image = new Image();
   private ready  = false;
@@ -104,17 +117,30 @@ export class RollerCoasterRenderer {
 
     // Couplers drawn first (behind carts)
     const cartH = Math.hypot(p[C3_LT].x - p[C3_LB].x, p[C3_LT].y - p[C3_LB].y) || 5;
-    // The SVG cart body is rendered ABOVE the physics box (the physics box
-    // spans only the wheel area).  The body's lower rail (SVG y≈334) maps
-    // to physics y≈−1, which is lerp(LT→LB, −0.2) — i.e., slightly above LT.
+    // Face midpoints at cart-body height (slightly above physics LT)
     const c3R = lerp2(p[C3_RT], p[C3_RB], -0.2);
     const c2L = lerp2(p[C2_LT], p[C2_LB], -0.2);
     const c2R = lerp2(p[C2_RT], p[C2_RB], -0.2);
     const c1L = lerp2(p[C1_LT], p[C1_LB], -0.2);
-    // Inset bar endpoints past the SVG body overhang so the bar only draws
-    // in the clear gap between cart visuals, not through the car bodies
-    this.drawCoupler(ctx, pushToward(c3R, c2L, SVG_OVER_R), pushToward(c2L, c3R, SVG_OVER_L), cartH);
-    this.drawCoupler(ctx, pushToward(c2R, c1L, SVG_OVER_R), pushToward(c1L, c2R, SVG_OVER_L), cartH);
+
+    if (rider.sledIntact) {
+      // Intact: full bar + pin circle between each cart pair
+      this.drawCoupler(ctx, pushToward(c3R, c2L, SVG_OVER_R), pushToward(c2L, c3R, SVG_OVER_L), cartH);
+      this.drawCoupler(ctx, pushToward(c2R, c1L, SVG_OVER_R), pushToward(c1L, c2R, SVG_OVER_L), cartH);
+    } else {
+      // Broken: each cart face shows its own stub (bar + half-circle)
+      // Cart 3 — right stub only
+      if (this.cartSane(p[C3_LB], p[C3_RB]))
+        this.drawCouplerStub(ctx, c3R, faceNormal(p[C3_RT], p[C3_RB], true),  cartH);
+      // Cart 2 — left and right stubs
+      if (this.cartSane(p[C2_LB], p[C2_RB])) {
+        this.drawCouplerStub(ctx, c2L, faceNormal(p[C2_LT], p[C2_LB], false), cartH);
+        this.drawCouplerStub(ctx, c2R, faceNormal(p[C2_RT], p[C2_RB], true),  cartH);
+      }
+      // Cart 1 — left stub only
+      if (this.cartSane(p[C1_LB], p[C1_RB]))
+        this.drawCouplerStub(ctx, c1L, faceNormal(p[C1_LT], p[C1_LB], false), cartH);
+    }
 
     // Carts rear → front so front overlaps rear
     if (this.ready) {
@@ -142,6 +168,8 @@ export class RollerCoasterRenderer {
     const angle = Math.atan2(pdy, pdx);
     const pLen  = Math.hypot(pdx, pdy) || 1;
     const scale = pLen / SVG_SPAN;
+    // Skip carts whose geometry has gone wild (e.g. after a wreck flings points)
+    if (scale < 0.001 || scale > 15) return;
     const mx    = (lb.x + rb.x) / 2;
     const my    = (lb.y + rb.y) / 2;
 
@@ -152,6 +180,40 @@ export class RollerCoasterRenderer {
     ctx.translate(-SVG_MX, -SVG_MY);
     ctx.drawImage(this.image, 0, 0, RENDER_W, RENDER_H);
     ctx.restore();
+  }
+
+  private cartSane(lb: P2, rb: P2): boolean {
+    const scale = Math.hypot(rb.x - lb.x, rb.y - lb.y) / SVG_SPAN;
+    return scale >= 0.001 && scale <= 15;
+  }
+
+  /**
+   * Broken coupler stub: a bar extending outward from the cart face ending
+   * in a half-circle (the "split pin" that remains after the joint breaks).
+   */
+  private drawCouplerStub(ctx: CanvasRenderingContext2D, face: P2, outward: P2, cartH: number) {
+    const pinR = cartH * 0.14;
+    const barW = cartH * 0.10;
+    // Bar runs from face point outward to where the pin center sits
+    const tipX = face.x + outward.x * (SVG_OVER_R + pinR);
+    const tipY = face.y + outward.y * (SVG_OVER_R + pinR);
+
+    ctx.strokeStyle = '#1a1a1a';
+    ctx.lineWidth   = barW;
+    ctx.lineCap     = 'butt';
+    ctx.beginPath();
+    ctx.moveTo(face.x, face.y);
+    ctx.lineTo(tipX, tipY);
+    ctx.stroke();
+
+    // Half-circle at the tip facing outward
+    const angle = Math.atan2(outward.y, outward.x);
+    ctx.fillStyle = '#1a1a1a';
+    ctx.beginPath();
+    ctx.moveTo(tipX, tipY);
+    ctx.arc(tipX, tipY, pinR, angle - Math.PI / 2, angle + Math.PI / 2, false);
+    ctx.closePath();
+    ctx.fill();
   }
 
   /**
