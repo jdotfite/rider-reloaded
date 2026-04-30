@@ -576,6 +576,34 @@ toolbar.onGridSnapToggle = (enabled) => {
 toolbar.onGridSizeChange = (size) => {
   setPaperGridSize(size);
 };
+
+// Wire Settings modal grid controls to the same state functions
+{
+  const settingsGridCheckbox = document.getElementById('settings-grid-checkbox') as HTMLInputElement | null;
+  const settingsGridSnapCheckbox = document.getElementById('settings-grid-snap-checkbox') as HTMLInputElement | null;
+  const settingsGridSizeInput = document.getElementById('settings-grid-size-input') as HTMLInputElement | null;
+  const settingsGridSizeValue = document.getElementById('settings-grid-size-value') as HTMLElement | null;
+
+  // Keep settings panel controls in sync with grid state
+  const syncSettingsGridControls = () => {
+    if (settingsGridCheckbox) settingsGridCheckbox.checked = paperGrid.enabled;
+    if (settingsGridSnapCheckbox) settingsGridSnapCheckbox.checked = paperGrid.snapEnabled;
+    if (settingsGridSizeInput) settingsGridSizeInput.value = String(paperGrid.size);
+    if (settingsGridSizeValue) settingsGridSizeValue.textContent = String(paperGrid.size);
+  };
+  syncSettingsGridControls();
+
+  settingsGridCheckbox?.addEventListener('change', () => setPaperGridEnabled(settingsGridCheckbox.checked));
+  settingsGridSnapCheckbox?.addEventListener('change', () => setPaperGridSnapEnabled(settingsGridSnapCheckbox.checked));
+  settingsGridSizeInput?.addEventListener('input', () => {
+    const size = parseInt(settingsGridSizeInput.value || '24', 10);
+    if (settingsGridSizeValue) settingsGridSizeValue.textContent = String(size);
+    setPaperGridSize(size);
+  });
+
+  // Sync when settings modal opens (grid state may have changed via keyboard shortcuts)
+  document.getElementById('btn-settings')?.addEventListener('click', syncSettingsGridControls);
+}
 toolbar.onSmoothStart = () => selectTool.startSmooth();
 toolbar.onSmoothChange = (amount) => selectTool.setSmoothAmount(amount);
 toolbar.onSmoothApply = () => selectTool.applySmooth();
@@ -1154,6 +1182,12 @@ vehiclePickerButton?.addEventListener('click', () => {
   if (!canEdit()) return;
   openVehiclePicker();
 });
+
+// Left-dock vehicle button also opens the picker
+document.getElementById('btn-vehicle-dock')?.addEventListener('click', () => {
+  if (!canEdit()) return;
+  openVehiclePicker();
+});
 vehiclePickerClose?.addEventListener('click', closeVehiclePicker);
 vehiclePickerOverlay?.addEventListener('click', (event) => {
   if (event.target === vehiclePickerOverlay) {
@@ -1168,6 +1202,54 @@ window.addEventListener('keydown', (event) => {
 
 buildVehiclePicker();
 setVehicle(activeVehicle.id);
+
+// ── Floating Layers Panel ──
+const layersFloat = document.getElementById('layers-float') as HTMLElement | null;
+const layersFloatHandle = document.getElementById('layers-float-handle') as HTMLElement | null;
+const layersFloatClose = document.getElementById('layers-float-close') as HTMLButtonElement | null;
+const btnLayersDock = document.getElementById('btn-layers-dock') as HTMLButtonElement | null;
+
+function setLayersFloatOpen(open: boolean) {
+  if (!layersFloat) return;
+  layersFloat.style.display = open ? '' : 'none';
+  if (btnLayersDock) {
+    btnLayersDock.classList.toggle('active', open);
+    btnLayersDock.setAttribute('aria-pressed', open ? 'true' : 'false');
+  }
+}
+
+btnLayersDock?.addEventListener('click', () => {
+  const isOpen = layersFloat?.style.display !== 'none';
+  setLayersFloatOpen(!isOpen);
+});
+layersFloatClose?.addEventListener('click', () => setLayersFloatOpen(false));
+
+// Drag logic for layers panel
+if (layersFloat && layersFloatHandle) {
+  let isDragging = false;
+  let dragOffsetX = 0;
+  let dragOffsetY = 0;
+
+  layersFloatHandle.addEventListener('mousedown', (e) => {
+    if (e.button !== 0) return;
+    isDragging = true;
+    const rect = layersFloat.getBoundingClientRect();
+    dragOffsetX = e.clientX - rect.left;
+    dragOffsetY = e.clientY - rect.top;
+    e.preventDefault();
+  });
+
+  document.addEventListener('mousemove', (e) => {
+    if (!isDragging) return;
+    const x = Math.max(0, Math.min(window.innerWidth - layersFloat.offsetWidth, e.clientX - dragOffsetX));
+    const y = Math.max(0, Math.min(window.innerHeight - layersFloat.offsetHeight, e.clientY - dragOffsetY));
+    layersFloat.style.left = `${x}px`;
+    layersFloat.style.top = `${y}px`;
+    layersFloat.style.right = 'auto';
+  });
+
+  document.addEventListener('mouseup', () => { isDragging = false; });
+}
 
 // Layer rename modal
 if (layerRenameSave && layerRenameCancel && layerRenameInput) {

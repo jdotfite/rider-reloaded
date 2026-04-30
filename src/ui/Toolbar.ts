@@ -647,6 +647,15 @@ export class Toolbar {
     });
     dockUndoBtn?.addEventListener('click', () => this.onUndo?.());
     dockRedoBtn?.addEventListener('click', () => this.onRedo?.());
+
+    const inspectorCloseBtn = document.getElementById('inspector-close') as HTMLButtonElement | null;
+    inspectorCloseBtn?.addEventListener('click', () => {
+      sidebarInspectorOpen = false;
+      applySidebarInspectorMode(false);
+      try {
+        window.localStorage.setItem(sidebarInspectorKey, 'false');
+      } catch {}
+    });
     window.addEventListener('resize', () => {
       mountToolGrid();
       applySidebarInspectorMode(sidebarInspectorOpen);
