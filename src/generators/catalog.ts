@@ -168,8 +168,9 @@ export function formatGeneratorControlValue(control: GeneratorControl, value: nu
 export function buildGeneratorPreviewMarkup(
   asset: GeneratorAsset,
   settings: GeneratorSettings,
+  rideSideColor?: string,
 ): string {
-  return buildPreviewMarkup(asset.createSegments(settings));
+  return buildPreviewMarkup(asset.createSegments(settings), rideSideColor);
 }
 
 export function computeGeneratedSegmentBounds(
@@ -260,31 +261,52 @@ function createPolylineSegments(points: readonly Vec2[], closed: boolean): Gener
   return segments;
 }
 
-function buildPreviewMarkup(segments: readonly GeneratedSegment[]): string {
+export function buildPreviewMarkup(segments: readonly GeneratedSegment[], rideSideColor?: string): string {
   const bounds = computeGeneratedSegmentBounds(segments);
   const padding = Math.max(6, LINE_WIDTH * 2);
   const viewBoxX = bounds.minX - padding;
   const viewBoxY = bounds.minY - padding;
   const viewBoxWidth = bounds.width + padding * 2;
   const viewBoxHeight = bounds.height + padding * 2;
-  const commands: string[] = [];
+  const trackCommands: string[] = [];
+  const rideCommands: string[] = [];
+  const rideOffset = LINE_WIDTH * 0.9;
 
   let prevX = Number.NaN;
   let prevY = Number.NaN;
   for (const segment of segments) {
     if (!pointsMatch(prevX, prevY, segment.p1.x, segment.p1.y)) {
-      commands.push(`M ${formatSvgNumber(segment.p1.x)} ${formatSvgNumber(segment.p1.y)}`);
+      trackCommands.push(`M ${formatSvgNumber(segment.p1.x)} ${formatSvgNumber(segment.p1.y)}`);
     }
-    commands.push(`L ${formatSvgNumber(segment.p2.x)} ${formatSvgNumber(segment.p2.y)}`);
+    trackCommands.push(`L ${formatSvgNumber(segment.p2.x)} ${formatSvgNumber(segment.p2.y)}`);
     prevX = segment.p2.x;
     prevY = segment.p2.y;
+
+    // Ride-side stripe: left-hand normal (-dy, dx) points toward the rideable side
+    if (rideSideColor) {
+      const dx = segment.p2.x - segment.p1.x;
+      const dy = segment.p2.y - segment.p1.y;
+      const len = Math.sqrt(dx * dx + dy * dy);
+      if (len > 0.01) {
+        const nx = (-dy / len) * rideOffset;
+        const ny = (dx / len) * rideOffset;
+        rideCommands.push(
+          `M ${formatSvgNumber(segment.p1.x + nx)} ${formatSvgNumber(segment.p1.y + ny)}`,
+          `L ${formatSvgNumber(segment.p2.x + nx)} ${formatSvgNumber(segment.p2.y + ny)}`,
+        );
+      }
+    }
   }
 
-  return [
+  const parts = [
     `<svg viewBox="${formatSvgNumber(viewBoxX)} ${formatSvgNumber(viewBoxY)} ${formatSvgNumber(viewBoxWidth)} ${formatSvgNumber(viewBoxHeight)}" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">`,
-    `<path d="${commands.join(' ')}" fill="none" stroke="currentColor" stroke-width="${LINE_WIDTH}" stroke-linecap="round" stroke-linejoin="round"/>`,
-    '</svg>',
-  ].join('');
+    `<path d="${trackCommands.join(' ')}" fill="none" stroke="currentColor" stroke-width="${LINE_WIDTH}" stroke-linecap="round" stroke-linejoin="round"/>`,
+  ];
+  if (rideSideColor && rideCommands.length > 0) {
+    parts.push(`<path d="${rideCommands.join(' ')}" fill="none" stroke="${rideSideColor}" stroke-width="${LINE_WIDTH * 0.55}" stroke-linecap="round" stroke-linejoin="round" opacity="0.85"/>`);
+  }
+  parts.push('</svg>');
+  return parts.join('');
 }
 
 function pointsMatch(ax: number, ay: number, bx: number, by: number): boolean {

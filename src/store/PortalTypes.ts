@@ -4,6 +4,7 @@ export type PortalEndpointKey = 'entry' | 'exit';
 export type PortalMode = 'oneWay' | 'twoWay';
 export type PortalVelocityMode = 'remap' | 'world';
 export type PortalDirectionRule = 'any' | 'frontOnly' | 'backOnly';
+export type PortalExitDirection = 'inherit' | 'forward' | 'backward';
 export type PortalTriggerBody = 'auto' | 'center' | 'front' | 'rear';
 export type PortalVisibility = 'activation' | 'subtle' | 'always';
 export type PortalColorTheme = 'violet' | 'amber' | 'mint';
@@ -20,6 +21,7 @@ export interface PortalPhysics {
   speedMultiplier: number;
   preserveLocalOffset: boolean;
   entryDirectionRule: PortalDirectionRule;
+  exitDirection: PortalExitDirection;
   triggerBody: PortalTriggerBody;
   cooldownFrames: number;
   exitOffset: number;
@@ -65,6 +67,7 @@ export interface SerializedPortalPair {
     speedMultiplier?: number;
     preserveLocalOffset?: boolean;
     entryDirectionRule?: string;
+    exitDirection?: string;
     triggerBody?: string;
     cooldownFrames?: number;
     exitOffset?: number;

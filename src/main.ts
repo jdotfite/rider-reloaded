@@ -13,7 +13,6 @@ import { FlagTool } from './input/tools/FlagTool';
 import { SelectTool } from './input/tools/SelectTool';
 import { EditTool } from './input/tools/EditTool';
 import { DrawEditTool } from './input/tools/DrawEditTool';
-import { StampTool } from './input/tools/StampTool';
 import { GeneratorTool } from './input/tools/GeneratorTool';
 import { PortalTool } from './input/tools/PortalTool';
 import { TrackStore } from './store/TrackStore';
@@ -41,7 +40,7 @@ import {
   DEFAULT_EDITOR_GRID_SIZE,
   type EditorGridSettings,
 } from './editor/GridMath';
-import { buildCloudStampAssets, type StampAsset } from './stamps/cloudAssets';
+import { buildCloudGeneratorAssets } from './stamps/cloudAssets';
 import {
   buildGeneratorAssets,
   buildGeneratorPreviewMarkup,
@@ -273,14 +272,17 @@ const editTool = new EditTool(
   () => paperGrid.snapEnabled,
   () => paperGrid.size,
 );
-const pencilTool = new DrawEditTool('pencil', rawPencilTool, editTool);
-const lineTool = new DrawEditTool('line', rawLineTool, editTool);
-const stampTool = new StampTool(
+const portalTool = new PortalTool(
   store,
+  () => camera.zoom,
+  () => endpointSnapEnabled,
   () => paperGrid.snapEnabled,
   () => paperGrid.size,
-  () => camera.zoom,
+  () => currentToolName === 'portal',
 );
+const pencilTool = new DrawEditTool('pencil', rawPencilTool, portalTool, editTool);
+const lineTool = new DrawEditTool('line', rawLineTool, portalTool, editTool);
+const selectAmbientTool = new DrawEditTool('select', selectTool, portalTool);
 const generatorTool = new GeneratorTool(
   store,
   () => currentLineType,
@@ -288,13 +290,6 @@ const generatorTool = new GeneratorTool(
   () => paperGrid.snapEnabled,
   () => paperGrid.size,
   () => camera.zoom,
-);
-const portalTool = new PortalTool(
-  store,
-  () => camera.zoom,
-  () => endpointSnapEnabled,
-  () => paperGrid.snapEnabled,
-  () => paperGrid.size,
 );
 portalTool.onPortalCreated = (portal) => {
   portalFxEvents.push({
@@ -309,17 +304,17 @@ const flagTool = new FlagTool((position) => {
   if (!store.setStartPosition(position)) return;
   rider.setStartPosition(store.startPosition);
 }, () => paperGrid.snapEnabled, () => paperGrid.size, () => camera.zoom);
-const cloudStampAssets = buildCloudStampAssets();
+const cloudGeneratorAssets = buildCloudGeneratorAssets();
 const generatorAssets = buildGeneratorAssets();
+const allGeneratorAssets = [...generatorAssets, ...cloudGeneratorAssets];
 const generatorSettingsById = new Map<string, GeneratorSettings>(
-  generatorAssets.map((asset) => [asset.id, { ...asset.defaultSettings }]),
+  allGeneratorAssets.map((asset) => [asset.id, { ...asset.defaultSettings }]),
 );
-let stampResumeToolName = currentToolName;
 let generatorResumeToolName = currentToolName;
-let activeStampAssetId: string | null = null;
 let activeGeneratorId: string | null = null;
 let selectedGeneratorId: string | null = generatorAssets[0]?.id ?? null;
-stampTool.onCancel = () => cancelStampPlacement();
+let generatorLineType: string = 'solid';
+let generatorFlipped = false;
 generatorTool.onCancel = () => cancelGeneratorPlacement();
 currentTool = pencilTool;
 const loadInput = document.createElement('input');
@@ -387,7 +382,7 @@ function canEdit(): boolean {
 
 function getGeneratorAssetById(id: string | null): GeneratorAsset | null {
   if (!id) return null;
-  return generatorAssets.find((asset) => asset.id === id) ?? null;
+  return allGeneratorAssets.find((asset) => asset.id === id) ?? null;
 }
 
 function getGeneratorSettingsState(id: string | null): GeneratorSettings | null {
@@ -477,12 +472,13 @@ const gameLoop = new GameLoop(physics, () => {
     selectTool.isSmoothing(),
     selectTool.hasSelectedAccelerationLines(),
   );
-  const portalDiagnostics = currentTool === portalTool ? portalTool.getDiagnostics() : null;
+  const portalInspectorActive = currentToolName === 'portal' || portalTool.isPlacing() || portalTool.getSelectedPortalId() !== null;
+  const portalDiagnostics = portalInspectorActive ? portalTool.getDiagnostics() : null;
   toolbar.setPortalState(
-    currentTool === portalTool,
-    currentTool === portalTool ? portalTool.getSelectedPortal() : null,
-    currentTool === portalTool && portalTool.isPlacing(),
-    currentTool === portalTool ? portalTool.getActiveEndpoint() : null,
+    portalInspectorActive,
+    portalInspectorActive ? portalTool.getSelectedPortal() : null,
+    currentToolName === 'portal' && portalTool.isPlacing(),
+    portalInspectorActive ? portalTool.getActiveEndpoint() : null,
     portalDiagnostics,
   );
 
@@ -609,65 +605,36 @@ toolbar.onSmoothChange = (amount) => selectTool.setSmoothAmount(amount);
 toolbar.onSmoothApply = () => selectTool.applySmooth();
 toolbar.onSmoothCancel = () => selectTool.cancelSmooth();
 toolbar.onFlipSelection = () => {
-  if (currentTool === selectTool) {
+  if (currentToolName === 'select') {
     selectTool.flipSelected();
   }
 };
 toolbar.onReverseAccelSelection = () => {
-  if (currentTool === selectTool) {
+  if (currentToolName === 'select') {
     selectTool.reverseAccelSelected();
   }
 };
 toolbar.onConvertSelectedType = (type) => {
-  if (currentTool === selectTool) {
+  if (currentToolName === 'select') {
     selectTool.changeSelectedType(type);
   }
 };
-toolbar.onPortalModeChange = (mode) => {
-  if (currentTool === portalTool) portalTool.setSelectedPortalMode(mode);
-};
-toolbar.onPortalThemeChange = (theme) => {
-  if (currentTool === portalTool) portalTool.setSelectedColorTheme(theme);
-};
-toolbar.onPortalVelocityModeChange = (mode) => {
-  if (currentTool === portalTool) portalTool.setSelectedVelocityMode(mode);
-};
-toolbar.onPortalSpeedMultiplierChange = (multiplier) => {
-  if (currentTool === portalTool) portalTool.setSelectedSpeedMultiplier(multiplier);
-};
-toolbar.onPortalPreserveOffsetChange = (enabled) => {
-  if (currentTool === portalTool) portalTool.setSelectedPreserveOffset(enabled);
-};
-toolbar.onPortalDirectionRuleChange = (rule) => {
-  if (currentTool === portalTool) portalTool.setSelectedDirectionRule(rule);
-};
-toolbar.onPortalTriggerBodyChange = (body) => {
-  if (currentTool === portalTool) portalTool.setSelectedTriggerBody(body);
-};
-toolbar.onPortalCooldownChange = (frames) => {
-  if (currentTool === portalTool) portalTool.setSelectedCooldownFrames(frames);
-};
-toolbar.onPortalExitOffsetChange = (offset) => {
-  if (currentTool === portalTool) portalTool.setSelectedExitOffset(offset);
-};
-toolbar.onPortalVisibilityChange = (visibility) => {
-  if (currentTool === portalTool) portalTool.setSelectedVisibility(visibility);
-};
-toolbar.onPortalSizeChange = (length) => {
-  if (currentTool === portalTool) portalTool.setSelectedPortalSize(length);
-};
-toolbar.onPortalRadiusChange = (radius) => {
-  if (currentTool === portalTool) portalTool.setSelectedPortalRadius(radius);
-};
-toolbar.onPortalShowEditorLinkChange = (enabled) => {
-  if (currentTool === portalTool) portalTool.setSelectedShowEditorLink(enabled);
-};
-toolbar.onPortalShowDebugChange = (enabled) => {
-  if (currentTool === portalTool) portalTool.setSelectedShowDebug(enabled);
-};
-toolbar.onPortalEnabledChange = (enabled) => {
-  if (currentTool === portalTool) portalTool.setSelectedEnabled(enabled);
-};
+toolbar.onPortalModeChange = (mode) => portalTool.setSelectedPortalMode(mode);
+toolbar.onPortalThemeChange = (theme) => portalTool.setSelectedColorTheme(theme);
+toolbar.onPortalVelocityModeChange = (mode) => portalTool.setSelectedVelocityMode(mode);
+toolbar.onPortalSpeedMultiplierChange = (multiplier) => portalTool.setSelectedSpeedMultiplier(multiplier);
+toolbar.onPortalPreserveOffsetChange = (enabled) => portalTool.setSelectedPreserveOffset(enabled);
+toolbar.onPortalDirectionRuleChange = (rule) => portalTool.setSelectedDirectionRule(rule);
+toolbar.onPortalExitDirectionChange = (direction) => portalTool.setSelectedExitDirection(direction);
+toolbar.onPortalTriggerBodyChange = (body) => portalTool.setSelectedTriggerBody(body);
+toolbar.onPortalCooldownChange = (frames) => portalTool.setSelectedCooldownFrames(frames);
+toolbar.onPortalExitOffsetChange = (offset) => portalTool.setSelectedExitOffset(offset);
+toolbar.onPortalVisibilityChange = (visibility) => portalTool.setSelectedVisibility(visibility);
+toolbar.onPortalSizeChange = (length) => portalTool.setSelectedPortalSize(length);
+toolbar.onPortalRadiusChange = (radius) => portalTool.setSelectedPortalRadius(radius);
+toolbar.onPortalShowEditorLinkChange = (enabled) => portalTool.setSelectedShowEditorLink(enabled);
+toolbar.onPortalShowDebugChange = (enabled) => portalTool.setSelectedShowDebug(enabled);
+toolbar.onPortalEnabledChange = (enabled) => portalTool.setSelectedEnabled(enabled);
 selectTool.onSmoothRequest = () => {
   const started = selectTool.startSmooth();
   if (started) toolbar.showSmoothSlider();
@@ -682,7 +649,7 @@ selectTool.onSelectionChange = () => {
 toolbar.onLineTypeSelect = (type) => {
   currentLineType = type;
   toolbar.setActiveLineType(type);
-  if (currentTool === selectTool && selectTool.getSelectedCount() > 0) {
+  if (currentToolName === 'select' && selectTool.getSelectedCount() > 0) {
     selectTool.changeSelectedType(type);
   }
   renderGeneratorDetail();
@@ -796,12 +763,6 @@ toolbar.onStepBack = () => {
   }
 };
 
-function syncStampSelection() {
-  if (!generatorsList) return;
-  generatorsList.querySelectorAll<HTMLButtonElement>('.stamp-card').forEach(card => {
-    card.classList.toggle('active', card.dataset.assetId === activeStampAssetId);
-  });
-}
 
 type PickerCardOptions = {
   className: string;
@@ -857,7 +818,7 @@ function closeGeneratorsModal() {
 }
 
 function syncGeneratorsButton() {
-  const active = activeGeneratorId !== null || activeStampAssetId !== null || document.body.classList.contains('generators-open');
+  const active = activeGeneratorId !== null || document.body.classList.contains('generators-open');
   for (const button of generatorsButtons) {
     button.classList.toggle('active', active);
     button.setAttribute('aria-pressed', active ? 'true' : 'false');
@@ -883,17 +844,28 @@ function updateGeneratorDetailSummary(asset: GeneratorAsset, settings: Generator
   if (generatorDetailTitle) generatorDetailTitle.textContent = asset.name;
   if (generatorDetailText) generatorDetailText.textContent = asset.description;
   if (generatorDetailPreview) {
-    generatorDetailPreview.innerHTML = buildGeneratorPreviewMarkup(asset, settings);
+    // Show ride-side stripe for solid/acc; scenery has no physics side
+    const rideSideColor = generatorLineType === 'acc'
+      ? '#e06020'
+      : generatorLineType === 'scenery'
+        ? undefined
+        : '#3b82f6';
+    generatorDetailPreview.innerHTML = buildGeneratorPreviewMarkup(asset, settings, rideSideColor);
   }
 
   const segments = asset.createSegments(settings);
   const bounds = computeGeneratedSegmentBounds(segments);
   if (generatorStats) {
     generatorStats.innerHTML = '';
+    const genLineTypeLabel = generatorLineType === 'acc'
+      ? GENERATOR_LINE_TYPE_LABELS[LineType.ACC]
+      : generatorLineType === 'scenery'
+        ? GENERATOR_LINE_TYPE_LABELS[LineType.SCENERY]
+        : GENERATOR_LINE_TYPE_LABELS[LineType.SOLID];
     for (const value of [
       `${segments.length} lines`,
       `${Math.round(bounds.width)} × ${Math.round(bounds.height)}u`,
-      `${GENERATOR_LINE_TYPE_LABELS[currentLineType]} output`,
+      `${genLineTypeLabel} output`,
     ]) {
       const chip = document.createElement('span');
       chip.textContent = value;
@@ -906,7 +878,7 @@ function updateGeneratorDetailSummary(asset: GeneratorAsset, settings: Generator
   }
 
   if (generatorActivate) {
-    generatorActivate.textContent = activeGeneratorId === asset.id ? 'Resume Placing' : 'Start Placing';
+    generatorActivate.textContent = activeGeneratorId === asset.id ? 'Resume Placing' : 'Place Shape';
   }
 }
 
@@ -972,31 +944,31 @@ function addPickerSectionHeader(label: string): HTMLDivElement {
   return header;
 }
 
+function addPlaceholderCards(count: number) {
+  for (let i = 0; i < count; i++) {
+    const card = document.createElement('button');
+    card.className = 'picker-card generator-card shape-placeholder';
+    card.disabled = true;
+    card.setAttribute('aria-label', 'Coming soon');
+    card.innerHTML = `
+      <div class="picker-card-art">
+        <svg class="icon" viewBox="0 0 24 24" width="20" height="20" style="opacity:0.3">
+          <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
+        </svg>
+      </div>
+      <div class="picker-card-copy">
+        <strong>Coming Soon</strong>
+      </div>`;
+    generatorsList!.appendChild(card);
+  }
+}
+
 function buildGeneratorsModal() {
   if (!generatorsList) return;
   generatorsList.innerHTML = '';
 
-  // Stamp section
-  generatorsList.appendChild(addPickerSectionHeader('Cloud Stamps'));
-  for (const asset of cloudStampAssets) {
-    const button = createPickerCard({
-      className: 'stamp-card',
-      datasetKey: 'assetId',
-      datasetValue: asset.id,
-      previewMarkup: asset.previewMarkup,
-      title: asset.name,
-      subtitle: 'Stamp',
-      onClick: () => {
-        if (!canEdit()) return;
-        activateStampPlacement(asset);
-        closeGeneratorsModal();
-      },
-    });
-    generatorsList.appendChild(button);
-  }
-
-  // Generator section
-  generatorsList.appendChild(addPickerSectionHeader('Shape Generators'));
+  // Geometric shapes
+  generatorsList.appendChild(addPickerSectionHeader('Shapes'));
   for (const asset of generatorAssets) {
     const button = createPickerCard({
       className: 'generator-card',
@@ -1014,9 +986,34 @@ function buildGeneratorsModal() {
     });
     generatorsList.appendChild(button);
   }
+  // Fill to next row multiple (target: multiples of 3)
+  const shapeRemainder = (3 - (generatorAssets.length % 3)) % 3;
+  addPlaceholderCards(shapeRemainder + 3); // always show a few "coming soon" slots
+
+  // Cloud stamps (now as full generators)
+  generatorsList.appendChild(addPickerSectionHeader('Clouds'));
+  for (const asset of cloudGeneratorAssets) {
+    const button = createPickerCard({
+      className: 'generator-card',
+      datasetKey: 'generatorId',
+      datasetValue: asset.id,
+      previewMarkup: asset.previewMarkup,
+      title: asset.name,
+      subtitle: '1 control',
+      stateText: 'Ready',
+      onClick: () => {
+        selectedGeneratorId = asset.id;
+        syncGeneratorSelection();
+        renderGeneratorDetail();
+      },
+    });
+    generatorsList.appendChild(button);
+  }
+  // Fill clouds to next row multiple too
+  const cloudRemainder = (3 - (cloudGeneratorAssets.length % 3)) % 3;
+  addPlaceholderCards(cloudRemainder + 3);
 
   syncGeneratorSelection();
-  syncStampSelection();
   renderGeneratorDetail();
 }
 
@@ -1044,6 +1041,37 @@ window.addEventListener('keydown', (event) => {
 
 buildGeneratorsModal();
 syncGeneratorsButton();
+
+// Generator line type selector
+const generatorLineTypeStrip = document.getElementById('generator-line-type-strip');
+
+function syncGeneratorLineTypeStrip() {
+  generatorLineTypeStrip?.querySelectorAll<HTMLButtonElement>('[data-gen-line-type]').forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.genLineType === generatorLineType);
+  });
+}
+
+generatorLineTypeStrip?.querySelectorAll<HTMLButtonElement>('[data-gen-line-type]').forEach(btn => {
+  btn.addEventListener('click', () => {
+    generatorLineType = btn.dataset.genLineType ?? 'solid';
+    syncGeneratorLineTypeStrip();
+    if (selectedGeneratorId) {
+      const asset = getGeneratorAssetById(selectedGeneratorId);
+      const settings = getGeneratorSettingsState(selectedGeneratorId);
+      if (asset && settings) updateGeneratorDetailSummary(asset, settings);
+    }
+  });
+});
+
+// Generator flip toggle
+const generatorFlipBtn = document.getElementById('generator-flip-btn') as HTMLButtonElement | null;
+
+generatorFlipBtn?.addEventListener('click', () => {
+  generatorFlipped = !generatorFlipped;
+  generatorFlipBtn.classList.toggle('active', generatorFlipped);
+});
+
+syncGeneratorLineTypeStrip();
 
 const settingsButtons = Array.from(
   document.querySelectorAll<HTMLButtonElement>('[data-settings-trigger]'),
@@ -1153,28 +1181,44 @@ function buildVehiclePicker() {
 
   vehiclePickerList.innerHTML = '';
   for (const vehicle of VEHICLE_MANIFESTS) {
-    const card = document.createElement('button');
     const available = vehicle.available !== false;
+    const card = document.createElement('button');
     card.type = 'button';
-    card.className = `vehicle-card${available ? '' : ' locked'}`;
+    card.className = `picker-card vehicle-card${available ? '' : ' locked'}`;
     card.dataset.vehicle = vehicle.id;
-    card.innerHTML = `
-      <span class="vehicle-card-icon">${vehicle.iconSvg}</span>
-      <span class="vehicle-card-copy">
-        <strong>${vehicle.name}</strong>
-        <span>${available ? 'Available now' : (vehicle.unlockHint ?? 'Locked')}</span>
-      </span>
-      ${available ? '' : '<span class="vehicle-card-lock">Locked</span>'}
-    `;
     card.disabled = !available;
+    card.innerHTML = `
+      <div class="picker-card-art">${vehicle.iconSvg}</div>
+      <div class="picker-card-copy">
+        <strong>${vehicle.name}</strong>
+      </div>
+    `;
     card.addEventListener('click', () => {
-      if (!canEdit()) return;
-      if (!available) return;
+      if (!canEdit() || !available) return;
       setVehicle(vehicle.id);
       closeVehiclePicker();
     });
     vehiclePickerList.appendChild(card);
   }
+
+  // Placeholder slots so grid always looks complete
+  const remainder = (3 - (VEHICLE_MANIFESTS.length % 3)) % 3;
+  for (let i = 0; i < remainder + 3; i++) {
+    const ph = document.createElement('button');
+    ph.className = 'picker-card vehicle-card locked';
+    ph.disabled = true;
+    ph.setAttribute('aria-label', 'Coming soon');
+    ph.innerHTML = `
+      <div class="picker-card-art">
+        <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" style="opacity:0.25">
+          <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
+        </svg>
+      </div>
+      <div class="picker-card-copy"><strong style="font: 600 9px/1.2 var(--font); letter-spacing:0.08em; opacity:0.45;">COMING SOON</strong></div>
+    `;
+    vehiclePickerList.appendChild(ph);
+  }
+
   updateVehiclePickerSelection();
 }
 
@@ -1296,9 +1340,11 @@ loadInput.addEventListener('change', async () => {
 });
 
 function switchTool(name: string) {
-  clearStampPlacementState();
   clearGeneratorPlacementState();
   closeGeneratorsModal();
+  if (name !== 'portal') {
+    portalTool.cancelPlacement();
+  }
   currentToolName = name;
   currentTool = resolveToolByName(name);
   if (name !== 'pencil' && name !== 'line') {
@@ -1316,41 +1362,10 @@ function resolveToolByName(name: string): Tool {
   if (name === 'pencil') return pencilTool;
   if (name === 'line') return lineTool;
   if (name === 'eraser') return eraserTool;
-  if (name === 'select') return selectTool;
+  if (name === 'select') return selectAmbientTool;
   if (name === 'flag') return flagTool;
   if (name === 'portal') return portalTool;
   return pencilTool;
-}
-
-function clearStampPlacementState() {
-  activeStampAssetId = null;
-  stampTool.clearAsset();
-  syncGeneratorsButton();
-  syncStampSelection();
-}
-
-function activateStampPlacement(asset: StampAsset) {
-  clearGeneratorPlacementState();
-  closeGeneratorsModal();
-  if (activeStampAssetId === null) {
-    stampResumeToolName = currentToolName;
-  }
-  activeStampAssetId = asset.id;
-  stampTool.setAsset(asset);
-  currentTool = stampTool;
-  input.setTool(currentTool);
-  toolbar.setActiveTool(stampResumeToolName);
-  syncGeneratorsButton();
-  syncStampSelection();
-}
-
-function cancelStampPlacement() {
-  if (activeStampAssetId === null) return;
-  clearStampPlacementState();
-  currentToolName = stampResumeToolName;
-  currentTool = resolveToolByName(currentToolName);
-  input.setTool(currentTool);
-  toolbar.setActiveTool(currentToolName);
 }
 
 function clearGeneratorPlacementState() {
@@ -1362,8 +1377,15 @@ function clearGeneratorPlacementState() {
 }
 
 function activateGeneratorPlacement(asset: GeneratorAsset) {
-  clearStampPlacementState();
   closeGeneratorsModal();
+  // Apply the modal's line type selection
+  const mappedLineType = generatorLineType === 'acc'
+    ? LineType.ACC
+    : generatorLineType === 'scenery'
+      ? LineType.SCENERY
+      : LineType.SOLID;
+  currentLineType = mappedLineType;
+  toolbar.setActiveLineType(currentLineType);
   if (activeGeneratorId === null) {
     generatorResumeToolName = currentToolName;
   }
@@ -1844,10 +1866,11 @@ renderer.addRenderCallback((ctx) => {
   while (portalFxEvents.length > 0 && performance.now() - portalFxEvents[0].startedAt > 280) {
     portalFxEvents.shift();
   }
-  const selectedPortalDiagnostics = currentTool === portalTool ? portalTool.getDiagnostics() : null;
+  const portalInspectorActive = currentToolName === 'portal' || portalTool.isPlacing() || portalTool.getSelectedPortalId() !== null;
+  const selectedPortalDiagnostics = portalInspectorActive ? portalTool.getDiagnostics() : null;
   const portalRenderOptions = {
-    selectedPortalId: currentTool === portalTool ? portalTool.getSelectedPortalId() : null,
-    activeEndpoint: currentTool === portalTool ? portalTool.getActiveEndpoint() : null,
+    selectedPortalId: portalInspectorActive ? portalTool.getSelectedPortalId() : null,
+    activeEndpoint: portalInspectorActive ? portalTool.getActiveEndpoint() : null,
     editing: gameLoop.state !== GameState.PLAYING,
     events: portalFxEvents,
     warningEndpoints: selectedPortalDiagnostics?.warningEndpoints ?? null,
@@ -2431,6 +2454,7 @@ renderer.addRenderCallback((ctx) => {
   const origShowAudioPanel = showAudioPanel;
   function showAudioPanelWithHistory() {
     origShowAudioPanel();
+    updateAudioUI();
     renderYtHistory();
     updateTrimUI();
   }

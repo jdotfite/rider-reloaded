@@ -202,7 +202,7 @@ export class PhysicsEngine {
     const destination = pair[destinationKey];
     const local = worldToPortalLocal(triggerPoint, source);
     const mappedLocal = pair.physics.preserveLocalOffset ? local : new Vec2(0, 0);
-    const exitLocal = new Vec2(mappedLocal.x, destination.radius + pair.physics.exitOffset);
+    const exitLocal = new Vec2(mappedLocal.x, -(destination.radius + pair.physics.exitOffset));
     const nextCenter = this.resolveSafeExitPoint(destination, portalLocalToWorld(exitLocal, destination));
     const rotationDelta = destination.rotation - source.rotation;
     const sourceTangent = portalTangent(source.rotation);
@@ -212,16 +212,17 @@ export class PhysicsEngine {
     const entrySpeed = this.rider.getPortalTriggerVelocity(pair.physics.triggerBody).length();
 
     this.rider.teleportAroundPoint(triggerPoint, nextCenter, rotationDelta, (velocity) => {
-      if (pair.physics.velocityMode === 'world') {
-        return velocity.scale(pair.physics.speedMultiplier);
-      }
       const localVelocity = new Vec2(
         velocity.dot(sourceTangent),
         velocity.dot(sourceNormal),
       );
-      return destinationTangent.scale(localVelocity.x)
-        .add(destinationNormal.scale(localVelocity.y))
-        .scale(pair.physics.speedMultiplier);
+      return this.mapPortalExitVelocity(
+        velocity,
+        localVelocity,
+        destinationTangent,
+        destinationNormal,
+        pair,
+      );
     });
 
     this.rider.setPortalCooldown(pair.id, pair.physics.cooldownFrames);
@@ -237,7 +238,7 @@ export class PhysicsEngine {
   }
 
   private resolveSafeExitPoint(destination: PortalEndpoint, candidate: Vec2): Vec2 {
-    const normal = portalNormal(destination.rotation);
+    const outward = portalNormal(destination.rotation).scale(-1);
     const clearance = Math.max(4, destination.radius * 0.45);
     let resolved = candidate;
     for (let i = 0; i < 12; i++) {
@@ -248,8 +249,28 @@ export class PhysicsEngine {
       if (!blocked) {
         return resolved;
       }
-      resolved = resolved.add(normal.scale(Math.max(3, clearance * 0.8)));
+      resolved = resolved.add(outward.scale(Math.max(3, clearance * 0.8)));
     }
     return resolved;
+  }
+
+  private mapPortalExitVelocity(
+    worldVelocity: Vec2,
+    localVelocity: Vec2,
+    destinationTangent: Vec2,
+    destinationNormal: Vec2,
+    pair: PortalPair,
+  ): Vec2 {
+    const scaledSpeed = worldVelocity.length() * pair.physics.speedMultiplier;
+    if (pair.physics.exitDirection === 'forward' || pair.physics.exitDirection === 'backward') {
+      const sign = pair.physics.exitDirection === 'forward' ? 1 : -1;
+      return destinationTangent.scale(sign * scaledSpeed);
+    }
+    if (pair.physics.velocityMode === 'world') {
+      return worldVelocity.scale(pair.physics.speedMultiplier);
+    }
+    return destinationTangent.scale(localVelocity.x)
+      .add(destinationNormal.scale(localVelocity.y))
+      .scale(pair.physics.speedMultiplier);
   }
 }

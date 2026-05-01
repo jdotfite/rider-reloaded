@@ -7,6 +7,7 @@ import { LineType } from '../../src/physics/lines/LineTypes';
 import { LineTool } from '../../src/input/tools/LineTool';
 import { EditTool } from '../../src/input/tools/EditTool';
 import { DrawEditTool } from '../../src/input/tools/DrawEditTool';
+import { PortalTool } from '../../src/input/tools/PortalTool';
 
 function installWindowStub() {
   const stub = {
@@ -37,6 +38,32 @@ function createDrawEditTool(store: TrackStore) {
     () => 24,
   );
   return new DrawEditTool('line', rawLineTool, editTool);
+}
+
+function createDrawEditPortalTool(store: TrackStore) {
+  const rawLineTool = new LineTool(
+    store,
+    () => LineType.SOLID,
+    () => true,
+    () => false,
+    () => 24,
+    () => 1,
+  );
+  const editTool = new EditTool(
+    store,
+    () => 1,
+    () => true,
+    () => false,
+    () => 24,
+  );
+  const portalTool = new PortalTool(
+    store,
+    () => 1,
+    () => true,
+    () => false,
+    () => 24,
+  );
+  return { tool: new DrawEditTool('line', rawLineTool, portalTool, editTool), portalTool };
 }
 
 test('dragging an already active straight line in draw mode moves it without converting it to bezier', () => {
@@ -197,4 +224,23 @@ test('double-click conversion preserves flipped ride side on the new curve', () 
   assert.equal(store.bezierPaths.length, 1);
   assert.equal(store.bezierPaths[0].flipped, true);
   assert.equal(store.bezierPaths[0].lineIds.every((lineId) => store.lines.find((candidate) => candidate.id === lineId)?.flipped === true), true);
+});
+
+test('clicking a portal while on the line tool selects the portal instead of starting a new line', () => {
+  installWindowStub();
+
+  const store = new TrackStore();
+  const pair = store.addPortalPair(new Vec2(0, 0), new Vec2(40, 0), {
+    entryRotation: 0,
+    exitRotation: 0,
+  });
+  assert.ok(pair);
+  const { tool, portalTool } = createDrawEditPortalTool(store);
+
+  const hit = new Vec2(0, 0);
+  tool.onMouseDown(hit, hit, 0);
+  tool.onMouseUp(hit, hit, 0);
+
+  assert.equal(store.lines.length, 0);
+  assert.equal(portalTool.getSelectedPortalId(), pair!.id);
 });

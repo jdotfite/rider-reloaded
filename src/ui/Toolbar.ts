@@ -4,6 +4,7 @@ import { ICONS } from './icons';
 import type {
   PortalColorTheme,
   PortalDirectionRule,
+  PortalExitDirection,
   PortalMode,
   PortalPair,
   PortalTriggerBody,
@@ -79,6 +80,7 @@ export class Toolbar {
   onPortalSpeedMultiplierChange: ((multiplier: number) => void) | null = null;
   onPortalPreserveOffsetChange: ((enabled: boolean) => void) | null = null;
   onPortalDirectionRuleChange: ((rule: PortalDirectionRule) => void) | null = null;
+  onPortalExitDirectionChange: ((direction: PortalExitDirection) => void) | null = null;
   onPortalTriggerBodyChange: ((body: PortalTriggerBody) => void) | null = null;
   onPortalCooldownChange: ((frames: number) => void) | null = null;
   onPortalExitOffsetChange: ((offset: number) => void) | null = null;
@@ -118,6 +120,7 @@ export class Toolbar {
   private portalRadiusValue!: HTMLElement;
   private portalPreserveOffset!: HTMLInputElement;
   private portalDirectionRule!: HTMLSelectElement;
+  private portalExitDirection!: HTMLSelectElement;
   private portalTriggerBody!: HTMLSelectElement;
   private portalExitOffset!: HTMLInputElement;
   private portalExitOffsetValue!: HTMLElement;
@@ -356,6 +359,7 @@ export class Toolbar {
     this.portalRadiusValue = document.getElementById('portal-radius-value') as HTMLElement;
     this.portalPreserveOffset = document.getElementById('portal-preserve-offset') as HTMLInputElement;
     this.portalDirectionRule = document.getElementById('portal-direction-rule') as HTMLSelectElement;
+    this.portalExitDirection = document.getElementById('portal-exit-direction') as HTMLSelectElement;
     this.portalTriggerBody = document.getElementById('portal-trigger-body') as HTMLSelectElement;
     this.portalExitOffset = document.getElementById('portal-exit-offset') as HTMLInputElement;
     this.portalExitOffsetValue = document.getElementById('portal-exit-offset-value') as HTMLElement;
@@ -406,6 +410,14 @@ export class Toolbar {
           ? 'backOnly'
           : 'any';
       this.onPortalDirectionRuleChange?.(rule);
+    });
+    this.portalExitDirection?.addEventListener('change', () => {
+      const direction = this.portalExitDirection.value === 'forward'
+        ? 'forward'
+        : this.portalExitDirection.value === 'backward'
+          ? 'backward'
+          : 'inherit';
+      this.onPortalExitDirectionChange?.(direction);
     });
     this.portalTriggerBody?.addEventListener('change', () => {
       const body = this.portalTriggerBody.value === 'center'
@@ -842,6 +854,7 @@ export class Toolbar {
     this.portalRadius.disabled = disableFields;
     this.portalPreserveOffset.disabled = disableFields;
     this.portalDirectionRule.disabled = disableFields;
+    this.portalExitDirection.disabled = disableFields;
     this.portalTriggerBody.disabled = disableFields;
     this.portalExitOffset.disabled = disableFields;
     this.portalShowLink.disabled = disableFields;
@@ -854,6 +867,7 @@ export class Toolbar {
       this.portalModeOneWay.classList.remove('active');
       this.portalModeTwoWay.classList.remove('active');
       this.portalTheme.value = 'violet';
+      this.portalExitDirection.value = 'inherit';
       this.portalShowLink.checked = false;
       this.portalShowDebug.checked = false;
       this.portalEnabled.checked = true;
@@ -872,6 +886,7 @@ export class Toolbar {
     this.portalRadiusValue.textContent = this.portalRadius.value;
     this.portalPreserveOffset.checked = portal.physics.preserveLocalOffset;
     this.portalDirectionRule.value = portal.physics.entryDirectionRule;
+    this.portalExitDirection.value = portal.physics.exitDirection;
     this.portalTriggerBody.value = portal.physics.triggerBody;
     this.portalExitOffset.value = String(portal.physics.exitOffset);
     this.portalExitOffsetValue.textContent = this.portalExitOffset.value;

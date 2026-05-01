@@ -9,6 +9,7 @@ import {
   PortalColorTheme,
   PortalEndpointKey,
   PortalDirectionRule,
+  PortalExitDirection,
   PortalMode,
   PortalPair,
   PortalTriggerBody,
@@ -58,9 +59,11 @@ export class PortalTool implements Tool {
   private getEndpointSnapEnabled: () => boolean;
   private getGridSnapEnabled: () => boolean;
   private getGridSize: () => number;
+  private isIdlePreviewEnabled: () => boolean;
   private shiftHeld = false;
   private state: PortalToolState = 'idle';
   private pendingEntry: Vec2 | null = null;
+  private pendingEntryRotation = 0;
   private previewPos = new Vec2();
   private idlePreviewPos: Vec2 | null = null;
   private idlePreviewRotation = 0;
@@ -80,12 +83,14 @@ export class PortalTool implements Tool {
     getEndpointSnapEnabled: () => boolean = () => false,
     getGridSnapEnabled: () => boolean = () => false,
     getGridSize: () => number = () => 24,
+    isIdlePreviewEnabled: () => boolean = () => true,
   ) {
     this.store = store;
     this.getZoom = getZoom;
     this.getEndpointSnapEnabled = getEndpointSnapEnabled;
     this.getGridSnapEnabled = getGridSnapEnabled;
     this.getGridSize = getGridSize;
+    this.isIdlePreviewEnabled = isIdlePreviewEnabled;
     window.addEventListener('keydown', this.onWindowKeyDown);
     window.addEventListener('keyup', this.onWindowKeyUp);
   }
@@ -163,8 +168,17 @@ export class PortalTool implements Tool {
     this.clearSelection();
     const snapped = this.applySnap(worldPos);
     this.pendingEntry = snapped;
+    this.pendingEntryRotation = this.getPlacementRotation(snapped, 0);
     this.previewPos = snapped.clone();
     this.state = 'placing';
+  }
+
+  canStartInteraction(worldPos: Vec2): boolean {
+    if (this.pendingEntry) return false;
+    if (this.findSelectedHandle(worldPos)) return true;
+    if (this.findPairHandle(worldPos)) return true;
+    if (this.store.getPortalEndpointAt(worldPos, this.worldHandleRadius())) return true;
+    return this.store.getPortalAt(worldPos, this.worldBodyPadding()) !== null;
   }
 
   onMouseMove(worldPos: Vec2) {
@@ -179,9 +193,33 @@ export class PortalTool implements Tool {
     }
 
     if (this.selectedPortalId === null) {
-      const snapped = this.applySnap(worldPos);
-      this.idlePreviewPos = snapped;
-      this.idlePreviewRotation = this.getPreviewRotation(snapped);
+      if (this.isIdlePreviewEnabled()) {
+        const snapped = this.applySnap(worldPos);
+        this.idlePreviewPos = snapped;
+        this.idlePreviewRotation = this.getPreviewRotation(snapped);
+      } else {
+        this.idlePreviewPos = null;
+        this.snapPreview = null;
+      }
+
+      const endpointHit = this.store.getPortalEndpointAt(worldPos, this.worldHandleRadius());
+      if (endpointHit) {
+        this.hoveredHandle = {
+          portalId: endpointHit.portalId,
+          endpoint: endpointHit.endpoint,
+          handle: 'position',
+        };
+        return;
+      }
+      const bodyHit = this.store.getPortalAt(worldPos, this.worldBodyPadding());
+      if (bodyHit) {
+        this.hoveredHandle = {
+          portalId: bodyHit.id,
+          endpoint: this.pickNearestEndpoint(bodyHit, worldPos),
+          handle: 'position',
+        };
+        return;
+      }
     } else {
       this.idlePreviewPos = null;
       this.snapPreview = null;
@@ -203,6 +241,7 @@ export class PortalTool implements Tool {
       if (this.pendingEntry) {
         e.preventDefault();
         this.pendingEntry = null;
+        this.pendingEntryRotation = 0;
         this.state = 'idle';
         return;
       }
@@ -306,17 +345,19 @@ export class PortalTool implements Tool {
   }
 
   render(ctx: CanvasRenderingContext2D) {
-    if (!this.pendingEntry && this.idlePreviewPos && this.selectedPortalId === null) {
+    if (!this.pendingEntry && this.isIdlePreviewEnabled() && this.idlePreviewPos && this.selectedPortalId === null) {
       this.drawPreviewPortal(ctx, this.idlePreviewPos, this.idlePreviewRotation, '#111111', 0.42);
     }
 
     if (this.pendingEntry) {
-      const angle = this.previewPos.sub(this.pendingEntry).lengthSq() > 1
+      const fallbackAngle = this.previewPos.sub(this.pendingEntry).lengthSq() > 1
         ? this.quantizeAngle(Math.atan2(this.previewPos.y - this.pendingEntry.y, this.previewPos.x - this.pendingEntry.x))
-        : 0;
+        : this.pendingEntryRotation;
+      const entryAngle = this.getPlacementRotation(this.pendingEntry, fallbackAngle);
+      const exitAngle = this.getPlacementRotation(this.previewPos, fallbackAngle);
       this.drawPreviewLink(ctx, this.pendingEntry, this.previewPos);
-      this.drawPreviewPortal(ctx, this.pendingEntry, angle, '#6f6cff', 0.72);
-      this.drawPreviewPortal(ctx, this.previewPos, angle, '#36d1ff', 0.84);
+      this.drawPreviewPortal(ctx, this.pendingEntry, entryAngle, '#6f6cff', 0.72);
+      this.drawPreviewPortal(ctx, this.previewPos, exitAngle, '#36d1ff', 0.84);
     }
 
     const portal = this.getSelectedPortal();
@@ -392,6 +433,14 @@ export class PortalTool implements Tool {
     return this.pendingEntry !== null;
   }
 
+  cancelPlacement() {
+    this.pendingEntry = null;
+    this.pendingEntryRotation = 0;
+    this.snapPreview = null;
+    this.idlePreviewPos = null;
+    this.state = 'idle';
+  }
+
   clearSelection() {
     this.selectedPortalId = null;
     this.dragHandle = null;
@@ -427,6 +476,12 @@ export class PortalTool implements Tool {
     const portal = this.getSelectedPortal();
     if (!portal) return;
     this.store.updatePortalPhysics(portal.id, { entryDirectionRule: rule });
+  }
+
+  setSelectedExitDirection(direction: PortalExitDirection) {
+    const portal = this.getSelectedPortal();
+    if (!portal) return;
+    this.store.updatePortalPhysics(portal.id, { exitDirection: direction });
   }
 
   setSelectedTriggerBody(body: PortalTriggerBody) {
@@ -523,12 +578,15 @@ export class PortalTool implements Tool {
   private commitPortal(exitPosition: Vec2) {
     if (!this.pendingEntry) return;
     const delta = exitPosition.sub(this.pendingEntry);
-    const angle = delta.lengthSq() > 1 ? this.quantizeAngle(Math.atan2(delta.y, delta.x)) : 0;
+    const fallbackAngle = delta.lengthSq() > 1 ? this.quantizeAngle(Math.atan2(delta.y, delta.x)) : this.pendingEntryRotation;
+    const entryRotation = this.getPlacementRotation(this.pendingEntry, fallbackAngle);
+    const exitRotation = this.getPlacementRotation(exitPosition, fallbackAngle);
     const pair = this.store.addPortalPair(this.pendingEntry, exitPosition, {
-      entryRotation: angle,
-      exitRotation: angle,
+      entryRotation,
+      exitRotation,
     });
     this.pendingEntry = null;
+    this.pendingEntryRotation = 0;
     this.state = 'idle';
     if (pair) {
       this.selectPortal(pair.id, 'exit');
@@ -749,6 +807,12 @@ export class PortalTool implements Tool {
   private getPreviewRotation(worldPos: Vec2): number {
     const line = this.store.getLineAt(worldPos, (SELECT_RADIUS * 2.5) / this.getZoom());
     if (!line || line.length <= 0.0001) return 0;
+    return this.quantizeAngle(Math.atan2(line.delta.y, line.delta.x));
+  }
+
+  private getPlacementRotation(worldPos: Vec2, fallback: number): number {
+    const line = this.store.getLineAt(worldPos, (SELECT_RADIUS * 2.5) / this.getZoom());
+    if (!line || line.length <= 0.0001) return fallback;
     return this.quantizeAngle(Math.atan2(line.delta.y, line.delta.x));
   }
 

@@ -5,6 +5,7 @@ import cloud4Raw from '../img/cloud-4.svg?raw';
 import { Vec2 } from '../math/Vec2';
 import { LINE_WIDTH } from '../constants';
 import { splitSvgPathSubpaths } from './svgPath';
+import { type GeneratorAsset, type GeneratorSettings, buildPreviewMarkup as buildGeneratorPreviewSvg } from '../generators/catalog';
 
 export interface StampSegment {
   p1: Vec2;
@@ -202,4 +203,42 @@ function pointsMatch(ax: number, ay: number, bx: number, by: number): boolean {
 
 function formatSvgNumber(value: number): string {
   return Number(value.toFixed(2)).toString();
+}
+
+/** Wrap SVG cloud stamps as GeneratorAssets so they share the same placement UI */
+export function buildCloudGeneratorAssets(): GeneratorAsset[] {
+  const stampAssets = buildCloudStampAssets();
+  return stampAssets.map((stamp) => {
+    const scaleControl = {
+      key: 'scale',
+      label: 'Size',
+      min: 0.3,
+      max: 3.0,
+      step: 0.1,
+      defaultValue: 1.0,
+      format: (v: number) => `${v.toFixed(1)}×`,
+    };
+    const defaultSettings: GeneratorSettings = { scale: 1.0 };
+
+    const asset: GeneratorAsset = {
+      id: stamp.id,
+      name: stamp.name,
+      description: 'A scenery cloud shape. Works with any line type and can be flipped.',
+      controls: [scaleControl],
+      defaultSettings,
+      previewMarkup: buildGeneratorPreviewSvg(
+        stamp.segments.map(s => ({ p1: s.p1, p2: s.p2, leftExtended: s.leftExtended, rightExtended: s.rightExtended })),
+      ),
+      createSegments(settings: GeneratorSettings) {
+        const scale = Math.max(0.01, settings.scale ?? 1.0);
+        return stamp.segments.map((s) => ({
+          p1: s.p1.scale(scale),
+          p2: s.p2.scale(scale),
+          leftExtended: s.leftExtended,
+          rightExtended: s.rightExtended,
+        }));
+      },
+    };
+    return asset;
+  });
 }

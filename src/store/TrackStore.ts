@@ -1198,6 +1198,12 @@ export class TrackStore {
               : candidate.physics?.entryDirectionRule === 'backOnly'
                 ? 'backOnly'
                 : 'any',
+          exitDirection:
+            candidate.physics?.exitDirection === 'forward'
+              ? 'forward'
+              : candidate.physics?.exitDirection === 'backward'
+                ? 'backward'
+                : 'inherit',
           triggerBody:
             candidate.physics?.triggerBody === 'center'
               ? 'center'
@@ -1277,6 +1283,7 @@ export class TrackStore {
       speedMultiplier: 1,
       preserveLocalOffset: false,
       entryDirectionRule: 'any',
+      exitDirection: 'inherit',
       triggerBody: 'auto',
       cooldownFrames: 10,
       exitOffset: 3,

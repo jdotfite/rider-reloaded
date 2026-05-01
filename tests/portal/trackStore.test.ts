@@ -26,6 +26,7 @@ test('portal helpers rotate, swap, and serialize advanced state', () => {
   store.updatePortalPhysics(pair!.id, {
     triggerBody: 'front',
     entryDirectionRule: 'backOnly',
+    exitDirection: 'backward',
     exitOffset: 9,
   });
   store.updatePortalVisual(pair!.id, {
@@ -46,6 +47,7 @@ test('portal helpers rotate, swap, and serialize advanced state', () => {
 
   assert.equal(restored.physics.triggerBody, 'front');
   assert.equal(restored.physics.entryDirectionRule, 'backOnly');
+  assert.equal(restored.physics.exitDirection, 'backward');
   assert.equal(restored.physics.exitOffset, 9);
   assert.equal(restored.visual.colorTheme, 'amber');
   assert.equal(restored.visual.visibility, 'activation');
