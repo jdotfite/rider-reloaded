@@ -1,9 +1,10 @@
 import { Vec2 } from '../../math/Vec2';
 import { Tool } from './Tool';
 import { TrackStore } from '../../store/TrackStore';
-import { SNAP_RADIUS } from '../../constants';
+import { SELECT_RADIUS, SNAP_RADIUS } from '../../constants';
 import { LineType } from '../../physics/lines/LineTypes';
 import {
+  DEFAULT_PORTAL_LENGTH,
   DEFAULT_PORTAL_RADIUS,
   PortalColorTheme,
   PortalEndpointKey,
@@ -24,6 +25,13 @@ import {
   portalTangent,
   worldToPortalLocal,
 } from '../../portal/portalMath';
+import {
+  buildPortalArchPath,
+  buildPortalLipPath,
+  buildPortalSketchMetrics,
+  getPortalFrontStubSegments,
+  tracePortalPath,
+} from '../../portal/portalSketch';
 import {
   PointSnapResult,
   renderPointSnapIndicator,
@@ -54,12 +62,16 @@ export class PortalTool implements Tool {
   private state: PortalToolState = 'idle';
   private pendingEntry: Vec2 | null = null;
   private previewPos = new Vec2();
+  private idlePreviewPos: Vec2 | null = null;
+  private idlePreviewRotation = 0;
   private selectedPortalId: number | null = null;
   private activeEndpoint: PortalEndpointKey = 'entry';
   private dragHandle: HandleHit | null = null;
   private hoveredHandle: HandleHit | null = null;
   private dragCurrent = new Vec2();
   private pairRotateAngle = 0;
+  private endpointRotateStartAngle = 0;
+  private endpointRotateStartRotation = 0;
   private snapPreview: PointSnapResult | null = null;
 
   constructor(
@@ -96,6 +108,17 @@ export class PortalTool implements Tool {
           : selectedHandle.handle === 'length'
             ? 'dragging-length'
             : 'idle';
+      if (selectedHandle.handle === 'rotation') {
+        const portal = this.store.getPortalById(selectedHandle.portalId);
+        const endpoint = portal?.[selectedHandle.endpoint];
+        if (endpoint) {
+          this.endpointRotateStartAngle = Math.atan2(
+            worldPos.y - endpoint.position.y,
+            worldPos.x - endpoint.position.x,
+          );
+          this.endpointRotateStartRotation = endpoint.rotation;
+        }
+      }
       this.store.beginTransaction();
       return;
     }
@@ -155,7 +178,14 @@ export class PortalTool implements Tool {
       return;
     }
 
-    this.snapPreview = null;
+    if (this.selectedPortalId === null) {
+      const snapped = this.applySnap(worldPos);
+      this.idlePreviewPos = snapped;
+      this.idlePreviewRotation = this.getPreviewRotation(snapped);
+    } else {
+      this.idlePreviewPos = null;
+      this.snapPreview = null;
+    }
     this.hoveredHandle = this.findSelectedHandle(worldPos) ?? this.findPairHandle(worldPos);
   }
 
@@ -276,6 +306,10 @@ export class PortalTool implements Tool {
   }
 
   render(ctx: CanvasRenderingContext2D) {
+    if (!this.pendingEntry && this.idlePreviewPos && this.selectedPortalId === null) {
+      this.drawPreviewPortal(ctx, this.idlePreviewPos, this.idlePreviewRotation, '#111111', 0.42);
+    }
+
     if (this.pendingEntry) {
       const angle = this.previewPos.sub(this.pendingEntry).lengthSq() > 1
         ? this.quantizeAngle(Math.atan2(this.previewPos.y - this.pendingEntry.y, this.previewPos.x - this.pendingEntry.x))
@@ -362,7 +396,6 @@ export class PortalTool implements Tool {
     this.selectedPortalId = null;
     this.dragHandle = null;
     this.hoveredHandle = null;
-    this.snapPreview = null;
     this.state = this.pendingEntry ? 'placing' : 'idle';
   }
 
@@ -507,6 +540,7 @@ export class PortalTool implements Tool {
     this.selectedPortalId = portalId;
     this.activeEndpoint = endpoint;
     this.hoveredHandle = null;
+    this.idlePreviewPos = null;
   }
 
   private pickNearestEndpoint(portal: PortalPair, point: Vec2): PortalEndpointKey {
@@ -547,8 +581,10 @@ export class PortalTool implements Tool {
     this.snapPreview = null;
     if (handle.handle === 'rotation') {
       const delta = worldPos.sub(endpoint.position);
-      const angle = this.quantizeAngle(Math.atan2(delta.y, delta.x));
-      this.store.updatePortalEndpoint(portal.id, handle.endpoint, { rotation: angle });
+      const pointerAngle = Math.atan2(delta.y, delta.x);
+      const angleDelta = this.normalizeAngleDelta(pointerAngle - this.endpointRotateStartAngle);
+      const rotation = this.quantizeAngle(this.endpointRotateStartRotation + angleDelta);
+      this.store.updatePortalEndpoint(portal.id, handle.endpoint, { rotation });
       this.dragCurrent = worldPos.clone();
       return;
     }
@@ -651,16 +687,69 @@ export class PortalTool implements Tool {
     ctx.save();
     ctx.translate(position.x, position.y);
     ctx.rotate(rotation);
-    const half = 17;
-    const radius = 10;
+    const metrics = buildPortalSketchMetrics(DEFAULT_PORTAL_LENGTH, DEFAULT_PORTAL_RADIUS);
+    const arch = buildPortalArchPath(metrics);
+    const backArch = buildPortalArchPath(metrics, metrics.backOffset);
+    const lip = buildPortalLipPath(metrics);
+    const stubs = getPortalFrontStubSegments(metrics);
+
+    ctx.fillStyle = this.withAlpha('#111111', alpha * 0.06);
     ctx.beginPath();
-    ctx.roundRect(-half, -radius, half * 2, radius * 2, radius);
-    ctx.fillStyle = this.withAlpha(color, alpha * 0.22);
-    ctx.strokeStyle = this.withAlpha(color, alpha);
-    ctx.lineWidth = 2 / this.getZoom();
+    ctx.ellipse(
+      metrics.shadowCenter.x,
+      metrics.shadowCenter.y,
+      metrics.shadowRx,
+      metrics.shadowRy,
+      0,
+      0,
+      Math.PI * 2,
+    );
     ctx.fill();
+
+    ctx.fillStyle = this.withAlpha('#ffffff', alpha * 0.58);
+    ctx.beginPath();
+    ctx.ellipse(
+      metrics.fieldCenter.x,
+      metrics.fieldCenter.y,
+      metrics.fieldRx,
+      metrics.fieldRy,
+      0,
+      0,
+      Math.PI * 2,
+    );
+    ctx.fill();
+
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+
+    ctx.beginPath();
+    tracePortalPath(ctx, backArch);
+    ctx.strokeStyle = this.withAlpha('#777777', alpha * 0.82);
+    ctx.lineWidth = 2 / this.getZoom();
+    ctx.stroke();
+
+    ctx.beginPath();
+    tracePortalPath(ctx, arch);
+    ctx.strokeStyle = this.withAlpha('#111111', alpha * 0.92);
+    ctx.lineWidth = 2.25 / this.getZoom();
+    ctx.stroke();
+
+    ctx.beginPath();
+    tracePortalPath(ctx, lip);
+    for (const stub of stubs) {
+      ctx.moveTo(stub.start.x, stub.start.y);
+      ctx.lineTo(stub.end.x, stub.end.y);
+    }
+    ctx.strokeStyle = this.withAlpha('#111111', alpha * 0.46);
+    ctx.lineWidth = 1.25 / this.getZoom();
     ctx.stroke();
     ctx.restore();
+  }
+
+  private getPreviewRotation(worldPos: Vec2): number {
+    const line = this.store.getLineAt(worldPos, (SELECT_RADIUS * 2.5) / this.getZoom());
+    if (!line || line.length <= 0.0001) return 0;
+    return this.quantizeAngle(Math.atan2(line.delta.y, line.delta.x));
   }
 
   private drawHandle(ctx: CanvasRenderingContext2D, position: Vec2, color: string, radius: number) {

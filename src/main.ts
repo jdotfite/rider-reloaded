@@ -1845,18 +1845,14 @@ renderer.addRenderCallback((ctx) => {
     portalFxEvents.shift();
   }
   const selectedPortalDiagnostics = currentTool === portalTool ? portalTool.getDiagnostics() : null;
-  portalRenderer.render(ctx, store.portals, store.layers, {
+  const portalRenderOptions = {
     selectedPortalId: currentTool === portalTool ? portalTool.getSelectedPortalId() : null,
     activeEndpoint: currentTool === portalTool ? portalTool.getActiveEndpoint() : null,
     editing: gameLoop.state !== GameState.PLAYING,
     events: portalFxEvents,
     warningEndpoints: selectedPortalDiagnostics?.warningEndpoints ?? null,
-  });
-
-  // Draw active tool preview (editing or paused)
-  if (gameLoop.state !== GameState.PLAYING && currentTool.render) {
-    currentTool.render(ctx);
-  }
+  };
+  portalRenderer.renderBackdrop(ctx, store.portals, store.layers, portalRenderOptions);
 
   // Draw triggers (edit mode or paused)
   triggerRenderer.render(ctx, triggerStore.triggers, gameLoop.state !== GameState.PLAYING);
@@ -1878,6 +1874,13 @@ renderer.addRenderCallback((ctx) => {
   // Draw rider
   const renderData = rider.getRenderData(renderAlpha);
   renderVehicle(ctx, renderData);
+
+  portalRenderer.renderForeground(ctx, store.portals, store.layers, portalRenderOptions);
+
+  // Draw active tool preview last so editor handles stay readable above the portal front rim.
+  if (gameLoop.state !== GameState.PLAYING && currentTool.render) {
+    currentTool.render(ctx);
+  }
 
   // Debug overlays: momentum vectors and contact points (visible when paused)
   if (gameLoop.state === GameState.PAUSED) {

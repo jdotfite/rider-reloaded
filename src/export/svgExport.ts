@@ -5,6 +5,13 @@ import { COLOR_SOLID, COLOR_ACC, COLOR_SCENERY, LINE_WIDTH } from '../constants'
 import type { TrackLayer } from '../store/TrackStore';
 import type { PortalPair } from '../store/PortalTypes';
 import { getPortalThemePalette } from '../portal/portalTheme';
+import {
+  buildPortalArchPath,
+  buildPortalLipPath,
+  buildPortalSketchMetrics,
+  getPortalFrontStubSegments,
+  portalPathToSvg,
+} from '../portal/portalSketch';
 
 const TYPE_COLORS: Record<LineType, string> = {
   [LineType.SOLID]: COLOR_SOLID,
@@ -111,17 +118,22 @@ function buildPortalGroups(portals: PortalPair[], layers: TrackLayer[]): string 
 }
 
 function buildPortalEndpointSvg(position: Vec2, rotation: number, length: number, radius: number, color: string): string {
+  const metrics = buildPortalSketchMetrics(length, radius);
+  const backArch = portalPathToSvg(buildPortalArchPath(metrics, metrics.backOffset));
+  const frontArch = portalPathToSvg(buildPortalArchPath(metrics));
+  const lip = portalPathToSvg(buildPortalLipPath(metrics));
+  const stubs = getPortalFrontStubSegments(metrics)
+    .map(stub => `M ${stub.start.x} ${stub.start.y} L ${stub.end.x} ${stub.end.y}`)
+    .join(' ');
   const x = r(position.x);
   const y = r(position.y);
-  const width = r(length);
-  const height = r(radius * 2);
-  const rx = r(radius);
-  const half = length / 2;
-  const arrowY = radius * 0.58;
   return [
     `      <g transform="translate(${x} ${y}) rotate(${r(rotation * 180 / Math.PI)})">`,
-    `        <rect x="${r(-half)}" y="${r(-radius)}" width="${width}" height="${height}" rx="${rx}" fill="${withAlpha(color, 0.18)}" stroke="${color}" stroke-width="2" />`,
-    `        <path d="M ${r(-5)} ${r(radius * 0.12)} L 0 ${r(arrowY)} L ${r(5)} ${r(radius * 0.12)}" fill="none" stroke="${color}" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" />`,
+    `        <ellipse cx="${r(metrics.fieldCenter.x)}" cy="${r(metrics.fieldCenter.y)}" rx="${r(metrics.fieldRx)}" ry="${r(metrics.fieldRy)}" fill="${withAlpha('#ffffff', 0.74)}" />`,
+    `        <ellipse cx="${r(metrics.fieldCenter.x)}" cy="${r(metrics.fieldCenter.y)}" rx="${r(metrics.fieldRx * 0.96)}" ry="${r(metrics.fieldRy * 0.9)}" fill="none" stroke="${withAlpha(color, 0.05)}" stroke-width="0.85" />`,
+    `        <path d="${backArch}" fill="none" stroke="${withAlpha('#737373', 0.62)}" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />`,
+    `        <path d="${frontArch}" fill="none" stroke="#111111" stroke-width="2.45" stroke-linecap="round" stroke-linejoin="round" />`,
+    `        <path d="${lip} ${stubs}" fill="none" stroke="${withAlpha('#111111', 0.42)}" stroke-width="1.28" stroke-linecap="round" stroke-linejoin="round" />`,
     '      </g>\n',
   ].join('\n');
 }
@@ -132,15 +144,41 @@ function portalBounds(portal: PortalPair) {
   let minY = Infinity;
   let maxY = -Infinity;
   for (const endpoint of [portal.entry, portal.exit]) {
-    const half = endpoint.length / 2;
+    const metrics = buildPortalSketchMetrics(endpoint.length, endpoint.radius);
+    const localPoints = [
+      new Vec2(-metrics.halfSpan, metrics.footY),
+      new Vec2(metrics.halfSpan, metrics.footY),
+      new Vec2(0, metrics.crownY),
+      metrics.backOffset.add(new Vec2(-metrics.halfSpan, metrics.footY)),
+      metrics.backOffset.add(new Vec2(metrics.halfSpan, metrics.footY)),
+      metrics.backOffset.add(new Vec2(0, metrics.crownY)),
+      new Vec2(
+        metrics.fieldCenter.x - metrics.fieldRx,
+        metrics.fieldCenter.y - metrics.fieldRy,
+      ),
+      new Vec2(
+        metrics.fieldCenter.x + metrics.fieldRx,
+        metrics.fieldCenter.y + metrics.fieldRy,
+      ),
+      new Vec2(
+        metrics.shadowCenter.x - metrics.shadowRx,
+        metrics.shadowCenter.y - metrics.shadowRy,
+      ),
+      new Vec2(
+        metrics.shadowCenter.x + metrics.shadowRx,
+        metrics.shadowCenter.y + metrics.shadowRy,
+      ),
+    ];
     const cos = Math.cos(endpoint.rotation);
     const sin = Math.sin(endpoint.rotation);
-    const xExtent = Math.abs(cos) * half + Math.abs(sin) * endpoint.radius;
-    const yExtent = Math.abs(sin) * half + Math.abs(cos) * endpoint.radius;
-    minX = Math.min(minX, endpoint.position.x - xExtent);
-    maxX = Math.max(maxX, endpoint.position.x + xExtent);
-    minY = Math.min(minY, endpoint.position.y - yExtent);
-    maxY = Math.max(maxY, endpoint.position.y + yExtent);
+    for (const point of localPoints) {
+      const worldX = endpoint.position.x + point.x * cos - point.y * sin;
+      const worldY = endpoint.position.y + point.x * sin + point.y * cos;
+      minX = Math.min(minX, worldX);
+      maxX = Math.max(maxX, worldX);
+      minY = Math.min(minY, worldY);
+      maxY = Math.max(maxY, worldY);
+    }
   }
   return { minX, maxX, minY, maxY };
 }
