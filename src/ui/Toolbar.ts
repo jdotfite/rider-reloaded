@@ -131,6 +131,7 @@ export class Toolbar {
   private portalCooldownValue!: HTMLElement;
   private portalVisibility!: HTMLSelectElement;
   private portalAdvancedMode = false;
+  private setSidebarInspectorOpenInternal: ((open: boolean) => void) | null = null;
   private endpointSnapCheckbox!: HTMLInputElement;
   private gridCheckbox!: HTMLInputElement;
   private gridSnapCheckbox!: HTMLInputElement;
@@ -622,6 +623,15 @@ export class Toolbar {
       dockInspectorBtn.setAttribute('aria-label', dockInspectorBtn.title);
     };
 
+    const persistSidebarInspectorMode = (open: boolean) => {
+      sidebarInspectorOpen = open;
+      applySidebarInspectorMode(open);
+      try {
+        window.localStorage.setItem(sidebarInspectorKey, open ? 'true' : 'false');
+      } catch {}
+    };
+    this.setSidebarInspectorOpenInternal = persistSidebarInspectorMode;
+
     const applyLeftRailCollapse = (collapsed: boolean) => {
       document.body.classList.toggle('left-rail-collapsed', collapsed);
       mountToolGrid();
@@ -651,22 +661,14 @@ export class Toolbar {
       } catch {}
     });
     dockInspectorBtn?.addEventListener('click', () => {
-      sidebarInspectorOpen = !sidebarInspectorOpen;
-      applySidebarInspectorMode(sidebarInspectorOpen);
-      try {
-        window.localStorage.setItem(sidebarInspectorKey, sidebarInspectorOpen ? 'true' : 'false');
-      } catch {}
+      persistSidebarInspectorMode(!sidebarInspectorOpen);
     });
     dockUndoBtn?.addEventListener('click', () => this.onUndo?.());
     dockRedoBtn?.addEventListener('click', () => this.onRedo?.());
 
     const inspectorCloseBtn = document.getElementById('inspector-close') as HTMLButtonElement | null;
     inspectorCloseBtn?.addEventListener('click', () => {
-      sidebarInspectorOpen = false;
-      applySidebarInspectorMode(false);
-      try {
-        window.localStorage.setItem(sidebarInspectorKey, 'false');
-      } catch {}
+      persistSidebarInspectorMode(false);
     });
     window.addEventListener('resize', () => {
       mountToolGrid();
@@ -720,6 +722,10 @@ export class Toolbar {
     stepBack?.addEventListener('click', () => this.onStepBack?.());
   }
 
+  setInspectorOpen(open: boolean) {
+    this.setSidebarInspectorOpenInternal?.(open);
+  }
+
   private setActiveSpeed(speed: number) {
     for (const btn of this.speedButtons) {
       const btnSpeed = parseFloat(btn.dataset.speed || '1');
@@ -733,9 +739,6 @@ export class Toolbar {
       btn.classList.toggle('active', n === name);
     }
     this.syncSelectionPanelVisibility();
-    if (this.portalSettings) {
-      this.portalSettings.style.display = name === 'portal' ? 'block' : 'none';
-    }
   }
 
   setEndpointSnapEnabled(enabled: boolean) {
@@ -821,6 +824,9 @@ export class Toolbar {
     diagnostics: { messages: string[] } | null = null,
   ) {
     if (!this.portalSettings) return;
+    if (active) {
+      this.setInspectorOpen(true);
+    }
     this.portalSettings.style.display = active ? '' : 'none';
     if (!active) return;
 

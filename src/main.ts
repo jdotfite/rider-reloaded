@@ -473,6 +473,9 @@ const gameLoop = new GameLoop(physics, () => {
     selectTool.hasSelectedAccelerationLines(),
   );
   const portalInspectorActive = currentToolName === 'portal' || portalTool.isPlacing() || portalTool.getSelectedPortalId() !== null;
+  if (portalInspectorActive) {
+    toolbar.setInspectorOpen(true);
+  }
   const portalDiagnostics = portalInspectorActive ? portalTool.getDiagnostics() : null;
   toolbar.setPortalState(
     portalInspectorActive,
