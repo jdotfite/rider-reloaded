@@ -21,7 +21,7 @@ import {
   MAX_PORTAL_RADIUS,
 } from '../../store/PortalTypes';
 import {
-  pointInsidePortalCapsule,
+  pointInsidePortalVisibleShape,
   portalNormal,
   portalTangent,
   worldToPortalLocal,
@@ -673,7 +673,7 @@ export class PortalTool implements Tool {
       if (worldPos.distanceToSq(lengthHandle) <= handleRadius * handleRadius) {
         return { portalId: portal.id, endpoint: endpointKey, handle: 'length' };
       }
-      if (pointInsidePortalCapsule(worldPos, endpoint, this.worldBodyPadding())) {
+      if (pointInsidePortalVisibleShape(worldPos, endpoint, this.worldBodyPadding())) {
         return { portalId: portal.id, endpoint: endpointKey, handle: 'position' };
       }
     }

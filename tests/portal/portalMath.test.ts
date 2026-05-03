@@ -4,6 +4,7 @@ import assert from 'node:assert/strict';
 import { Vec2 } from '../../src/math/Vec2';
 import {
   pointInsidePortalCapsule,
+  pointInsidePortalVisibleShape,
   portalLocalToWorld,
   worldToPortalLocal,
 } from '../../src/portal/portalMath';
@@ -33,4 +34,13 @@ test('portal capsule hit detection respects rotation and bounds', () => {
 
   assert.equal(pointInsidePortalCapsule(new Vec2(50, 68), endpoint), true);
   assert.equal(pointInsidePortalCapsule(new Vec2(50, 89), endpoint), false);
+});
+
+test('portal visible-shape hit detection matches the tall drawn arch', () => {
+  const endpoint = createPortalEndpoint(new Vec2(50, 60), 0);
+  endpoint.length = 34;
+  endpoint.radius = 10;
+
+  assert.equal(pointInsidePortalVisibleShape(new Vec2(50, 42), endpoint), true);
+  assert.equal(pointInsidePortalVisibleShape(new Vec2(50, 33), endpoint), false);
 });

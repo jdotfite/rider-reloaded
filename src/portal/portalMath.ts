@@ -1,5 +1,6 @@
 import { Vec2 } from '../math/Vec2';
 import type { PortalEndpoint } from '../store/PortalTypes';
+import { buildPortalSketchMetrics } from './portalSketch';
 
 export function rotateVec(v: Vec2, angle: number): Vec2 {
   const c = Math.cos(angle);
@@ -44,4 +45,25 @@ export function distanceSqToPortalCapsule(point: Vec2, endpoint: PortalEndpoint,
 
 export function pointInsidePortalCapsule(point: Vec2, endpoint: PortalEndpoint, padding = 0): boolean {
   return distanceSqToPortalCapsule(point, endpoint, padding) <= 0;
+}
+
+export function distanceSqToPortalVisibleShape(point: Vec2, endpoint: PortalEndpoint, padding = 0): number {
+  const local = worldToPortalLocal(point, endpoint);
+  const metrics = buildPortalSketchMetrics(endpoint.length, endpoint.radius);
+  const rx = metrics.halfSpan + padding;
+  const ry = (metrics.footY - metrics.crownY) + padding;
+  const bottom = metrics.footY + Math.max(padding, endpoint.radius * 0.22);
+  const normalized =
+    (local.x * local.x) / Math.max(0.0001, rx * rx) +
+    (local.y * local.y) / Math.max(0.0001, ry * ry);
+
+  if (local.y <= bottom && local.y >= metrics.crownY - padding && normalized <= 1) {
+    return 0;
+  }
+
+  return distanceSqToPortalCapsule(point, endpoint, padding);
+}
+
+export function pointInsidePortalVisibleShape(point: Vec2, endpoint: PortalEndpoint, padding = 0): boolean {
+  return distanceSqToPortalVisibleShape(point, endpoint, padding) <= 0;
 }

@@ -27,7 +27,7 @@ import {
   MIN_PORTAL_RADIUS,
   MAX_PORTAL_RADIUS,
 } from './PortalTypes';
-import { distanceSqToPortalCapsule, rotateVec } from '../portal/portalMath';
+import { distanceSqToPortalVisibleShape, rotateVec } from '../portal/portalMath';
 
 export interface SerializedTrackLine {
   id: number;
@@ -264,8 +264,8 @@ export class TrackStore {
     const toRemove = this.portals.filter(portal => {
       if (portal.layer !== this.activeLayerId) return false;
       return (
-        distanceSqToPortalCapsule(point, portal.entry, radius) <= 0 ||
-        distanceSqToPortalCapsule(point, portal.exit, radius) <= 0
+        distanceSqToPortalVisibleShape(point, portal.entry, radius) <= 0 ||
+        distanceSqToPortalVisibleShape(point, portal.exit, radius) <= 0
       );
     });
     if (toRemove.length === 0) return 0;
@@ -754,12 +754,12 @@ export class TrackStore {
     let bestDist = radius * radius;
     for (const portal of this.portals) {
       if (portal.layer !== this.activeLayerId) continue;
-      const entryDist = distanceSqToPortalCapsule(point, portal.entry, radius);
+      const entryDist = distanceSqToPortalVisibleShape(point, portal.entry, radius);
       if (entryDist <= bestDist) {
         bestDist = entryDist;
         bestPortal = portal;
       }
-      const exitDist = distanceSqToPortalCapsule(point, portal.exit, radius);
+      const exitDist = distanceSqToPortalVisibleShape(point, portal.exit, radius);
       if (exitDist <= bestDist) {
         bestDist = exitDist;
         bestPortal = portal;

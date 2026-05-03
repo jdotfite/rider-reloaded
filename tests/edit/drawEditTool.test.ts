@@ -244,3 +244,22 @@ test('clicking a portal while on the line tool selects the portal instead of sta
   assert.equal(store.lines.length, 0);
   assert.equal(portalTool.getSelectedPortalId(), pair!.id);
 });
+
+test('clicking the visible upper arch of a portal selects it from the line tool', () => {
+  installWindowStub();
+
+  const store = new TrackStore();
+  const pair = store.addPortalPair(new Vec2(0, 0), new Vec2(40, 0), {
+    entryRotation: 0,
+    exitRotation: 0,
+  });
+  assert.ok(pair);
+  const { tool, portalTool } = createDrawEditPortalTool(store);
+
+  const visibleArchPoint = new Vec2(0, -18);
+  tool.onMouseDown(visibleArchPoint, visibleArchPoint, 0);
+  tool.onMouseUp(visibleArchPoint, visibleArchPoint, 0);
+
+  assert.equal(store.lines.length, 0);
+  assert.equal(portalTool.getSelectedPortalId(), pair!.id);
+});
