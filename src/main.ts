@@ -143,6 +143,11 @@ const statBeat = document.getElementById('stat-beat') as HTMLElement;
 const metronomeFlash = document.getElementById('metronome-flash') as HTMLElement;
 let lastBeatIndex = -1; // track which beat we were on to detect crossings
 let portalCameraBias: { target: Vec2; strength: number; framesLeft: number } | null = null;
+let portalCameraSnap: Vec2 | null = null;
+let portalExitRamp: { startTime: number; normalSpeed: number } | null = null;
+const PORTAL_SLOWMO_SPEED = 0.25;
+const PORTAL_SLOWMO_MS = 160;
+const PORTAL_RAMP_MS = 420;
 let endpointSnapEnabled = editorPreferences.endpointSnapEnabled;
 const paperGrid: EditorGridSettings = { ...editorPreferences.paperGrid };
 
@@ -194,11 +199,23 @@ physics.onPortalTeleport = (event) => {
     startedAt: performance.now(),
   });
   portalAudio.playTeleport(event.theme, event.speed);
+  // Snap camera 70% toward exit immediately so it's already in position when
+  // the rider emerges — eliminates the "camera racing across the map" jolt.
+  portalCameraSnap = event.exitPosition.clone();
+  // Residual bias handles the remaining 30% over a few frames.
   portalCameraBias = {
     target: event.exitPosition.clone(),
-    strength: 0.42,
-    framesLeft: 10,
+    strength: 0.18,
+    framesLeft: 6,
   };
+  // Temporal ramp: rider exits in slow-motion then eases back to normal speed.
+  if (gameLoop.state === GameState.PLAYING) {
+    portalExitRamp = {
+      startTime: performance.now(),
+      normalSpeed: gameLoop.playbackSpeed,
+    };
+    gameLoop.playbackSpeed = PORTAL_SLOWMO_SPEED;
+  }
 };
 
 // Sub-renderers
@@ -1878,6 +1895,8 @@ function startPlayback() {
     riderPositions.length = 0; // clear beat position history
     lastBeatIndex = -1;
     portalCameraBias = null;
+    portalCameraSnap = null;
+    portalExitRamp = null;
     // Start audio from beginning
     audioSeekFrame(0);
   } else if (gameLoop.state === GameState.PAUSED) {
@@ -1892,6 +1911,11 @@ function stopPlayback() {
   gameLoop.stop();
   portalFxEvents.length = 0;
   portalCameraBias = null;
+  portalCameraSnap = null;
+  if (portalExitRamp) {
+    gameLoop.playbackSpeed = portalExitRamp.normalSpeed;
+    portalExitRamp = null;
+  }
   rider.setStartPosition(store.startPosition);
   resetVehicleRenderers();
   cameraFollowing = false;
@@ -2146,6 +2170,13 @@ renderer.addRenderCallback((ctx) => {
       camera.zoom += (targetZoom - camera.zoom) * 0.05;
     }
 
+    // Instant camera pre-jump: snap 70% toward exit on the frame teleport fires.
+    if (portalCameraSnap) {
+      camera.position.x += (portalCameraSnap.x - camera.position.x) * 0.7;
+      camera.position.y += (portalCameraSnap.y - camera.position.y) * 0.7;
+      portalCameraSnap = null;
+    }
+
     let fx = focusTarget ? focusTarget.x : predictedX;
     let fy = focusTarget ? focusTarget.y : predictedY;
     if (portalCameraBias && portalCameraBias.framesLeft > 0) {
@@ -2157,6 +2188,21 @@ renderer.addRenderCallback((ctx) => {
         portalCameraBias = null;
       }
     }
+
+    // Temporal ramp: ease playbackSpeed back to normal after portal slow-mo.
+    if (portalExitRamp) {
+      const elapsed = performance.now() - portalExitRamp.startTime;
+      if (elapsed >= PORTAL_SLOWMO_MS) {
+        const t = Math.min(1, (elapsed - PORTAL_SLOWMO_MS) / PORTAL_RAMP_MS);
+        const eased = t * t * (3 - 2 * t); // smoothstep
+        gameLoop.playbackSpeed = lerp(PORTAL_SLOWMO_SPEED, portalExitRamp.normalSpeed, eased);
+        if (t >= 1) {
+          gameLoop.playbackSpeed = portalExitRamp.normalSpeed;
+          portalExitRamp = null;
+        }
+      }
+    }
+
     // Speed-adaptive smoothing: still responsive at speed, but calmer overall.
     const smoothing = lerp(0.025, 0.065, cameraFollowT)
       + Math.min(lerp(0.025, 0.105, cameraFollowT), speed * lerp(0.005, 0.035, cameraFollowT));
