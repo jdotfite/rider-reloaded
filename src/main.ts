@@ -473,9 +473,6 @@ const gameLoop = new GameLoop(physics, () => {
     selectTool.hasSelectedAccelerationLines(),
   );
   const portalInspectorActive = currentToolName === 'portal' || portalTool.isPlacing() || portalTool.getSelectedPortalId() !== null;
-  if (portalInspectorActive) {
-    toolbar.setInspectorOpen(true);
-  }
   const portalDiagnostics = portalInspectorActive ? portalTool.getDiagnostics() : null;
   toolbar.setPortalState(
     portalInspectorActive,
@@ -1297,6 +1294,57 @@ if (layersFloat && layersFloatHandle) {
 
   document.addEventListener('mouseup', () => { isDragging = false; });
 }
+
+// ── Floating Portal Editor Panel ──
+const portalFloat = document.getElementById('portal-float') as HTMLElement | null;
+const portalFloatHandle = document.getElementById('portal-float-handle') as HTMLElement | null;
+const portalFloatClose = document.getElementById('portal-float-close') as HTMLButtonElement | null;
+
+portalFloatClose?.addEventListener('click', () => {
+  if (portalFloat) portalFloat.style.display = 'none';
+  portalTool.clearSelection();
+});
+
+if (portalFloat && portalFloatHandle) {
+  let isDragging = false;
+  let dragOffsetX = 0;
+  let dragOffsetY = 0;
+
+  portalFloatHandle.addEventListener('mousedown', (e) => {
+    if (e.button !== 0) return;
+    isDragging = true;
+    const rect = portalFloat.getBoundingClientRect();
+    dragOffsetX = e.clientX - rect.left;
+    dragOffsetY = e.clientY - rect.top;
+    e.preventDefault();
+  });
+
+  document.addEventListener('mousemove', (e) => {
+    if (!isDragging) return;
+    const x = Math.max(0, Math.min(window.innerWidth - portalFloat.offsetWidth, e.clientX - dragOffsetX));
+    const y = Math.max(0, Math.min(window.innerHeight - portalFloat.offsetHeight, e.clientY - dragOffsetY));
+    portalFloat.style.left = `${x}px`;
+    portalFloat.style.top = `${y}px`;
+    portalFloat.style.right = 'auto';
+  });
+
+  document.addEventListener('mouseup', () => { isDragging = false; });
+}
+
+toolbar.onPortalDelete = () => {
+  const id = portalTool.getSelectedPortalId();
+  if (id !== null) store.removePortalPair(id);
+};
+
+toolbar.onPortalDuplicate = () => {
+  const portal = portalTool.getSelectedPortal();
+  if (portal) store.duplicatePortalPair(portal.id, 20, 20);
+};
+
+toolbar.onPortalSwap = () => {
+  const id = portalTool.getSelectedPortalId();
+  if (id !== null) store.swapPortalEndpoints(id);
+};
 
 // Layer rename modal
 if (layerRenameSave && layerRenameCancel && layerRenameInput) {

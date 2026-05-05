@@ -86,7 +86,6 @@
 
       /* — layout — */
       --sidebar-left-w: 76px;
-      --sidebar-right-w: 248px;
       --topbar-h: 58px;
     }
 
@@ -571,22 +570,6 @@
       transform: scaleX(-1);
     }
 
-    /* ── Inspector panel header ── */
-    #inspector-header {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      padding: var(--sp-2) var(--sp-3);
-      border-bottom: 1px solid var(--border-light);
-      flex-shrink: 0;
-    }
-    #inspector-close {
-      width: 26px; height: 26px;
-      background: transparent; border: none; border-radius: var(--radius-sm);
-      cursor: pointer; display: flex; align-items: center; justify-content: center;
-      color: var(--ink-muted);
-    }
-    #inspector-close:hover { background: var(--bg-hover); color: var(--ink); }
 
     /* ── Topbar line-type-strip ── */
     #top-center-slot #line-type-strip {
@@ -808,27 +791,20 @@
       border-color: var(--bg-active);
       color: var(--ink-inverse);
     }
-    #dock-inspector-btn {
-      background: rgba(255,255,255,0.96);
-      border-color: rgba(17,17,17,0.1);
-      color: var(--ink);
-    }
-    #dock-inspector-btn:hover {
-      background: rgba(255,255,255,1);
-      border-color: rgba(17,17,17,0.16);
-      color: var(--ink);
-    }
-    #dock-inspector-btn.active {
-      background: rgba(255,255,255,0.96);
-      border-color: rgba(17,17,17,0.14);
-      color: var(--ink);
+    /* ── Selection float panel ── */
+    #smooth-container {
+      position: fixed;
+      top: 80px;
+      right: 20px;
+      width: 240px;
+      background: rgba(255,255,255,0.98);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.12);
+      padding: var(--sp-3);
+      z-index: 200;
     }
 
-    /* — Track type (line type) — */
-    /* — Tool options (Inspector panel) — */
-    #tool-options {
-      padding: var(--sp-1) var(--sp-3);
-    }
     #vehicle-picker-btn {
       width: calc(100% - var(--sp-6));
       margin: 0 var(--sp-3);
@@ -1014,60 +990,117 @@
       opacity: 0.45;
       cursor: not-allowed;
     }
-    #portal-settings {
-      display: none;
-      margin-top: var(--sp-2);
-      padding: var(--sp-2);
-      border: 1px solid var(--border-light);
-      border-radius: var(--radius-md);
-      background: linear-gradient(180deg, rgba(241,244,255,0.95), rgba(255,255,255,0.92));
+    /* ── Portal Float Panel ── */
+    #portal-float {
+      position: fixed;
+      top: 80px;
+      right: 260px;
+      width: 360px;
+      background: #fff;
+      border-radius: 16px;
+      box-shadow: 0 8px 32px rgba(0,0,0,0.16), 0 1px 4px rgba(0,0,0,0.10);
+      border: 1px solid rgba(0,0,0,0.08);
+      z-index: 200;
+      overflow: hidden;
     }
-    .portal-panel-header {
+    #portal-float-handle {
       display: flex;
-      align-items: flex-start;
-      justify-content: space-between;
+      align-items: center;
       gap: var(--sp-2);
-      margin-bottom: var(--sp-2);
+      padding: 10px var(--sp-3);
+      background: var(--bg);
+      border-bottom: 1px solid var(--border-light);
+      cursor: grab;
+      user-select: none;
     }
-    .portal-panel-heading {
+    #portal-float-handle:active { cursor: grabbing; }
+    #portal-float-handle > span {
+      flex: 1;
+      font: 700 var(--text-sm)/1 var(--font);
+      color: var(--ink);
+    }
+    #portal-float-close {
+      display: flex; align-items: center; justify-content: center;
+      width: 24px; height: 24px;
+      padding: 0;
+      border: none; background: transparent;
+      border-radius: var(--radius-sm);
+      color: var(--ink-muted); cursor: pointer;
+    }
+    #portal-float-close:hover { background: var(--bg-hover); color: var(--ink); }
+    .portal-float-tabs {
       display: grid;
-      gap: 4px;
+      grid-template-columns: 1fr 1fr;
+      border-bottom: 1px solid var(--border-light);
     }
-    .portal-panel-title {
-      font: 700 var(--text-xs)/1 var(--font);
-      letter-spacing: 0.12em;
-      text-transform: uppercase;
+    .portal-float-tabs button {
+      height: 34px;
+      border: none;
+      border-radius: 0;
+      background: transparent;
+      font: 600 var(--text-sm)/1 var(--font);
       color: var(--ink-muted);
+      cursor: pointer;
+      transition: background var(--transition-fast), color var(--transition-fast);
+    }
+    .portal-float-tabs button:first-child { border-right: 1px solid var(--border-light); }
+    .portal-float-tabs button.active {
+      background: var(--ink);
+      color: #fff;
+    }
+    .portal-float-tabs button:hover:not(.active) { background: var(--bg-hover); color: var(--ink); }
+    .portal-float-body {
+      padding: var(--sp-3);
+      display: grid;
+      gap: var(--sp-2);
+      max-height: calc(100vh - 220px);
+      overflow-y: auto;
+    }
+    .portal-float-footer {
+      display: flex;
+      align-items: center;
+      gap: var(--sp-1);
+      padding: var(--sp-2) var(--sp-3);
+      border-top: 1px solid var(--border-light);
+    }
+    .portal-footer-spacer { flex: 1; }
+    .portal-float-footer button {
+      display: flex; align-items: center; justify-content: center;
+      width: 32px; height: 32px;
+      padding: 0;
+      border: 1px solid var(--border);
+      background: var(--bg);
+      border-radius: var(--radius-md);
+      color: var(--ink-muted); cursor: pointer;
+      transition: background var(--transition-fast), color var(--transition-fast), border-color var(--transition-fast);
+    }
+    .portal-float-footer button:hover { background: var(--bg-hover); color: var(--ink); }
+    #portal-delete-btn:hover {
+      color: #c94040;
+      border-color: rgba(201,64,64,0.3);
+      background: rgba(201,64,64,0.06);
     }
     #portal-selection-status {
-      font: 600 var(--text-xs)/1 var(--font-mono);
-      color: var(--ink-secondary);
-      white-space: nowrap;
+      font: 700 15px/1.2 var(--font);
+      color: var(--ink);
     }
     #portal-empty-hint {
       font: 500 var(--text-xs)/1.45 var(--font);
       color: var(--ink-muted);
     }
-    .portal-detail-toggle {
-      min-width: 146px;
-    }
-    .portal-detail-toggle button {
-      min-height: 30px;
-      font-size: var(--text-xs);
-      letter-spacing: 0.06em;
-      text-transform: uppercase;
-    }
     #portal-warning-box {
-      margin-top: var(--sp-2);
+      display: flex;
+      align-items: flex-start;
+      gap: var(--sp-2);
       padding: 8px 10px;
       border-radius: var(--radius-md);
-      border: 1px solid rgba(198, 81, 81, 0.18);
-      background: rgba(255, 242, 242, 0.88);
+      border: 1px solid rgba(198,81,81,0.22);
+      background: rgba(255,242,242,0.9);
       color: #9b2d2d;
-      font: 600 var(--text-xs)/1.45 var(--font);
+      font: 500 var(--text-xs)/1.45 var(--font);
     }
+    #portal-warning-box svg { flex-shrink: 0; margin-top: 1px; }
     .portal-shortcuts {
-      margin-top: var(--sp-2);
       color: var(--ink-muted);
       font: 500 var(--text-xs)/1.45 var(--font);
     }
@@ -1088,11 +1121,9 @@
     #portal-settings-fields {
       display: grid;
       gap: var(--sp-2);
-      margin-top: var(--sp-2);
     }
     #portal-advanced-fields {
-      display: grid;
-      gap: var(--sp-2);
+      display: contents;
     }
     .portal-segmented {
       display: grid;
@@ -1103,6 +1134,7 @@
       min-height: var(--control-h);
       border-radius: var(--radius-md);
       font-size: var(--text-sm);
+      font-weight: 600;
     }
     .portal-segmented button.active {
       background: var(--bg-active);
@@ -1111,21 +1143,32 @@
     }
     .portal-field {
       display: grid;
-      grid-template-columns: 72px minmax(0, 1fr) auto;
+      grid-template-columns: 90px minmax(0, 1fr) auto;
       align-items: center;
       gap: var(--sp-2);
       font: 600 var(--text-xs)/1 var(--font);
       color: var(--ink-secondary);
     }
     .portal-field span {
-      letter-spacing: 0.08em;
-      text-transform: uppercase;
-      color: var(--ink-muted);
+      color: var(--ink);
+      font: 500 var(--text-xs)/1 var(--font);
     }
-    .portal-field input[type="range"],
+    .portal-field input[type="range"] { width: 100%; }
     .portal-field select {
       width: 100%;
+      height: var(--control-h);
+      padding: 0 22px 0 8px;
+      -webkit-appearance: none; appearance: none;
+      background: var(--bg) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%23888' stroke-width='1.5' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") no-repeat right 7px center;
+      border: 1px solid var(--border);
+      border-radius: var(--radius-md);
+      font: 600 var(--text-xs)/1 var(--font);
+      color: var(--ink);
+      cursor: pointer;
     }
+    .portal-field select:hover { border-color: var(--color-gray-400); }
+    .portal-field select:focus { outline: none; border-color: var(--border-focus); }
+    .portal-field select + .portal-inline-value { display: none; }
     .portal-inline-value {
       min-width: 40px;
       text-align: right;
@@ -1137,15 +1180,16 @@
       grid-template-columns: 1fr 1fr;
       gap: var(--sp-1);
     }
-    #portal-settings .tool-option-label {
+    #portal-float .tool-option-label {
       padding: var(--sp-2);
       margin: 0;
       border: 1px solid rgba(17,17,17,0.08);
-      background: rgba(255,255,255,0.72);
+      border-radius: var(--radius-md);
+      background: var(--bg-alt);
     }
-    #portal-settings button:disabled,
-    #portal-settings input:disabled,
-    #portal-settings select:disabled {
+    #portal-float button:disabled,
+    #portal-float input:disabled,
+    #portal-float select:disabled {
       opacity: 0.45;
       cursor: not-allowed;
     }
@@ -2264,7 +2308,6 @@
         --sidebar-left-w: 72px;
       }
       #main { grid-template-columns: var(--sidebar-left-w) 1fr; }
-      #sidebar-right { width: 212px; }
       #left-dock-tools,
       #left-dock-library {
         padding-left: 6px;
@@ -2276,10 +2319,6 @@
         padding: 7px 3px;
       }
       .tool-label { font-size: 10px; }
-      #file-actions,
-      #tool-options {
-        border-top-color: var(--border-light);
-      }
       #vehicle-picker-btn {
         width: calc(100% - var(--sp-4));
         margin: 0 var(--sp-2);
@@ -2460,22 +2499,13 @@
       #smooth-slider-row > div:first-child { margin-top: 4px; }
       #smooth-slider-row > div:last-child { margin-top: 4px; }
 
-      #portal-settings {
-        margin-top: 0; padding: 8px; border-radius: 12px;
-        border: 1px solid rgba(17,17,17,0.08);
-        background: rgba(244,247,252,0.95);
-        box-shadow: 0 4px 14px rgba(17,17,17,0.06);
-      }
-      #portal-settings .tool-option-label { display: flex; padding: 6px; }
       .portal-field {
         grid-template-columns: 55px minmax(0,1fr) auto; gap: 5px;
       }
-      .portal-field span, .portal-panel-title,
+      .portal-field span,
       #portal-selection-status, #portal-empty-hint,
       .portal-shortcuts, #portal-warning-box { font-size: 10px; }
       .portal-segmented button { min-height: 30px; font-size: 10px; }
-      .portal-panel-header { align-items: stretch; }
-      .portal-detail-toggle { min-width: 110px; }
       .portal-inline-value { min-width: 30px; font-size: 10px; }
       .portal-checkbox-grid { grid-template-columns: 1fr; }
 
@@ -2732,8 +2762,11 @@
           <button id="dock-redo-btn" class="dock-utility-button" type="button" title="Redo" aria-label="Redo">
             <svg class="icon" viewBox="0 0 24 24"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
           </button>
-          <button id="dock-inspector-btn" class="dock-utility-button" type="button" title="Show inspector" aria-label="Show inspector" aria-pressed="false">
-            <svg class="icon" viewBox="0 0 24 24"><circle cx="6" cy="12" r="1.6" fill="currentColor" stroke="none"/><circle cx="12" cy="12" r="1.6" fill="currentColor" stroke="none"/><circle cx="18" cy="12" r="1.6" fill="currentColor" stroke="none"/></svg>
+          <button id="dock-onion-btn" class="dock-utility-button" type="button" title="Onion skin" aria-label="Onion skin" aria-pressed="false">
+            <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg>
+          </button>
+          <button id="dock-snap-btn" class="dock-utility-button" type="button" title="Snap to endpoints" aria-label="Snap to endpoints" aria-pressed="true">
+            <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 15a6 6 0 1 0 12 0c0-3.5-3-7-6-11C9 8 6 11.5 6 15z"/><path d="M12 21v-3"/></svg>
           </button>
         </div>
       </aside>
@@ -2749,197 +2782,50 @@
         </div>
       </div>
 
-      <!-- RIGHT SIDEBAR — Inspector/Properties panel, toggled by inspector button -->
+      <!-- RIGHT SIDEBAR — kept for mobile tool-grid placement only -->
       <aside id="sidebar-right">
-        <div id="inspector-header">
-          <span class="section-label" style="border:none; padding:0;">Properties</span>
-          <button id="inspector-close" type="button" aria-label="Close inspector">
-            <svg class="icon icon-sm" viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-          </button>
-        </div>
         <div id="file-actions"></div>
-
-        <div id="tool-options">
-          <label class="tool-option-label" id="onion-toggle">
-            <input type="checkbox" id="onion-checkbox" />
-            <span>Onion skin</span>
-          </label>
-          <label class="tool-option-label" id="snap-toggle">
-            <input type="checkbox" id="snap-checkbox" checked />
-            <span>Snap to endpoints</span>
-          </label>
-          <!-- Grid settings moved to Settings modal -->
-          <div id="grid-settings-panel" style="display:none !important">
-            <div class="grid-settings-header">
-              <span class="grid-settings-title">Paper Grid</span>
-              <span class="grid-settings-shortcuts"><kbd>G</kbd> / <kbd>Shift</kbd>+<kbd>G</kbd></span>
-            </div>
-            <label class="tool-option-label" id="grid-toggle">
-              <input type="checkbox" id="grid-checkbox" checked />
-              <span>Grid background</span>
-            </label>
-            <label class="tool-option-label" id="grid-snap-toggle">
-              <input type="checkbox" id="grid-snap-checkbox" />
-              <span>Snap to grid</span>
-            </label>
-            <div class="grid-size-row">
-              <label for="grid-size-input">Grid size</label>
-              <span id="grid-size-value">24</span>
-            </div>
-            <input type="range" id="grid-size-input" min="8" max="64" step="2" value="24" />
-            <div class="grid-settings-hint">World-aligned graph paper that stays locked to the track while you pan or zoom.</div>
-          </div>
-          <div id="smooth-container">
-            <div class="select-action-header">
-              <span class="select-action-title">Selected Lines</span>
-              <span id="selected-count">No selection</span>
-            </div>
-            <div id="convert-type-strip">
-              <button id="convert-solid-btn" type="button" title="Convert selected lines to normal (Q)">Normal</button>
-              <button id="convert-accel-btn" type="button" title="Convert selected lines to accel (W)">Accel</button>
-              <button id="convert-scene-btn" type="button" title="Convert selected lines to scenery (E)">Scene</button>
-            </div>
-            <div class="select-action-hint">Convert existing lines without redrawing them. Keyboard: Q / W / E.</div>
-            <div id="select-utility-strip">
-              <button id="reverse-btn" type="button" style="padding:var(--sp-1) var(--sp-2); background:var(--bg-hover); border:1px solid var(--border); border-radius:4px; cursor:pointer; color:var(--ink);" title="Flip the rideable side of the selected lines (F)">Flip Ride Side (F)</button>
-              <button id="reverse-accel-btn" type="button" style="padding:var(--sp-1) var(--sp-2); background:var(--bg-hover); border:1px solid var(--border); border-radius:4px; cursor:pointer; color:var(--ink);" title="Reverse acceleration direction on selected red lines">Reverse Accel</button>
-              <button id="smooth-btn" type="button" style="padding:var(--sp-1) var(--sp-2); background:var(--bg-hover); border:1px solid var(--border); border-radius:4px; cursor:pointer; color:var(--ink);" title="Select lines then click to smooth (S)">Smooth (S)</button>
-            </div>
-            <div class="select-action-hint">Blue/red lines can now split rideable side from red-line boost direction.</div>
-            <div id="smooth-slider-row" style="display:none;">
-              <div style="display:flex; align-items:center; gap:var(--sp-1); margin-top:var(--sp-1);">
-                <input type="range" id="smooth-slider" min="0" max="100" value="0" style="flex:1; accent-color:#4488cc;" />
-                <span id="smooth-value" style="font-size:var(--text-xs); color:var(--ink-muted); min-width:28px; text-align:right;">0%</span>
-              </div>
-              <div style="display:flex; gap:var(--sp-1); margin-top:var(--sp-1);">
-                <button id="smooth-apply" style="flex:1; padding:var(--sp-1); background:#4488cc; color:#fff; border:none; border-radius:4px; cursor:pointer; font-size:var(--text-sm);">Apply</button>
-                <button id="smooth-cancel" style="flex:1; padding:var(--sp-1); background:var(--bg-hover); border:1px solid var(--border); border-radius:4px; cursor:pointer; font-size:var(--text-sm); color:var(--ink);">Cancel</button>
-              </div>
-            </div>
-          </div>
-          <div id="portal-settings">
-            <div class="portal-panel-header">
-              <div class="portal-panel-heading">
-                <span class="portal-panel-title">Portal Pair</span>
-                <span id="portal-selection-status">Place entry</span>
-              </div>
-              <div class="portal-detail-toggle portal-segmented">
-                <button id="portal-detail-simple" type="button" class="active">Simple</button>
-                <button id="portal-detail-advanced" type="button">Advanced</button>
-              </div>
-            </div>
-            <div id="portal-empty-hint">Click once to place the entry portal, then click again to place the exit. Select a portal to rotate or stretch its endpoints.</div>
-            <div id="portal-warning-box" style="display:none;"></div>
-            <div class="portal-shortcuts">Portal keys: <kbd>Tab</kbd> switch end, <kbd>Arrows</kbd> nudge, <kbd>Alt</kbd>+<kbd>Arrows</kbd> move pair, <kbd>[</kbd>/<kbd>]</kbd> rotate, <kbd>X</kbd> swap ends.</div>
-            <div id="portal-settings-fields">
-              <div class="portal-segmented">
-                <button id="portal-mode-oneway" type="button">One Way</button>
-                <button id="portal-mode-twoway" type="button">Two Way</button>
-              </div>
-              <label class="portal-field">
-                <span>Theme</span>
-                <select id="portal-theme">
-                  <option value="violet">Violet</option>
-                  <option value="amber">Amber</option>
-                  <option value="mint">Mint</option>
-                </select>
-                <strong class="portal-inline-value"></strong>
-              </label>
-              <label class="portal-field">
-                <span>Velocity</span>
-                <select id="portal-velocity-mode">
-                  <option value="remap">Remap</option>
-                  <option value="world">World</option>
-                </select>
-                <strong class="portal-inline-value"></strong>
-              </label>
-              <label class="portal-field">
-                <span>Speed</span>
-                <input type="range" id="portal-speed-mult" min="0.25" max="3" step="0.05" value="1" />
-                <strong id="portal-speed-value" class="portal-inline-value">1.00x</strong>
-              </label>
-              <label class="portal-field">
-                <span>Exit Travel</span>
-                <select id="portal-exit-direction">
-                  <option value="inherit">Preserve Entry</option>
-                  <option value="forward">Along Portal</option>
-                  <option value="backward">Against Portal</option>
-                </select>
-                <strong class="portal-inline-value"></strong>
-              </label>
-              <label class="portal-field">
-                <span>Size</span>
-                <input type="range" id="portal-size" min="18" max="84" step="1" value="34" />
-                <strong id="portal-size-value" class="portal-inline-value">34</strong>
-              </label>
-              <div id="portal-advanced-fields">
-                <label class="portal-field">
-                  <span>Width</span>
-                  <input type="range" id="portal-radius" min="6" max="28" step="1" value="10" />
-                  <strong id="portal-radius-value" class="portal-inline-value">10</strong>
-                </label>
-                <label class="portal-field">
-                  <span>Trigger</span>
-                  <select id="portal-trigger-body">
-                    <option value="auto">Auto</option>
-                    <option value="center">Center</option>
-                    <option value="front">Front</option>
-                    <option value="rear">Rear</option>
-                  </select>
-                  <strong class="portal-inline-value"></strong>
-                </label>
-                <label class="portal-field">
-                  <span>Direction</span>
-                  <select id="portal-direction-rule">
-                    <option value="any">Any</option>
-                    <option value="frontOnly">Front Only</option>
-                    <option value="backOnly">Back Only</option>
-                  </select>
-                  <strong class="portal-inline-value"></strong>
-                </label>
-                <label class="portal-field">
-                  <span>Exit Push</span>
-                  <input type="range" id="portal-exit-offset" min="0" max="30" step="1" value="3" />
-                  <strong id="portal-exit-offset-value" class="portal-inline-value">3</strong>
-                </label>
-                <div class="portal-checkbox-grid">
-                  <label class="tool-option-label">
-                    <input type="checkbox" id="portal-preserve-offset" />
-                    <span>Preserve offset</span>
-                  </label>
-                  <label class="tool-option-label">
-                    <input type="checkbox" id="portal-show-link" />
-                    <span>Show pair link</span>
-                  </label>
-                  <label class="tool-option-label">
-                    <input type="checkbox" id="portal-show-debug" />
-                    <span>Debug overlay</span>
-                  </label>
-                  <label class="tool-option-label">
-                    <input type="checkbox" id="portal-enabled" checked />
-                    <span>Enabled</span>
-                  </label>
-                </div>
-                <label class="portal-field">
-                  <span>Cooldown</span>
-                  <input type="range" id="portal-cooldown" min="0" max="60" step="1" value="10" />
-                  <strong id="portal-cooldown-value" class="portal-inline-value">10f</strong>
-                </label>
-                <label class="portal-field">
-                  <span>Playback</span>
-                  <select id="portal-visibility">
-                    <option value="subtle">Subtle</option>
-                    <option value="always">Always</option>
-                    <option value="activation">On Trigger</option>
-                  </select>
-                  <strong class="portal-inline-value"></strong>
-                </label>
-              </div>
-            </div>
-          </div>
-        </div>
-
       </aside>
+    </div>
+
+    <!-- Hidden toggle state (referenced by Toolbar.ts) -->
+    <div style="display:none" aria-hidden="true">
+      <input type="checkbox" id="onion-checkbox" />
+      <input type="checkbox" id="snap-checkbox" checked />
+      <input type="checkbox" id="grid-checkbox" checked />
+      <input type="checkbox" id="grid-snap-checkbox" />
+      <input type="range" id="grid-size-input" min="8" max="64" step="2" value="24" />
+      <span id="grid-size-value">24</span>
+    </div>
+
+    <!-- Selection float panel (shown when select tool is active) -->
+    <div id="smooth-container" style="display:none;">
+      <div class="select-action-header">
+        <span class="select-action-title">Selected Lines</span>
+        <span id="selected-count">No selection</span>
+      </div>
+      <div id="convert-type-strip">
+        <button id="convert-solid-btn" type="button" title="Convert selected lines to normal (Q)">Normal</button>
+        <button id="convert-accel-btn" type="button" title="Convert selected lines to accel (W)">Accel</button>
+        <button id="convert-scene-btn" type="button" title="Convert selected lines to scenery (E)">Scene</button>
+      </div>
+      <div class="select-action-hint">Convert existing lines without redrawing them. Keyboard: Q / W / E.</div>
+      <div id="select-utility-strip">
+        <button id="reverse-btn" type="button" style="padding:var(--sp-1) var(--sp-2); background:var(--bg-hover); border:1px solid var(--border); border-radius:4px; cursor:pointer; color:var(--ink);" title="Flip the rideable side of the selected lines (F)">Flip Ride Side (F)</button>
+        <button id="reverse-accel-btn" type="button" style="padding:var(--sp-1) var(--sp-2); background:var(--bg-hover); border:1px solid var(--border); border-radius:4px; cursor:pointer; color:var(--ink);" title="Reverse acceleration direction on selected red lines">Reverse Accel</button>
+        <button id="smooth-btn" type="button" style="padding:var(--sp-1) var(--sp-2); background:var(--bg-hover); border:1px solid var(--border); border-radius:4px; cursor:pointer; color:var(--ink);" title="Select lines then click to smooth (S)">Smooth (S)</button>
+      </div>
+      <div class="select-action-hint">Blue/red lines can now split rideable side from red-line boost direction.</div>
+      <div id="smooth-slider-row" style="display:none;">
+        <div style="display:flex; align-items:center; gap:var(--sp-1); margin-top:var(--sp-1);">
+          <input type="range" id="smooth-slider" min="0" max="100" value="0" style="flex:1; accent-color:#4488cc;" />
+          <span id="smooth-value" style="font-size:var(--text-xs); color:var(--ink-muted); min-width:28px; text-align:right;">0%</span>
+        </div>
+        <div style="display:flex; gap:var(--sp-1); margin-top:var(--sp-1);">
+          <button id="smooth-apply" style="flex:1; padding:var(--sp-1); background:#4488cc; color:#fff; border:none; border-radius:4px; cursor:pointer; font-size:var(--text-sm);">Apply</button>
+          <button id="smooth-cancel" style="flex:1; padding:var(--sp-1); background:var(--bg-hover); border:1px solid var(--border); border-radius:4px; cursor:pointer; font-size:var(--text-sm); color:var(--ink);">Cancel</button>
+        </div>
+      </div>
     </div>
 
     <!-- Floating Layers Panel -->
@@ -2953,6 +2839,147 @@
       </div>
       <div id="layer-list"></div>
       <div id="layer-controls"></div>
+    </div>
+
+    <!-- Floating Portal Editor Panel -->
+    <div id="portal-float" style="display:none;">
+      <div id="portal-float-handle">
+        <svg class="icon icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="4"/></svg>
+        <span>Portal Editor</span>
+        <button id="portal-float-close" type="button" aria-label="Close portal editor">
+          <svg class="icon icon-sm" viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        </button>
+      </div>
+      <div class="portal-float-tabs">
+        <button id="portal-detail-simple" type="button" class="active">Simple</button>
+        <button id="portal-detail-advanced" type="button">Advanced</button>
+      </div>
+      <div class="portal-float-body">
+        <div id="portal-selection-status">Place entry</div>
+        <div id="portal-empty-hint">Click once to place the entry portal, then click again to place the exit. Select a portal to rotate or stretch its endpoints.</div>
+        <div id="portal-warning-box" style="display:none;">
+          <svg class="icon icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+          <span id="portal-warning-text"></span>
+        </div>
+        <div class="portal-shortcuts">Portal keys: <kbd>Tab</kbd> switch end, <kbd>Arrows</kbd> nudge, <kbd>Alt</kbd>+<kbd>Arrows</kbd> move pair, <kbd>[</kbd>/<kbd>]</kbd> rotate, <kbd>X</kbd> swap ends.</div>
+        <div id="portal-settings-fields">
+          <div class="portal-segmented">
+            <button id="portal-mode-oneway" type="button">One Way</button>
+            <button id="portal-mode-twoway" type="button">Two Way</button>
+          </div>
+          <label class="portal-field">
+            <span>Theme</span>
+            <select id="portal-theme">
+              <option value="violet">Violet</option>
+              <option value="amber">Amber</option>
+              <option value="mint">Mint</option>
+            </select>
+            <strong class="portal-inline-value"></strong>
+          </label>
+          <label class="portal-field">
+            <span>Velocity</span>
+            <select id="portal-velocity-mode">
+              <option value="remap">Remap</option>
+              <option value="world">World</option>
+            </select>
+            <strong class="portal-inline-value"></strong>
+          </label>
+          <label class="portal-field">
+            <span>Speed</span>
+            <input type="range" id="portal-speed-mult" min="0.25" max="3" step="0.05" value="1" />
+            <strong id="portal-speed-value" class="portal-inline-value">1.00x</strong>
+          </label>
+          <label class="portal-field">
+            <span>Exit Travel</span>
+            <select id="portal-exit-direction">
+              <option value="inherit">Preserve Entry</option>
+              <option value="forward">Along Portal</option>
+              <option value="backward">Against Portal</option>
+            </select>
+            <strong class="portal-inline-value"></strong>
+          </label>
+          <label class="portal-field">
+            <span>Size</span>
+            <input type="range" id="portal-size" min="18" max="84" step="1" value="34" />
+            <strong id="portal-size-value" class="portal-inline-value">34</strong>
+          </label>
+          <div id="portal-advanced-fields">
+            <label class="portal-field">
+              <span>Width</span>
+              <input type="range" id="portal-radius" min="6" max="28" step="1" value="10" />
+              <strong id="portal-radius-value" class="portal-inline-value">10</strong>
+            </label>
+            <label class="portal-field">
+              <span>Trigger</span>
+              <select id="portal-trigger-body">
+                <option value="auto">Auto</option>
+                <option value="center">Center</option>
+                <option value="front">Front</option>
+                <option value="rear">Rear</option>
+              </select>
+              <strong class="portal-inline-value"></strong>
+            </label>
+            <label class="portal-field">
+              <span>Direction</span>
+              <select id="portal-direction-rule">
+                <option value="any">Any</option>
+                <option value="frontOnly">Front Only</option>
+                <option value="backOnly">Back Only</option>
+              </select>
+              <strong class="portal-inline-value"></strong>
+            </label>
+            <label class="portal-field">
+              <span>Exit Push</span>
+              <input type="range" id="portal-exit-offset" min="0" max="30" step="1" value="3" />
+              <strong id="portal-exit-offset-value" class="portal-inline-value">3</strong>
+            </label>
+            <div class="portal-checkbox-grid">
+              <label class="tool-option-label">
+                <input type="checkbox" id="portal-preserve-offset" />
+                <span>Preserve offset</span>
+              </label>
+              <label class="tool-option-label">
+                <input type="checkbox" id="portal-show-link" />
+                <span>Show pair link</span>
+              </label>
+              <label class="tool-option-label">
+                <input type="checkbox" id="portal-show-debug" />
+                <span>Debug overlay</span>
+              </label>
+              <label class="tool-option-label">
+                <input type="checkbox" id="portal-enabled" checked />
+                <span>Enabled</span>
+              </label>
+            </div>
+            <label class="portal-field">
+              <span>Cooldown</span>
+              <input type="range" id="portal-cooldown" min="0" max="60" step="1" value="10" />
+              <strong id="portal-cooldown-value" class="portal-inline-value">10f</strong>
+            </label>
+            <label class="portal-field">
+              <span>Playback</span>
+              <select id="portal-visibility">
+                <option value="subtle">Subtle</option>
+                <option value="always">Always</option>
+                <option value="activation">On Trigger</option>
+              </select>
+              <strong class="portal-inline-value"></strong>
+            </label>
+          </div>
+        </div>
+      </div>
+      <div class="portal-float-footer">
+        <button id="portal-delete-btn" type="button" title="Delete portal pair">
+          <svg class="icon icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4h6v2"/></svg>
+        </button>
+        <span class="portal-footer-spacer"></span>
+        <button id="portal-duplicate-btn" type="button" title="Duplicate portal pair">
+          <svg class="icon icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+        </button>
+        <button id="portal-swap-btn" type="button" title="Swap entry and exit">
+          <svg class="icon icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg>
+        </button>
+      </div>
     </div>
 
     <!-- Hidden vehicle-picker-btn (used by Toolbar.ts) -->

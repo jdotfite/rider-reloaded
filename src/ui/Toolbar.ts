@@ -90,6 +90,9 @@ export class Toolbar {
   onPortalShowEditorLinkChange: ((enabled: boolean) => void) | null = null;
   onPortalShowDebugChange: ((enabled: boolean) => void) | null = null;
   onPortalEnabledChange: ((enabled: boolean) => void) | null = null;
+  onPortalDelete: (() => void) | null = null;
+  onPortalDuplicate: (() => void) | null = null;
+  onPortalSwap: (() => void) | null = null;
 
   private toolButtons: Map<string, HTMLButtonElement> = new Map();
   private smoothContainer!: HTMLElement;
@@ -100,10 +103,11 @@ export class Toolbar {
   private smoothSlider!: HTMLInputElement;
   private smoothValue!: HTMLElement;
   private selectedCount!: HTMLElement;
-  private portalSettings!: HTMLElement;
+  private portalFloat!: HTMLElement;
   private portalSelectionStatus!: HTMLElement;
   private portalEmptyHint!: HTMLElement;
   private portalWarningBox!: HTMLElement;
+  private portalWarningText!: HTMLElement;
   private portalSettingsFields!: HTMLElement;
   private portalAdvancedFields!: HTMLElement;
   private portalDetailSimple!: HTMLButtonElement;
@@ -131,7 +135,7 @@ export class Toolbar {
   private portalCooldownValue!: HTMLElement;
   private portalVisibility!: HTMLSelectElement;
   private portalAdvancedMode = false;
-  private setSidebarInspectorOpenInternal: ((open: boolean) => void) | null = null;
+  private dockSnapBtn: HTMLButtonElement | null = null;
   private endpointSnapCheckbox!: HTMLInputElement;
   private gridCheckbox!: HTMLInputElement;
   private gridSnapCheckbox!: HTMLInputElement;
@@ -278,6 +282,11 @@ export class Toolbar {
     bindMobileToggle(onionCheckbox, mobileOnionBtn, 'Onion skin on', 'Onion skin off');
     bindMobileToggle(snapCheckbox, mobileSnapBtn, 'Snap to endpoints on', 'Snap to endpoints off');
 
+    const dockOnionBtn = document.getElementById('dock-onion-btn') as HTMLButtonElement | null;
+    this.dockSnapBtn = document.getElementById('dock-snap-btn') as HTMLButtonElement | null;
+    bindMobileToggle(onionCheckbox, dockOnionBtn, 'Onion skin on', 'Onion skin off');
+    bindMobileToggle(snapCheckbox, this.dockSnapBtn, 'Snap to endpoints on', 'Snap to endpoints off');
+
     // Smooth UI (visible only when select tool is active)
     this.smoothContainer = document.getElementById('smooth-container') as HTMLElement;
     this.smoothBtn = document.getElementById('smooth-btn') as HTMLButtonElement;
@@ -340,10 +349,11 @@ export class Toolbar {
     this.setSelectedLineState(0, false);
 
     // Portal UI
-    this.portalSettings = document.getElementById('portal-settings') as HTMLElement;
+    this.portalFloat = document.getElementById('portal-float') as HTMLElement;
     this.portalSelectionStatus = document.getElementById('portal-selection-status') as HTMLElement;
     this.portalEmptyHint = document.getElementById('portal-empty-hint') as HTMLElement;
     this.portalWarningBox = document.getElementById('portal-warning-box') as HTMLElement;
+    this.portalWarningText = document.getElementById('portal-warning-text') as HTMLElement;
     this.portalSettingsFields = document.getElementById('portal-settings-fields') as HTMLElement;
     this.portalAdvancedFields = document.getElementById('portal-advanced-fields') as HTMLElement;
     this.portalDetailSimple = document.getElementById('portal-detail-simple') as HTMLButtonElement;
@@ -458,6 +468,9 @@ export class Toolbar {
             : 'subtle',
       );
     });
+    document.getElementById('portal-delete-btn')?.addEventListener('click', () => this.onPortalDelete?.());
+    document.getElementById('portal-duplicate-btn')?.addEventListener('click', () => this.onPortalDuplicate?.());
+    document.getElementById('portal-swap-btn')?.addEventListener('click', () => this.onPortalSwap?.());
     this.setPortalInspectorMode(false);
     this.setPortalState(false, null, false);
 
@@ -582,14 +595,11 @@ export class Toolbar {
     const btnMobileDock = document.getElementById('btn-mobile-dock') as HTMLButtonElement | null;
     const dockUndoBtn = document.getElementById('dock-undo-btn') as HTMLButtonElement | null;
     const dockRedoBtn = document.getElementById('dock-redo-btn') as HTMLButtonElement | null;
-    const dockInspectorBtn = document.getElementById('dock-inspector-btn') as HTMLButtonElement | null;
     const leftDockTools = document.getElementById('left-dock-tools') as HTMLElement | null;
     const topToolRail = document.getElementById('top-tool-rail') as HTMLElement | null;
 
     const leftRailCollapsedKey = 'line-rider-left-rail-collapsed';
-    const sidebarInspectorKey = 'line-rider-sidebar-inspector-open';
     let leftRailCollapsed = false;
-    let sidebarInspectorOpen = true;
     const isDesktopViewport = () => window.matchMedia('(min-width: 900px)').matches;
 
     const sidebarRight = document.getElementById('sidebar-right') as HTMLElement | null;
@@ -597,13 +607,8 @@ export class Toolbar {
 
     const mountToolGrid = () => {
       if (!isDesktopViewport() && sidebarRight) {
-        // Mobile: put tool-grid inside sidebar-right, before the toggle button
         if (this.toolGrid.parentElement !== sidebarRight) {
-          if (mobilePanelToggle) {
-            sidebarRight.insertBefore(this.toolGrid, mobilePanelToggle);
-          } else {
-            sidebarRight.prepend(this.toolGrid);
-          }
+          sidebarRight.prepend(this.toolGrid);
         }
         return;
       }
@@ -613,29 +618,9 @@ export class Toolbar {
       }
     };
 
-    const applySidebarInspectorMode = (open: boolean) => {
-      const shouldShow = open && isDesktopViewport();
-      document.body.classList.toggle('sidebar-inspector-open', shouldShow);
-      if (!dockInspectorBtn) return;
-      dockInspectorBtn.classList.toggle('active', shouldShow);
-      dockInspectorBtn.setAttribute('aria-pressed', shouldShow ? 'true' : 'false');
-      dockInspectorBtn.title = shouldShow ? 'Hide inspector' : 'Show inspector';
-      dockInspectorBtn.setAttribute('aria-label', dockInspectorBtn.title);
-    };
-
-    const persistSidebarInspectorMode = (open: boolean) => {
-      sidebarInspectorOpen = open;
-      applySidebarInspectorMode(open);
-      try {
-        window.localStorage.setItem(sidebarInspectorKey, open ? 'true' : 'false');
-      } catch {}
-    };
-    this.setSidebarInspectorOpenInternal = persistSidebarInspectorMode;
-
     const applyLeftRailCollapse = (collapsed: boolean) => {
       document.body.classList.toggle('left-rail-collapsed', collapsed);
       mountToolGrid();
-      applySidebarInspectorMode(sidebarInspectorOpen);
       if (!btnToolRailToggle) return;
       btnToolRailToggle.setAttribute('aria-pressed', collapsed ? 'true' : 'false');
       btnToolRailToggle.title = collapsed ? 'Expand side rail' : 'Collapse side rail';
@@ -646,12 +631,6 @@ export class Toolbar {
       const savedCollapsed = window.localStorage.getItem(leftRailCollapsedKey);
       if (savedCollapsed === 'true') leftRailCollapsed = true;
     } catch {}
-    try {
-      const savedInspectorState = window.localStorage.getItem(sidebarInspectorKey);
-      if (savedInspectorState !== null) {
-        sidebarInspectorOpen = savedInspectorState === 'true';
-      }
-    } catch {}
     applyLeftRailCollapse(leftRailCollapsed);
     btnToolRailToggle?.addEventListener('click', () => {
       leftRailCollapsed = !leftRailCollapsed;
@@ -660,19 +639,11 @@ export class Toolbar {
         window.localStorage.setItem(leftRailCollapsedKey, leftRailCollapsed ? 'true' : 'false');
       } catch {}
     });
-    dockInspectorBtn?.addEventListener('click', () => {
-      persistSidebarInspectorMode(!sidebarInspectorOpen);
-    });
     dockUndoBtn?.addEventListener('click', () => this.onUndo?.());
     dockRedoBtn?.addEventListener('click', () => this.onRedo?.());
 
-    const inspectorCloseBtn = document.getElementById('inspector-close') as HTMLButtonElement | null;
-    inspectorCloseBtn?.addEventListener('click', () => {
-      persistSidebarInspectorMode(false);
-    });
     window.addEventListener('resize', () => {
       mountToolGrid();
-      applySidebarInspectorMode(sidebarInspectorOpen);
     });
 
     const mobileDockKey = 'line-rider-mobile-dock-mode';
@@ -722,9 +693,6 @@ export class Toolbar {
     stepBack?.addEventListener('click', () => this.onStepBack?.());
   }
 
-  setInspectorOpen(open: boolean) {
-    this.setSidebarInspectorOpenInternal?.(open);
-  }
 
   private setActiveSpeed(speed: number) {
     for (const btn of this.speedButtons) {
@@ -755,12 +723,15 @@ export class Toolbar {
   }
 
   private syncEndpointSnapButton() {
-    if (!this.endpointSnapCheckbox || !this.mobileEndpointSnapButton) return;
-    this.mobileEndpointSnapButton.classList.toggle('active', this.endpointSnapCheckbox.checked);
-    this.mobileEndpointSnapButton.setAttribute('aria-pressed', this.endpointSnapCheckbox.checked ? 'true' : 'false');
-    this.mobileEndpointSnapButton.title = this.endpointSnapCheckbox.checked
-      ? 'Snap to endpoints on'
-      : 'Snap to endpoints off';
+    if (!this.endpointSnapCheckbox) return;
+    const checked = this.endpointSnapCheckbox.checked;
+    const label = checked ? 'Snap to endpoints on' : 'Snap to endpoints off';
+    for (const btn of [this.mobileEndpointSnapButton, this.dockSnapBtn]) {
+      if (!btn) continue;
+      btn.classList.toggle('active', checked);
+      btn.setAttribute('aria-pressed', checked ? 'true' : 'false');
+      btn.title = label;
+    }
   }
 
   showSmoothSlider() {
@@ -823,11 +794,8 @@ export class Toolbar {
     activeEndpoint: 'entry' | 'exit' | null = null,
     diagnostics: { messages: string[] } | null = null,
   ) {
-    if (!this.portalSettings) return;
-    if (active) {
-      this.setInspectorOpen(true);
-    }
-    this.portalSettings.style.display = active ? '' : 'none';
+    if (!this.portalFloat) return;
+    this.portalFloat.style.display = active ? '' : 'none';
     if (!active) return;
 
     const hasPortal = !!portal;
@@ -846,7 +814,7 @@ export class Toolbar {
     this.portalSettingsFields.style.display = hasPortal ? '' : 'none';
     const warningMessages = diagnostics?.messages ?? [];
     this.portalWarningBox.style.display = warningMessages.length > 0 ? '' : 'none';
-    this.portalWarningBox.textContent = warningMessages.join(' ');
+    if (this.portalWarningText) this.portalWarningText.textContent = warningMessages.join(' ');
 
     const disableFields = !hasPortal;
     this.portalDetailSimple.disabled = disableFields;
