@@ -32,6 +32,8 @@ import { VEHICLE_MANIFESTS, getVehicleManifest } from './vehicles';
 import type { VehicleRenderer } from './vehicles';
 import { AudioPlayer } from './audio/AudioPlayer';
 import { PortalAudio } from './audio/PortalAudio';
+import { VehicleSfx } from './audio/VehicleSfx';
+import { deleteSfx, loadAllSfx, saveSfx } from './audio/sfxStorage';
 import { WaveformRenderer } from './audio/WaveformRenderer';
 import { parseYouTubeId, YouTubePlayer } from './audio/youtube';
 import {
@@ -134,6 +136,7 @@ const triggerRenderer = new TriggerRenderer();
 const portalRenderer = new PortalRenderer();
 const audioPlayer = new AudioPlayer();
 const portalAudio = new PortalAudio();
+const vehicleSfx = new VehicleSfx();
 const ytPlayer = new YouTubePlayer();
 const waveformCanvas = document.getElementById('waveform-canvas') as HTMLCanvasElement;
 const waveformRenderer = new WaveformRenderer(waveformCanvas);
@@ -240,6 +243,7 @@ function setVehicle(id: string) {
   if (vehicle.available === false) return;
   activeVehicle = vehicle;
   localStorage.setItem('line-rider-vehicle', id);
+  vehicleSfx.setVehicle(id);
   resetVehicleRenderers();
   rider.setVehicle(vehicle.physics);
   // Update topbar sled info
@@ -483,6 +487,9 @@ const gameLoop = new GameLoop(physics, () => {
 
   // Update stats in canvas HUD
   const speed = rider.getCenterSpeed() * (1000 / TIMESTEP);
+  if (gameLoop.state === GameState.PLAYING) {
+    vehicleSfx.update(speed);
+  }
   toolbar.updateStats(store.lines.length, speed);
   toolbar.setSelectedLineState(
     selectTool.getSelectedCount(),
@@ -1158,6 +1165,111 @@ cameraFollowSlider?.addEventListener('input', () => {
 });
 syncCameraFollowControls();
 syncSettingsButtons();
+
+// ── Sound Effects Settings ──
+{
+  const sfxVolumeSlider = document.getElementById('sfx-volume-slider') as HTMLInputElement | null;
+  const sfxVolumeDisplay = document.getElementById('sfx-volume-display') as HTMLElement | null;
+  const sfxList = document.getElementById('sfx-vehicle-list') as HTMLElement | null;
+
+  const savedSfxVol = parseInt(localStorage.getItem('line-rider-sfx-volume') ?? '65', 10);
+  vehicleSfx.volume = savedSfxVol / 100;
+  if (sfxVolumeSlider) sfxVolumeSlider.value = String(savedSfxVol);
+  if (sfxVolumeDisplay) sfxVolumeDisplay.textContent = `${savedSfxVol}%`;
+
+  sfxVolumeSlider?.addEventListener('input', () => {
+    const v = parseInt(sfxVolumeSlider.value, 10);
+    vehicleSfx.volume = v / 100;
+    if (sfxVolumeDisplay) sfxVolumeDisplay.textContent = `${v}%`;
+    localStorage.setItem('line-rider-sfx-volume', String(v));
+  });
+
+  function buildSfxRow(vehicle: { id: string; name: string }) {
+    const row = document.createElement('div');
+    row.className = 'sfx-vehicle-row';
+    row.dataset.vehicle = vehicle.id;
+
+    const nameEl = document.createElement('span');
+    nameEl.className = 'sfx-vehicle-name';
+    nameEl.textContent = vehicle.name;
+
+    const label = document.createElement('span');
+    label.className = 'sfx-custom-label';
+    label.id = `sfx-label-${vehicle.id}`;
+    label.textContent = 'Default';
+
+    const uploadBtn = document.createElement('button');
+    uploadBtn.className = 'sfx-btn';
+    uploadBtn.textContent = 'Upload';
+    uploadBtn.type = 'button';
+
+    const clearBtn = document.createElement('button');
+    clearBtn.className = 'sfx-btn sfx-clear-btn';
+    clearBtn.textContent = 'Clear';
+    clearBtn.type = 'button';
+    clearBtn.style.display = 'none';
+
+    const fileInput = document.createElement('input');
+    fileInput.type = 'file';
+    fileInput.accept = 'audio/*';
+    fileInput.style.display = 'none';
+
+    uploadBtn.addEventListener('click', () => fileInput.click());
+
+    fileInput.addEventListener('change', async () => {
+      const file = fileInput.files?.[0];
+      if (!file) return;
+      fileInput.value = '';
+      const arrayBuf = await file.arrayBuffer();
+      try {
+        const audioBuf = await vehicleSfx.decodeAudio(arrayBuf.slice(0));
+        await saveSfx(vehicle.id, { data: arrayBuf, name: file.name });
+        vehicleSfx.setCustomBuffer(vehicle.id, audioBuf, file.name);
+        label.textContent = file.name;
+        label.classList.add('has-custom');
+        clearBtn.style.display = '';
+      } catch {
+        label.textContent = 'Invalid audio file';
+      }
+    });
+
+    clearBtn.addEventListener('click', async () => {
+      await deleteSfx(vehicle.id);
+      vehicleSfx.clearCustom(vehicle.id);
+      label.textContent = 'Default';
+      label.classList.remove('has-custom');
+      clearBtn.style.display = 'none';
+    });
+
+    row.appendChild(nameEl);
+    row.appendChild(label);
+    row.appendChild(uploadBtn);
+    row.appendChild(clearBtn);
+    row.appendChild(fileInput);
+    return row;
+  }
+
+  if (sfxList) {
+    for (const vehicle of VEHICLE_MANIFESTS) {
+      sfxList.appendChild(buildSfxRow(vehicle));
+    }
+  }
+
+  // Load any previously saved custom sfx from IndexedDB
+  void loadAllSfx().then(async (entries) => {
+    for (const [vehicleId, entry] of entries) {
+      try {
+        const audioBuf = await vehicleSfx.decodeAudio(entry.data.slice(0));
+        vehicleSfx.setCustomBuffer(vehicleId, audioBuf, entry.name);
+        const labelEl = document.getElementById(`sfx-label-${vehicleId}`);
+        const row = sfxList?.querySelector<HTMLElement>(`[data-vehicle="${vehicleId}"]`);
+        if (labelEl) { labelEl.textContent = entry.name; labelEl.classList.add('has-custom'); }
+        const clearBtn = row?.querySelector<HTMLButtonElement>('.sfx-clear-btn');
+        if (clearBtn) clearBtn.style.display = '';
+      } catch { /* corrupt entry — ignore */ }
+    }
+  });
+}
 
 const vehiclePickerOverlay = document.getElementById('vehicle-picker-overlay') as HTMLElement | null;
 const vehiclePickerClose = document.getElementById('vehicle-picker-close') as HTMLButtonElement | null;
@@ -1905,6 +2017,7 @@ function startPlayback() {
   }
   gameLoop.play();
   audioPlay();
+  vehicleSfx.start(activeVehicle.id);
 }
 
 function stopPlayback() {
@@ -1925,6 +2038,7 @@ function stopPlayback() {
     savedCameraPos = null;
   }
   audioStop();
+  vehicleSfx.stop();
 }
 
 // Register render callbacks

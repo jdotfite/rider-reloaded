@@ -2190,6 +2190,44 @@
       text-transform: uppercase;
       letter-spacing: 0.05em;
     }
+    .sfx-vehicle-row {
+      display: flex;
+      align-items: center;
+      gap: var(--sp-2);
+      padding: 5px 0;
+      border-bottom: 1px solid var(--border-light);
+    }
+    .sfx-vehicle-row:last-child { border-bottom: none; }
+    .sfx-vehicle-name {
+      font: 600 var(--text-sm)/1 var(--font);
+      color: var(--ink);
+      min-width: 88px;
+    }
+    .sfx-custom-label {
+      flex: 1;
+      font: 500 var(--text-xs)/1 var(--font);
+      color: var(--ink-muted);
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .sfx-custom-label.has-custom {
+      color: var(--ink-secondary);
+    }
+    .sfx-btn {
+      min-height: var(--control-h-sm);
+      padding: 0 var(--sp-2);
+      font: 600 var(--text-xs)/1 var(--font);
+      border-radius: var(--radius-sm);
+      border: 1px solid var(--border);
+      background: var(--bg);
+      color: var(--ink);
+      cursor: pointer;
+      white-space: nowrap;
+    }
+    .sfx-btn:hover { background: var(--bg-hover); }
+    .sfx-clear-btn { color: var(--color-danger, #c0392b); border-color: var(--color-danger, #c0392b); }
+    .sfx-clear-btn:hover { background: #fdf0ef; }
     .hk-row {
       display: flex;
       align-items: center;
@@ -3226,6 +3264,18 @@
           </div>
           <input type="range" id="settings-grid-size-input" min="8" max="64" step="2" value="24" />
           <p class="settings-note">World-aligned graph paper locked to the track while you pan or zoom.</p>
+        </div>
+        <div class="settings-group">
+          <div class="settings-group-header">
+            <span>Sound Effects</span>
+            <span class="settings-inline-value"><span id="sfx-volume-display">65%</span></span>
+          </div>
+          <input type="range" id="sfx-volume-slider" min="0" max="100" value="65" />
+          <div class="settings-ends">
+            <span>Off</span>
+            <span>Loud</span>
+          </div>
+          <div id="sfx-vehicle-list" style="margin-top:var(--sp-1);"></div>
         </div>
       </div>
       <div id="hotkeys-list">
