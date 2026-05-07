@@ -9,6 +9,7 @@ const THEME_FREQUENCIES: Record<PortalColorTheme, { low: number; high: number }>
 export class PortalAudio {
   private ctx: AudioContext | null = null;
   private _volume = 0.55;
+  private _enabled = true;
   private noiseBuffer: AudioBuffer | null = null;
   private enterBuffer: AudioBuffer | null = null;
   private exitBuffer: AudioBuffer | null = null;
@@ -22,8 +23,16 @@ export class PortalAudio {
     this._volume = Math.max(0, Math.min(1, value));
   }
 
+  get enabled(): boolean {
+    return this._enabled;
+  }
+
+  set enabled(value: boolean) {
+    this._enabled = value;
+  }
+
   playPlacement(theme: PortalColorTheme) {
-    if (this._volume <= 0.001) return;
+    if (!this._enabled || this._volume <= 0.001) return;
     const ctx = this.ensureContext();
     const now = ctx.currentTime;
     const palette = THEME_FREQUENCIES[theme];
@@ -33,7 +42,7 @@ export class PortalAudio {
   }
 
   playTeleport(theme: PortalColorTheme, speed: number) {
-    if (this._volume <= 0.001) return;
+    if (!this._enabled || this._volume <= 0.001) return;
     const ctx = this.ensureContext();
     const now = ctx.currentTime;
     const speedFactor = Math.max(0.8, Math.min(1.9, 0.85 + speed / 18));

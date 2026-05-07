@@ -142,9 +142,15 @@ const waveformCanvas = document.getElementById('waveform-canvas') as HTMLCanvasE
 const waveformRenderer = new WaveformRenderer(waveformCanvas);
 const paperGridRenderer = new PaperGridRenderer(camera, () => paperGrid);
 const hudBeat = document.getElementById('hud-beat') as HTMLElement;
+const hudFps = document.getElementById('hud-fps') as HTMLElement;
 const statBeat = document.getElementById('stat-beat') as HTMLElement;
+const statFps = document.getElementById('stat-fps') as HTMLElement;
 const metronomeFlash = document.getElementById('metronome-flash') as HTMLElement;
-let lastBeatIndex = -1; // track which beat we were on to detect crossings
+let lastBeatIndex = -1;
+let fpsFrames = 0;
+let fpsSum = 0;
+let fpsLast = performance.now();
+let lastSledIntact = true;
 let portalCameraBias: { target: Vec2; strength: number; framesLeft: number } | null = null;
 let portalCameraSnap: Vec2 | null = null;
 let portalExitRamp: { startTime: number; normalSpeed: number } | null = null;
@@ -481,6 +487,20 @@ renderer.addBackgroundRenderCallback((ctx) => {
 
 // Game loop
 const gameLoop = new GameLoop(physics, () => {
+  // FPS tracking — rolling average over 20 frames
+  const nowMs = performance.now();
+  const dt = nowMs - fpsLast;
+  fpsLast = nowMs;
+  if (dt > 0 && dt < 1000) {
+    fpsSum += 1000 / dt;
+    fpsFrames++;
+    if (fpsFrames >= 20) {
+      statFps.textContent = String(Math.round(fpsSum / fpsFrames));
+      fpsSum = 0;
+      fpsFrames = 0;
+    }
+  }
+
   renderer.render();
   toolbar.setPlaybackState(gameLoop.state);
   toolbar.setLayerState(store.layers, store.getActiveLayerIndex());
@@ -494,6 +514,13 @@ const gameLoop = new GameLoop(physics, () => {
       id => store.lines.find(l => l.id === id)?.type === LineType.ACC,
     );
     vehicleSfx.update(speed, onLine, onAccLine);
+
+    // Crash detection — play wreck sound on first frame sled breaks
+    if (playing) {
+      const intact = rider.binding.sledIntact;
+      if (lastSledIntact && !intact) vehicleSfx.playWreck();
+      lastSledIntact = intact;
+    }
   }
   toolbar.updateStats(store.lines.length, speed);
   toolbar.setSelectedLineState(
@@ -1189,10 +1216,40 @@ syncSettingsButtons();
     localStorage.setItem('line-rider-sfx-volume', String(v));
   });
 
+  const ICON_SPEAKER = `<svg class="icon icon-sm" viewBox="0 0 24 24"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/></svg>`;
+  const ICON_SPEAKER_OFF = `<svg class="icon icon-sm" viewBox="0 0 24 24"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><line x1="23" y1="9" x2="17" y2="15"/><line x1="17" y1="9" x2="23" y2="15"/></svg>`;
+
+  // Restore persisted mute state
+  const savedMutedVehicles: string[] = JSON.parse(localStorage.getItem('line-rider-sfx-muted') ?? '[]');
+  for (const vid of savedMutedVehicles) vehicleSfx.setMuted(vid, true);
+
+  function saveMutedState() {
+    const muted = VEHICLE_MANIFESTS.filter(v => vehicleSfx.isMuted(v.id)).map(v => v.id);
+    localStorage.setItem('line-rider-sfx-muted', JSON.stringify(muted));
+  }
+
   function buildSfxRow(vehicle: { id: string; name: string }) {
     const row = document.createElement('div');
     row.className = 'sfx-vehicle-row';
     row.dataset.vehicle = vehicle.id;
+    const muted = vehicleSfx.isMuted(vehicle.id);
+    if (muted) row.classList.add('muted');
+
+    const muteBtn = document.createElement('button');
+    muteBtn.className = 'sfx-mute-btn';
+    muteBtn.type = 'button';
+    muteBtn.title = 'Enable/disable sound';
+    muteBtn.setAttribute('aria-pressed', String(!muted));
+    muteBtn.innerHTML = muted ? ICON_SPEAKER_OFF : ICON_SPEAKER;
+
+    muteBtn.addEventListener('click', () => {
+      const nowMuted = !vehicleSfx.isMuted(vehicle.id);
+      vehicleSfx.setMuted(vehicle.id, nowMuted);
+      muteBtn.setAttribute('aria-pressed', String(!nowMuted));
+      muteBtn.innerHTML = nowMuted ? ICON_SPEAKER_OFF : ICON_SPEAKER;
+      row.classList.toggle('muted', nowMuted);
+      saveMutedState();
+    });
 
     const nameEl = document.createElement('span');
     nameEl.className = 'sfx-vehicle-name';
@@ -1246,6 +1303,7 @@ syncSettingsButtons();
       clearBtn.style.display = 'none';
     });
 
+    row.appendChild(muteBtn);
     row.appendChild(nameEl);
     row.appendChild(label);
     row.appendChild(uploadBtn);
@@ -1273,6 +1331,33 @@ syncSettingsButtons();
         if (clearBtn) clearBtn.style.display = '';
       } catch { /* corrupt entry — ignore */ }
     }
+  });
+
+  // Portal FX enable toggle
+  const portalFxToggle = document.getElementById('portal-fx-toggle') as HTMLButtonElement | null;
+  const portalFxEnabled = localStorage.getItem('line-rider-portal-fx-enabled') !== 'false';
+  portalAudio.enabled = portalFxEnabled;
+  if (portalFxToggle) {
+    portalFxToggle.setAttribute('aria-pressed', String(portalFxEnabled));
+    portalFxToggle.innerHTML = portalFxEnabled ? ICON_SPEAKER : ICON_SPEAKER_OFF;
+    portalFxToggle.addEventListener('click', () => {
+      const next = !portalAudio.enabled;
+      portalAudio.enabled = next;
+      localStorage.setItem('line-rider-portal-fx-enabled', String(next));
+      portalFxToggle.setAttribute('aria-pressed', String(next));
+      portalFxToggle.innerHTML = next ? ICON_SPEAKER : ICON_SPEAKER_OFF;
+    });
+  }
+
+  // FPS counter toggle
+  const fpsCb = document.getElementById('settings-fps-checkbox') as HTMLInputElement | null;
+  const showFps = localStorage.getItem('line-rider-show-fps') === 'true';
+  if (fpsCb) fpsCb.checked = showFps;
+  if (showFps) document.body.classList.add('show-fps');
+  fpsCb?.addEventListener('change', () => {
+    const show = fpsCb.checked;
+    document.body.classList.toggle('show-fps', show);
+    localStorage.setItem('line-rider-show-fps', String(show));
   });
 }
 
@@ -2044,6 +2129,7 @@ function stopPlayback() {
   }
   audioStop();
   vehicleSfx.stop();
+  lastSledIntact = true;
 }
 
 // Register render callbacks

@@ -79,6 +79,9 @@ export class VehicleSfx {
   private voice: VoiceNodes | null = null;
   private customBuffers = new Map<string, AudioBuffer>();
   private customNames = new Map<string, string>();
+  private mutedVehicles = new Set<string>();
+  private wreckBuffer: AudioBuffer | null = null;
+  private _wreckLoadStarted = false;
   private currentVehicleId = 'sled';
   private _volume = 0.65;
   private _playing = false;
@@ -92,6 +95,40 @@ export class VehicleSfx {
     if (this.masterGain && this.ctx) {
       this.masterGain.gain.setTargetAtTime(this._volume, this.ctx.currentTime, 0.05);
     }
+  }
+
+  setMuted(vehicleId: string, muted: boolean) {
+    if (muted) {
+      this.mutedVehicles.add(vehicleId);
+      if (vehicleId === this.currentVehicleId && this.voice) {
+        this.stopVoice();
+      }
+    } else {
+      this.mutedVehicles.delete(vehicleId);
+      if (vehicleId === this.currentVehicleId && this._playing && !this.voice) {
+        this.startVoice(vehicleId);
+      }
+    }
+  }
+
+  isMuted(vehicleId: string): boolean {
+    return this.mutedVehicles.has(vehicleId);
+  }
+
+  /** Play the wreck one-shot — ignores per-vehicle mute, respects master volume. */
+  playWreck() {
+    if (this._volume <= 0.001) return;
+    const ctx = this.ensureCtx();
+    this.startLoadingWreck();
+    if (!this.wreckBuffer) return;
+    const src = ctx.createBufferSource();
+    src.buffer = this.wreckBuffer;
+    const gain = ctx.createGain();
+    gain.gain.value = this._volume;
+    src.connect(gain);
+    gain.connect(ctx.destination);
+    src.start();
+    src.onended = () => { src.disconnect(); gain.disconnect(); };
   }
 
   private ensureCtx(): AudioContext {
@@ -128,10 +165,24 @@ export class VehicleSfx {
     return buf;
   }
 
+  private startLoadingWreck() {
+    if (this._wreckLoadStarted) return;
+    this._wreckLoadStarted = true;
+    const ctx = this.ensureCtx();
+    void fetch('/audio/wreck.ogg')
+      .then(r => r.ok ? r.arrayBuffer() : null)
+      .then(buf => buf ? ctx.decodeAudioData(buf) : null)
+      .then(decoded => { if (decoded) this.wreckBuffer = decoded; })
+      .catch(() => {});
+  }
+
   start(vehicleId: string) {
     this._playing = true;
     this.currentVehicleId = vehicleId;
-    this.startVoice(vehicleId);
+    if (!this.mutedVehicles.has(vehicleId)) {
+      this.startVoice(vehicleId);
+    }
+    this.startLoadingWreck();
   }
 
   stop() {
@@ -143,7 +194,9 @@ export class VehicleSfx {
     this.currentVehicleId = vehicleId;
     if (this._playing) {
       this.stopVoice();
-      this.startVoice(vehicleId);
+      if (!this.mutedVehicles.has(vehicleId)) {
+        this.startVoice(vehicleId);
+      }
     }
   }
 
@@ -153,6 +206,7 @@ export class VehicleSfx {
    * onAccLine = touching an acceleration line (boosts pitch/rate slightly).
    */
   update(speed: number, onLine: boolean, onAccLine: boolean) {
+    if (this.mutedVehicles.has(this.currentVehicleId)) return;
     const v = this.voice;
     if (!v || !this.ctx) return;
     const now = this.ctx.currentTime;
@@ -182,7 +236,7 @@ export class VehicleSfx {
   setCustomBuffer(vehicleId: string, buffer: AudioBuffer, name: string) {
     this.customBuffers.set(vehicleId, buffer);
     this.customNames.set(vehicleId, name);
-    if (this._playing && this.currentVehicleId === vehicleId) {
+    if (this._playing && this.currentVehicleId === vehicleId && !this.mutedVehicles.has(vehicleId)) {
       this.stopVoice();
       this.startVoice(vehicleId);
     }
@@ -191,7 +245,7 @@ export class VehicleSfx {
   clearCustom(vehicleId: string) {
     this.customBuffers.delete(vehicleId);
     this.customNames.delete(vehicleId);
-    if (this._playing && this.currentVehicleId === vehicleId) {
+    if (this._playing && this.currentVehicleId === vehicleId && !this.mutedVehicles.has(vehicleId)) {
       this.stopVoice();
       this.startVoice(vehicleId);
     }
