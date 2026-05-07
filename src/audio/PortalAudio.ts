@@ -10,6 +10,9 @@ export class PortalAudio {
   private ctx: AudioContext | null = null;
   private _volume = 0.55;
   private noiseBuffer: AudioBuffer | null = null;
+  private enterBuffer: AudioBuffer | null = null;
+  private exitBuffer: AudioBuffer | null = null;
+  private _loadStarted = false;
 
   get volume(): number {
     return this._volume;
@@ -33,14 +36,20 @@ export class PortalAudio {
     if (this._volume <= 0.001) return;
     const ctx = this.ensureContext();
     const now = ctx.currentTime;
-    const palette = THEME_FREQUENCIES[theme];
     const speedFactor = Math.max(0.8, Math.min(1.9, 0.85 + speed / 18));
 
-    this.playNoiseBurst(now, 0.09, this._volume * 0.08, palette.low * 1.8, -0.18);
-    this.playNoiseBurst(now + 0.03, 0.12, this._volume * 0.06, palette.high * 1.1 * speedFactor, 0.22);
-    this.playTone('triangle', palette.low * 0.9, palette.low * 0.42, now, 0.09, this._volume * 0.13, -0.28);
-    this.playTone('sine', palette.high * 0.74 * speedFactor, palette.high * 1.22 * speedFactor, now + 0.028, 0.16, this._volume * 0.2, 0.3);
-    this.playTone('triangle', palette.high * 0.58, palette.high * 0.88, now + 0.044, 0.08, this._volume * 0.08, 0.08);
+    if (this.enterBuffer || this.exitBuffer) {
+      if (this.enterBuffer) this.playBuffer(this.enterBuffer, now, speedFactor);
+      if (this.exitBuffer) this.playBuffer(this.exitBuffer, now + 0.1, speedFactor);
+    } else {
+      // Synthesized fallback
+      const palette = THEME_FREQUENCIES[theme];
+      this.playNoiseBurst(now, 0.09, this._volume * 0.08, palette.low * 1.8, -0.18);
+      this.playNoiseBurst(now + 0.03, 0.12, this._volume * 0.06, palette.high * 1.1 * speedFactor, 0.22);
+      this.playTone('triangle', palette.low * 0.9, palette.low * 0.42, now, 0.09, this._volume * 0.13, -0.28);
+      this.playTone('sine', palette.high * 0.74 * speedFactor, palette.high * 1.22 * speedFactor, now + 0.028, 0.16, this._volume * 0.2, 0.3);
+      this.playTone('triangle', palette.high * 0.58, palette.high * 0.88, now + 0.044, 0.08, this._volume * 0.08, 0.08);
+    }
   }
 
   private ensureContext(): AudioContext {
@@ -50,7 +59,45 @@ export class PortalAudio {
     if (this.ctx.state === 'suspended') {
       void this.ctx.resume();
     }
+    this.startLoadingBuffers();
     return this.ctx;
+  }
+
+  private startLoadingBuffers() {
+    if (this._loadStarted) return;
+    this._loadStarted = true;
+    const ctx = this.ctx!;
+
+    const load = async (url: string): Promise<AudioBuffer | null> => {
+      try {
+        const res = await fetch(url);
+        if (!res.ok) return null;
+        return await ctx.decodeAudioData(await res.arrayBuffer());
+      } catch {
+        return null;
+      }
+    };
+
+    void Promise.all([
+      load('/audio/portal-enter.ogg'),
+      load('/audio/portal-exit.ogg'),
+    ]).then(([enter, exit]) => {
+      this.enterBuffer = enter;
+      this.exitBuffer = exit;
+    });
+  }
+
+  private playBuffer(buffer: AudioBuffer, startTime: number, rate = 1.0) {
+    const ctx = this.ensureContext();
+    const src = ctx.createBufferSource();
+    const gain = ctx.createGain();
+    src.buffer = buffer;
+    src.playbackRate.value = rate;
+    gain.gain.value = this._volume;
+    src.connect(gain);
+    gain.connect(ctx.destination);
+    src.start(startTime);
+    src.onended = () => { src.disconnect(); gain.disconnect(); };
   }
 
   private getNoiseBuffer(): AudioBuffer {

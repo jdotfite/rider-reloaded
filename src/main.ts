@@ -487,8 +487,13 @@ const gameLoop = new GameLoop(physics, () => {
 
   // Update stats in canvas HUD
   const speed = rider.getCenterSpeed() * (1000 / TIMESTEP);
-  if (gameLoop.state === GameState.PLAYING) {
-    vehicleSfx.update(speed);
+  if (gameLoop.state === GameState.PLAYING || gameLoop.state === GameState.PAUSED) {
+    const playing = gameLoop.state === GameState.PLAYING;
+    const onLine = playing && physics.hitLines.size > 0;
+    const onAccLine = onLine && [...physics.hitLines].some(
+      id => store.lines.find(l => l.id === id)?.type === LineType.ACC,
+    );
+    vehicleSfx.update(speed, onLine, onAccLine);
   }
   toolbar.updateStats(store.lines.length, speed);
   toolbar.setSelectedLineState(

@@ -147,24 +147,34 @@ export class VehicleSfx {
     }
   }
 
-  /** Called every render frame while playing. Speed in world-units/sec×40. */
-  update(speed: number) {
+  /**
+   * Called every render frame while playing.
+   * Speed in world-units/sec×40. onLine = sled touching any line.
+   * onAccLine = touching an acceleration line (boosts pitch/rate slightly).
+   */
+  update(speed: number, onLine: boolean, onAccLine: boolean) {
     const v = this.voice;
     if (!v || !this.ctx) return;
     const now = this.ctx.currentTime;
     const smooth = 0.07;
     const config = CONFIGS[v.vehicleId] ?? CONFIGS.sled;
 
-    const targetGain = config.gainAtSpeed(speed);
+    // Silence when airborne; boost effective speed on acc lines for a livelier sound
+    const effectiveSpeed = onAccLine ? speed * 1.15 : speed;
+    const targetGain = onLine ? config.gainAtSpeed(effectiveSpeed) : 0;
     v.mixGain.gain.setTargetAtTime(targetGain, now, smooth);
 
-    if (!v.isCustom) {
-      const freq = config.freqAtSpeed(speed);
+    const accRate = onAccLine ? 1.08 : 1.0;
+
+    if (v.isCustom) {
+      v.source.playbackRate.setTargetAtTime(accRate, now, smooth);
+    } else {
+      const freq = config.freqAtSpeed(effectiveSpeed);
       if (v.filter) {
         v.filter.frequency.setTargetAtTime(Math.max(30, freq), now, smooth);
       }
       if (v.osc && config.oscFreqAtSpeed) {
-        v.osc.frequency.setTargetAtTime(Math.max(20, config.oscFreqAtSpeed(speed)), now, smooth);
+        v.osc.frequency.setTargetAtTime(Math.max(20, config.oscFreqAtSpeed(effectiveSpeed)), now, smooth);
       }
     }
   }

@@ -1859,7 +1859,37 @@
       padding: var(--sp-4);
       display: flex;
       flex-direction: column;
-      gap: var(--sp-3);
+      gap: 0;
+    }
+    .audio-section {
+      display: flex;
+      flex-direction: column;
+      gap: var(--sp-2);
+      padding: var(--sp-3) 0;
+    }
+    .audio-section:first-child { padding-top: 0; }
+    .audio-section:last-child  { padding-bottom: 0; }
+    .audio-section + .audio-section {
+      border-top: 1px solid var(--border);
+    }
+    .audio-section-label {
+      font: 700 var(--text-xs)/1 var(--font);
+      color: var(--ink-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.09em;
+      margin-bottom: 2px;
+    }
+    #sfx-vehicle-list {
+      border: 1px solid var(--border);
+      border-radius: var(--radius-md);
+      overflow: hidden;
+    }
+    #sfx-vehicle-list:empty { display: none; }
+    .sfx-vehicle-row {
+      padding: 6px var(--sp-2);
+    }
+    .sfx-vehicle-row + .sfx-vehicle-row {
+      border-top: 1px solid var(--border-light);
     }
     #audio-body .audio-row {
       display: flex;
@@ -1996,7 +2026,7 @@
       flex-direction: column;
       gap: var(--sp-2);
     }
-    .audio-controls .audio-row span.value-label {
+    #audio-body .audio-row span.value-label {
       font: 600 var(--text-xs)/1 var(--font-mono);
       color: var(--ink-muted);
       min-width: 36px;
@@ -2194,10 +2224,7 @@
       display: flex;
       align-items: center;
       gap: var(--sp-2);
-      padding: 5px 0;
-      border-bottom: 1px solid var(--border-light);
     }
-    .sfx-vehicle-row:last-child { border-bottom: none; }
     .sfx-vehicle-name {
       font: 600 var(--text-sm)/1 var(--font);
       color: var(--ink);
@@ -3086,98 +3113,121 @@
         </button>
       </div>
       <div id="audio-body">
-        <!-- Shown when audio is loaded; hidden otherwise -->
-        <div id="audio-loaded-row" style="display:none;">
-          <svg class="icon icon-sm" viewBox="0 0 24 24" style="flex-shrink:0; color:var(--ink-muted);"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>
-          <span id="audio-loaded-name" style="flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-weight:500;"></span>
-          <span id="audio-loaded-duration" style="color:var(--ink-muted); font-size:var(--text-xs); flex-shrink:0;"></span>
-          <button id="audio-loaded-remove" type="button" title="Remove audio">
-            <svg class="icon icon-sm" viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-          </button>
-        </div>
-        <div id="audio-drop-zone">
-          Drop an audio file here or click to browse
-          <input type="file" id="audio-file-input" accept="audio/*" style="display:none" />
-        </div>
 
-        <div style="display:flex; align-items:center; gap:var(--sp-2);">
-          <div style="flex:1; height:1px; background:var(--border);"></div>
-          <span style="font:500 var(--text-xs)/1 var(--font); color:var(--ink-muted); text-transform:uppercase; letter-spacing:0.1em;">or YouTube</span>
-          <div style="flex:1; height:1px; background:var(--border);"></div>
-        </div>
+        <!-- ── MUSIC ── -->
+        <div class="audio-section">
+          <div class="audio-section-label">Music</div>
 
-        <div id="audio-yt-row">
-          <input type="text" id="audio-yt-input" placeholder="Paste YouTube URL..." />
-          <button id="audio-yt-btn">Load</button>
-        </div>
-
-        <div id="audio-yt-history" style="display:none;">
-          <div class="audio-yt-history-header">
-            <span>Recent</span>
-            <button id="audio-yt-clear-history" type="button">Clear</button>
+          <div id="audio-loaded-row" style="display:none;">
+            <svg class="icon icon-sm" viewBox="0 0 24 24" style="flex-shrink:0; color:var(--ink-muted);"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>
+            <span id="audio-loaded-name" style="flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-weight:500;"></span>
+            <span id="audio-loaded-duration" style="color:var(--ink-muted); font-size:var(--text-xs); flex-shrink:0;"></span>
+            <button id="audio-loaded-remove" type="button" title="Remove audio">
+              <svg class="icon icon-sm" viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+            </button>
           </div>
-          <div id="audio-yt-history-list"></div>
+
+          <div id="audio-drop-zone">
+            Drop an audio file here or click to browse
+            <input type="file" id="audio-file-input" accept="audio/*" style="display:none" />
+          </div>
+
+          <div style="display:flex; align-items:center; gap:var(--sp-2);">
+            <div style="flex:1; height:1px; background:var(--border);"></div>
+            <span style="font:500 var(--text-xs)/1 var(--font); color:var(--ink-muted); text-transform:uppercase; letter-spacing:0.1em;">or YouTube</span>
+            <div style="flex:1; height:1px; background:var(--border);"></div>
+          </div>
+
+          <div id="audio-yt-row">
+            <input type="text" id="audio-yt-input" placeholder="Paste YouTube URL..." />
+            <button id="audio-yt-btn">Load</button>
+          </div>
+
+          <div id="audio-yt-history" style="display:none;">
+            <div class="audio-yt-history-header">
+              <span>Recent</span>
+              <button id="audio-yt-clear-history" type="button">Clear</button>
+            </div>
+            <div id="audio-yt-history-list"></div>
+          </div>
+
+          <div id="audio-status"></div>
+
+          <div id="audio-file-info" style="display:none;">
+            <svg class="icon icon-sm" viewBox="0 0 24 24" style="flex-shrink:0; color:var(--ink-muted);"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>
+            <span class="audio-name" id="audio-name">No audio</span>
+            <span class="audio-duration" id="audio-duration"></span>
+          </div>
+
+          <div class="audio-controls" id="audio-controls" style="display:none;">
+            <div class="audio-row">
+              <label>Volume</label>
+              <input type="range" id="audio-volume" min="0" max="100" value="80" />
+              <span class="value-label" id="audio-volume-label">80%</span>
+            </div>
+            <div class="audio-row">
+              <label>Offset</label>
+              <input type="number" id="audio-offset" value="0" step="0.1" style="max-width:80px;" />
+              <span style="font:500 var(--text-xs)/1 var(--font); color:var(--ink-muted);">seconds</span>
+            </div>
+
+            <div style="border-top:1px solid var(--border-light); margin:var(--sp-1) 0;"></div>
+
+            <div id="audio-trim-section">
+              <div class="audio-row">
+                <label>Trim</label>
+                <input type="text" id="audio-clip-start" placeholder="0:00" style="max-width:64px; text-align:center;" />
+                <span style="font:500 var(--text-xs)/1 var(--font); color:var(--ink-muted);">to</span>
+                <input type="text" id="audio-clip-end" placeholder="0:00" style="max-width:64px; text-align:center;" />
+                <button id="audio-trim-reset" type="button" style="min-width:auto; min-height:var(--control-h-sm); padding:var(--sp-1) var(--sp-2); font-size:var(--text-xs);">Reset</button>
+              </div>
+            </div>
+
+            <div style="border-top:1px solid var(--border-light); margin:var(--sp-1) 0;"></div>
+
+            <div class="audio-row">
+              <label>BPM</label>
+              <input type="number" id="audio-bpm" value="" min="1" max="999" step="0.1" placeholder="—" style="max-width:72px;" />
+              <button id="audio-tap-btn" style="min-width:50px; min-height:var(--control-h-sm); padding:var(--sp-1) var(--sp-2); font-size:var(--text-xs);">Tap</button>
+              <span class="value-label" id="audio-bpm-info" style="min-width:auto;"></span>
+            </div>
+            <div class="audio-row">
+              <label>Snap</label>
+              <select id="audio-beat-snap" style="flex:1; min-height:var(--control-h); border-radius:var(--radius-md); border:1px solid var(--border); background:var(--bg); color:var(--ink); padding:var(--sp-1) var(--sp-2); font:500 var(--text-base)/1 var(--font); outline:none; cursor:pointer;">
+                <option value="0">Off</option>
+                <option value="1" selected>Beat</option>
+                <option value="2">1/2 beat</option>
+                <option value="4">1/4 beat</option>
+              </select>
+            </div>
+
+            <div style="display:flex; justify-content:flex-end;">
+              <button id="audio-remove-btn">Remove Audio</button>
+            </div>
+          </div>
         </div>
 
-        <div id="audio-status"></div>
-
-        <div id="audio-file-info" style="display:none;">
-          <svg class="icon icon-sm" viewBox="0 0 24 24" style="flex-shrink:0; color:var(--ink-muted);"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>
-          <span class="audio-name" id="audio-name">No audio</span>
-          <span class="audio-duration" id="audio-duration"></span>
-        </div>
-
-        <div class="audio-controls" id="audio-controls" style="display:none;">
+        <!-- ── VEHICLE SOUND ── -->
+        <div class="audio-section">
+          <div class="audio-section-label">Vehicle Sound</div>
           <div class="audio-row">
             <label>Volume</label>
-            <input type="range" id="audio-volume" min="0" max="100" value="80" />
-            <span class="value-label" id="audio-volume-label">80%</span>
+            <input type="range" id="sfx-volume-slider" min="0" max="100" value="65" />
+            <span class="value-label" id="sfx-volume-display">65%</span>
           </div>
+          <div id="sfx-vehicle-list"></div>
+        </div>
+
+        <!-- ── PORTAL EFFECTS ── -->
+        <div class="audio-section">
+          <div class="audio-section-label">Portal Effects</div>
           <div class="audio-row">
-            <label>Portal FX</label>
+            <label>Volume</label>
             <input type="range" id="portal-fx-volume" min="0" max="100" value="55" />
             <span class="value-label" id="portal-fx-label">55%</span>
           </div>
-          <div class="audio-row">
-            <label>Offset</label>
-            <input type="number" id="audio-offset" value="0" step="0.1" style="max-width:80px;" />
-            <span style="font:500 var(--text-xs)/1 var(--font); color:var(--ink-muted);">seconds</span>
-          </div>
-
-          <div style="border-top:1px solid var(--border-light); margin:var(--sp-1) 0;"></div>
-
-          <div id="audio-trim-section">
-            <div class="audio-row">
-              <label>Trim</label>
-              <input type="text" id="audio-clip-start" placeholder="0:00" style="max-width:64px; text-align:center;" />
-              <span style="font:500 var(--text-xs)/1 var(--font); color:var(--ink-muted);">to</span>
-              <input type="text" id="audio-clip-end" placeholder="0:00" style="max-width:64px; text-align:center;" />
-              <button id="audio-trim-reset" type="button" style="min-width:auto; min-height:var(--control-h-sm); padding:var(--sp-1) var(--sp-2); font-size:var(--text-xs);">Reset</button>
-            </div>
-          </div>
-
-          <div style="border-top:1px solid var(--border-light); margin:var(--sp-1) 0;"></div>
-
-          <div class="audio-row">
-            <label>BPM</label>
-            <input type="number" id="audio-bpm" value="" min="1" max="999" step="0.1" placeholder="—" style="max-width:72px;" />
-            <button id="audio-tap-btn" style="min-width:50px; min-height:var(--control-h-sm); padding:var(--sp-1) var(--sp-2); font-size:var(--text-xs);">Tap</button>
-            <span class="value-label" id="audio-bpm-info" style="min-width:auto;"></span>
-          </div>
-          <div class="audio-row">
-            <label>Snap</label>
-            <select id="audio-beat-snap" style="flex:1; min-height:var(--control-h); border-radius:var(--radius-md); border:1px solid var(--border); background:var(--bg); color:var(--ink); padding:var(--sp-1) var(--sp-2); font:500 var(--text-base)/1 var(--font); outline:none; cursor:pointer;">
-              <option value="0">Off</option>
-              <option value="1" selected>Beat</option>
-              <option value="2">1/2 beat</option>
-              <option value="4">1/4 beat</option>
-            </select>
-          </div>
-
-          <div style="display:flex; justify-content:flex-end;">
-            <button id="audio-remove-btn">Remove Audio</button>
-          </div>
         </div>
+
       </div>
     </div>
 
@@ -3264,18 +3314,6 @@
           </div>
           <input type="range" id="settings-grid-size-input" min="8" max="64" step="2" value="24" />
           <p class="settings-note">World-aligned graph paper locked to the track while you pan or zoom.</p>
-        </div>
-        <div class="settings-group">
-          <div class="settings-group-header">
-            <span>Sound Effects</span>
-            <span class="settings-inline-value"><span id="sfx-volume-display">65%</span></span>
-          </div>
-          <input type="range" id="sfx-volume-slider" min="0" max="100" value="65" />
-          <div class="settings-ends">
-            <span>Off</span>
-            <span>Loud</span>
-          </div>
-          <div id="sfx-vehicle-list" style="margin-top:var(--sp-1);"></div>
         </div>
       </div>
       <div id="hotkeys-list">
