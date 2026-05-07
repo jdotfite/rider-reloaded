@@ -1204,7 +1204,7 @@ syncSettingsButtons();
   const sfxVolumeDisplay = document.getElementById('sfx-volume-display') as HTMLElement | null;
   const sfxList = document.getElementById('sfx-vehicle-list') as HTMLElement | null;
 
-  const savedSfxVol = parseInt(localStorage.getItem('line-rider-sfx-volume') ?? '65', 10);
+  const savedSfxVol = parseInt(localStorage.getItem('line-rider-sfx-volume') ?? '20', 10);
   vehicleSfx.volume = savedSfxVol / 100;
   if (sfxVolumeSlider) sfxVolumeSlider.value = String(savedSfxVol);
   if (sfxVolumeDisplay) sfxVolumeDisplay.textContent = `${savedSfxVol}%`;

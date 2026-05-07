@@ -83,7 +83,7 @@ export class VehicleSfx {
   private wreckBuffer: AudioBuffer | null = null;
   private _wreckLoadStarted = false;
   private currentVehicleId = 'sled';
-  private _volume = 0.65;
+  private _volume = 0.20;
   private _playing = false;
 
   get volume(): number {
@@ -118,17 +118,62 @@ export class VehicleSfx {
   /** Play the wreck one-shot — ignores per-vehicle mute, respects master volume. */
   playWreck() {
     if (this._volume <= 0.001) return;
-    const ctx = this.ensureCtx();
     this.startLoadingWreck();
-    if (!this.wreckBuffer) return;
+    if (this.wreckBuffer) {
+      this.playWreckBuffer();
+    } else {
+      // OGG not decoded yet — synthesized crash as immediate fallback
+      this.playWreckSynthesized();
+    }
+  }
+
+  private playWreckBuffer() {
+    const ctx = this.ensureCtx();
     const src = ctx.createBufferSource();
-    src.buffer = this.wreckBuffer;
+    src.buffer = this.wreckBuffer!;
     const gain = ctx.createGain();
     gain.gain.value = this._volume;
     src.connect(gain);
     gain.connect(ctx.destination);
     src.start();
     src.onended = () => { src.disconnect(); gain.disconnect(); };
+  }
+
+  private playWreckSynthesized() {
+    const ctx = this.ensureCtx();
+    const now = ctx.currentTime;
+    const vol = this._volume;
+
+    // Sharp noise burst
+    const noise = ctx.createBufferSource();
+    noise.buffer = this.buildNoiseBuffer();
+    const nfilt = ctx.createBiquadFilter();
+    nfilt.type = 'bandpass';
+    nfilt.frequency.value = 700;
+    nfilt.Q.value = 0.4;
+    const ngain = ctx.createGain();
+    ngain.gain.setValueAtTime(vol * 0.8, now);
+    ngain.gain.exponentialRampToValueAtTime(0.0001, now + 0.28);
+    noise.connect(nfilt);
+    nfilt.connect(ngain);
+    ngain.connect(ctx.destination);
+    noise.start(now);
+    noise.stop(now + 0.32);
+    noise.onended = () => { noise.disconnect(); nfilt.disconnect(); ngain.disconnect(); };
+
+    // Low thud
+    const osc = ctx.createOscillator();
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(110, now);
+    osc.frequency.exponentialRampToValueAtTime(38, now + 0.18);
+    const ogain = ctx.createGain();
+    ogain.gain.setValueAtTime(vol * 0.6, now);
+    ogain.gain.exponentialRampToValueAtTime(0.0001, now + 0.22);
+    osc.connect(ogain);
+    ogain.connect(ctx.destination);
+    osc.start(now);
+    osc.stop(now + 0.26);
+    osc.onended = () => { osc.disconnect(); ogain.disconnect(); };
   }
 
   private ensureCtx(): AudioContext {
