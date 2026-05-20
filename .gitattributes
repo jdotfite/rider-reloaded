@@ -1,0 +1,17 @@
+# Keep repository text diffs stable across Windows and WSL checkouts.
+* text=auto eol=lf
+
+# Preserve binary assets.
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.webp binary
+*.ico binary
+*.mp3 binary
+*.wav binary
+*.ogg binary
+*.mp4 binary
+*.mov binary
+*.ai binary
+*.pdf binary

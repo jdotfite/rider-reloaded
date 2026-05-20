@@ -943,6 +943,7 @@ export class TrackStore {
     this.cancelTransaction();
     this.redoStack.push(this.captureSnapshot());
     this.applySnapshot(this.undoStack.pop()!);
+    this.onMutation?.();
   }
 
   redo() {
@@ -950,6 +951,7 @@ export class TrackStore {
     this.cancelTransaction();
     this.undoStack.push(this.captureSnapshot());
     this.applySnapshot(this.redoStack.pop()!);
+    this.onMutation?.();
   }
 
   private beginMutation() {
@@ -1030,12 +1032,13 @@ export class TrackStore {
         y = r.startPosition.y;
       }
     }
-    if (typeof x !== 'number' || typeof y !== 'number') return null;
+    if (typeof x !== 'number' || typeof y !== 'number' || !Number.isFinite(x) || !Number.isFinite(y)) return null;
 
     const layers = this.normalizeLayers(candidate.layers);
     if (!layers) return null;
 
     const normalizedLines: NormalizedTrackLine[] = [];
+    const seenLineIds = new Set<number>();
     const validLayerIds = new Set(layers.map(layer => layer.id));
     const fallbackLayerId = this.getPreferredActiveLayerId(layers);
     for (const line of candidate.lines) {
@@ -1048,7 +1051,11 @@ export class TrackStore {
         typeof line.x1 !== 'number' ||
         typeof line.y1 !== 'number' ||
         typeof line.x2 !== 'number' ||
-        typeof line.y2 !== 'number'
+        typeof line.y2 !== 'number' ||
+        !Number.isFinite(line.x1) ||
+        !Number.isFinite(line.y1) ||
+        !Number.isFinite(line.x2) ||
+        !Number.isFinite(line.y2)
       ) {
         return null;
       }
@@ -1070,11 +1077,16 @@ export class TrackStore {
       const rightExtended = this.toBoolean(line.rightExtended) ?? extended;
       const flipped = this.toBoolean(line.flipped) ?? false;
 
+      let id: number | undefined;
+      if (line.id != null) {
+        if (typeof line.id !== 'number' || !Number.isFinite(line.id)) return null;
+        if (seenLineIds.has(line.id)) return null;
+        seenLineIds.add(line.id);
+        id = line.id;
+      }
+
       normalizedLines.push({
-        id:
-          typeof line.id === 'number' && Number.isFinite(line.id)
-            ? line.id
-            : undefined,
+        id,
         type,
         x1: line.x1,
         y1: line.y1,

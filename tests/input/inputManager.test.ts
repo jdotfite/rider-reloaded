@@ -65,7 +65,7 @@ test('space toggles play/pause while the timeline scrubber has focus', () => {
       id: 'timeline-scrubber',
       isContentEditable: false,
     },
-  } as KeyboardEvent);
+  } as unknown as KeyboardEvent);
 
   assert.equal(toggles, 1);
 });
@@ -92,7 +92,7 @@ test('space remains ignored for normal text inputs', () => {
       id: 'audio-yt-input',
       isContentEditable: false,
     },
-  } as KeyboardEvent);
+  } as unknown as KeyboardEvent);
 
   assert.equal(toggles, 0);
 });

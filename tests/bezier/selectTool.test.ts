@@ -100,7 +100,7 @@ test('selecting a bezier segment expands to the full curve and duplicate keeps i
   assert.ok(pickedLine);
 
   const midpoint = pickedLine!.p1.lerp(pickedLine!.p2, 0.5);
-  selectTool.onMouseDown(midpoint, midpoint);
+  selectTool.onMouseDown(midpoint);
 
   assert.equal(selectTool.getSelectedCount(), original.lineIds.length);
 
@@ -130,9 +130,9 @@ test('smoothing a selected line chain keeps the result editable as a bezier path
   store.addLine(new Vec2(80, -10), new Vec2(120, 0), LineType.SOLID);
 
   const selectTool = new SelectTool(store);
-  selectTool.onMouseDown(new Vec2(-10, -20), new Vec2(-10, -20));
-  selectTool.onMouseMove(new Vec2(130, 30), new Vec2(130, 30));
-  selectTool.onMouseUp(new Vec2(130, 30), new Vec2(130, 30));
+  selectTool.onMouseDown(new Vec2(-10, -20));
+  selectTool.onMouseMove(new Vec2(130, 30));
+  selectTool.onMouseUp(new Vec2(130, 30));
 
   assert.equal(selectTool.getSelectedCount(), 3);
   assert.equal(store.bezierPaths.length, 0);
@@ -152,10 +152,10 @@ test('select tool scales a selected line uniformly from a corner handle by defau
   store.addLine(new Vec2(0, 0), new Vec2(100, 50), LineType.SOLID);
 
   const selectTool = new SelectTool(store);
-  selectTool.onMouseDown(new Vec2(50, 25), new Vec2(50, 25));
-  selectTool.onMouseDown(new Vec2(100, 50), new Vec2(100, 50));
-  selectTool.onMouseMove(new Vec2(200, 100), new Vec2(200, 100));
-  selectTool.onMouseUp(new Vec2(200, 100), new Vec2(200, 100));
+  selectTool.onMouseDown(new Vec2(50, 25));
+  selectTool.onMouseDown(new Vec2(100, 50));
+  selectTool.onMouseMove(new Vec2(200, 100));
+  selectTool.onMouseUp(new Vec2(200, 100));
 
   assert.equal(store.lines[0].p1.x, 0);
   assert.equal(store.lines[0].p1.y, 0);
@@ -169,7 +169,7 @@ test('holding shift while scaling breaks aspect ratio', () => {
   store.addLine(new Vec2(0, 0), new Vec2(100, 50), LineType.SOLID);
 
   const selectTool = new SelectTool(store);
-  selectTool.onMouseDown(new Vec2(50, 25), new Vec2(50, 25));
+  selectTool.onMouseDown(new Vec2(50, 25));
   windowStub.dispatch('keydown', {
     key: 'Shift',
     shiftKey: true,
@@ -177,9 +177,9 @@ test('holding shift while scaling breaks aspect ratio', () => {
     altKey: false,
     metaKey: false,
   } as KeyboardEvent);
-  selectTool.onMouseDown(new Vec2(100, 50), new Vec2(100, 50));
-  selectTool.onMouseMove(new Vec2(200, 50), new Vec2(200, 50));
-  selectTool.onMouseUp(new Vec2(200, 50), new Vec2(200, 50));
+  selectTool.onMouseDown(new Vec2(100, 50));
+  selectTool.onMouseMove(new Vec2(200, 50));
+  selectTool.onMouseUp(new Vec2(200, 50));
   windowStub.dispatch('keyup', {
     key: 'Shift',
     shiftKey: false,
@@ -198,10 +198,10 @@ test('grid snap affects select-tool scaling handles', () => {
   store.addLine(new Vec2(0, 0), new Vec2(100, 50), LineType.SOLID);
 
   const selectTool = new SelectTool(store, () => true, () => 20, () => 1);
-  selectTool.onMouseDown(new Vec2(50, 25), new Vec2(50, 25));
-  selectTool.onMouseDown(new Vec2(100, 50), new Vec2(100, 50));
-  selectTool.onMouseMove(new Vec2(191, 91), new Vec2(191, 91));
-  selectTool.onMouseUp(new Vec2(191, 91), new Vec2(191, 91));
+  selectTool.onMouseDown(new Vec2(50, 25));
+  selectTool.onMouseDown(new Vec2(100, 50));
+  selectTool.onMouseMove(new Vec2(191, 91));
+  selectTool.onMouseUp(new Vec2(191, 91));
 
   assert.equal(store.lines[0].p2.x, 200);
   assert.equal(store.lines[0].p2.y, 100);
@@ -213,10 +213,10 @@ test('select tool rotates a selected line around its center using the rotate han
   store.addLine(new Vec2(0, 0), new Vec2(100, 0), LineType.SOLID);
 
   const selectTool = new SelectTool(store, () => false, () => 24, () => 1);
-  selectTool.onMouseDown(new Vec2(50, 0), new Vec2(50, 0));
-  selectTool.onMouseDown(new Vec2(50, -28), new Vec2(50, -28));
-  selectTool.onMouseMove(new Vec2(100, 0), new Vec2(100, 0));
-  selectTool.onMouseUp(new Vec2(100, 0), new Vec2(100, 0));
+  selectTool.onMouseDown(new Vec2(50, 0));
+  selectTool.onMouseDown(new Vec2(50, -28));
+  selectTool.onMouseMove(new Vec2(100, 0));
+  selectTool.onMouseUp(new Vec2(100, 0));
 
   assert.ok(Math.abs(store.lines[0].p1.x - 50) < 1e-6);
   assert.ok(Math.abs(store.lines[0].p1.y + 50) < 1e-6);
@@ -230,10 +230,10 @@ test('scaling a selected bezier path keeps it editable and updates path ownershi
   const path = createStraightPath(store);
   const selectTool = new SelectTool(store);
 
-  selectTool.onMouseDown(new Vec2(50, 25), new Vec2(50, 25));
-  selectTool.onMouseDown(new Vec2(100, 50), new Vec2(100, 50));
-  selectTool.onMouseMove(new Vec2(200, 100), new Vec2(200, 100));
-  selectTool.onMouseUp(new Vec2(200, 100), new Vec2(200, 100));
+  selectTool.onMouseDown(new Vec2(50, 25));
+  selectTool.onMouseDown(new Vec2(100, 50));
+  selectTool.onMouseMove(new Vec2(200, 100));
+  selectTool.onMouseUp(new Vec2(200, 100));
 
   assert.equal(store.bezierPaths.length, 1);
   assert.equal(store.bezierPaths[0].id, path.id);
@@ -250,7 +250,7 @@ test('select tool flips selected straight lines', () => {
   store.addLine(new Vec2(0, 0), new Vec2(100, 0), LineType.SOLID);
 
   const selectTool = new SelectTool(store);
-  selectTool.onMouseDown(new Vec2(50, 0), new Vec2(50, 0));
+  selectTool.onMouseDown(new Vec2(50, 0));
   selectTool.flipSelected();
 
   assert.equal(store.lines[0].flipped, true);
@@ -262,7 +262,7 @@ test('select tool can reverse accel direction without flipping the rideable side
   store.addLine(new Vec2(0, 0), new Vec2(100, 0), LineType.ACC);
 
   const selectTool = new SelectTool(store);
-  selectTool.onMouseDown(new Vec2(50, 0), new Vec2(50, 0));
+  selectTool.onMouseDown(new Vec2(50, 0));
   selectTool.reverseAccelSelected();
 
   assert.equal(store.lines[0].flipped, false);
@@ -276,7 +276,7 @@ test('flipping the rideable side preserves accel direction state on red lines', 
   store.addLine(new Vec2(0, 0), new Vec2(100, 0), LineType.ACC);
 
   const selectTool = new SelectTool(store);
-  selectTool.onMouseDown(new Vec2(50, 0), new Vec2(50, 0));
+  selectTool.onMouseDown(new Vec2(50, 0));
   selectTool.reverseAccelSelected();
   selectTool.flipSelected();
 
@@ -294,7 +294,7 @@ test('select tool flips every segment in a selected bezier path without losing o
   const pickedLine = store.lines.find((line) => line.id === path.lineIds[0]);
   assert.ok(pickedLine);
   const midpoint = pickedLine!.p1.lerp(pickedLine!.p2, 0.5);
-  selectTool.onMouseDown(midpoint, midpoint);
+  selectTool.onMouseDown(midpoint);
   selectTool.flipSelected();
 
   assert.equal(store.bezierPaths.length, 1);
